@@ -99,12 +99,43 @@ CONFIG = {
         "n_rho": 100,
     },
     "pedestal": {
+        # Ballooning-stability-limited pedestal: rather than pinning the
+        # pedestal top to a preset temperature/density (set via
+        # ADAPTIVE_TRANSPORT instead of INTERNAL_BOUNDARY_CONDITION), the
+        # pedestal-region transport is decreased once P_SOL > P_LH (the
+        # formation model) and then increased once the local infinite-n
+        # ideal ballooning parameter alpha exceeds alpha_crit (the
+        # saturation model), letting the pedestal self-organize to marginal
+        # ballooning stability. T_i_ped/T_e_ped/n_e_ped below are therefore
+        # unused (only rho_norm_ped_top matters to the alpha_crit
+        # saturation model) and are left at their defaults.
+        # alpha_crit is not reported in [2] (which uses a separate
+        # empirical Europed pedestal-height scaling, eq 13-14, not
+        # alpha_crit).
+        # WIP/known limitation: the local alpha at rho=0.95 implied by the
+        # pedestal this scenario was originally tuned to (T_i_ped=4.0,
+        # T_e_ped=5.0 keV, n_e_ped=6e19 m^-3) is ~87 -- a physically
+        # motivated value, not a grid artifact (it reflects a real
+        # transport-barrier step in the gradient at the pedestal top).
+        # However, using alpha_crit=87 with the saturation model's default
+        # gain (base_multiplier=1e6, steepness=100) makes the solver
+        # numerically stiff/unstable (near-discontinuous transport
+        # response to a self-referential local gradient signal). alpha_crit
+        # is set to 15 below instead, which converges cleanly but only
+        # reaches T_e_ped ~ 0.7 keV, T_i_ped ~ 0.8 keV -- well short of the
+        # scenario's original ~5 keV pedestal, so H98/fusion-performance
+        # will not match the docstring's tuning targets. Reaching the
+        # original target with alpha_crit~87 likely needs a much gentler
+        # saturation gain (lower base_multiplier/steepness) than the
+        # defaults tuned for ProfileValueSaturation's use case.
         "model_name": "set_T_ped_n_ped",
         "set_pedestal": True,
+        "mode": "ADAPTIVE_TRANSPORT",
         "rho_norm_ped_top": 0.95,
-        "T_i_ped": 4.0,  # [keV]
-        "T_e_ped": 5.0,  # [keV]
-        "n_e_ped": 6e19,  # [m^-3]
+        "saturation_model": {
+            "model_name": "alpha_crit",
+            "alpha_crit": 15.0,
+        },
     },
     "sources": {
         # Physics-based sources

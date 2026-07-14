@@ -984,8 +984,10 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
     ``alpha_MHD`` parameter used internally by the QuaLiKiz- and TGLF-based
     transport models. ``alpha_crit`` is not computed by TORAX -- it must be
     supplied externally, e.g. from a local ideal ballooning mode stability
-    calculation. Only compatible with the ``set_P_ped_n_ped`` pedestal model
-    (whose own ``P_ped`` is not used by this saturation model). Additional
+    calculation. Only compatible with the ``set_P_ped_n_ped`` and
+    ``set_T_ped_n_ped`` pedestal models, since ``rho_norm_ped_top`` is the
+    only quantity this saturation model uses from the pedestal model (their
+    own pressure/temperature/density targets are not used). Additional
     parameters:
 
     * ``alpha_crit`` (**time-varying-scalar** [default = 1.0]): Critical

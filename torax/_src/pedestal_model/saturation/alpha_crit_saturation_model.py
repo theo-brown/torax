@@ -55,11 +55,13 @@ class AlphaCritSaturationModel(base.SaturationModel):
   ``alpha_crit`` is not computed by TORAX -- it must be supplied externally
   (e.g. from a local ideal ballooning mode stability calculation).
 
-  Only compatible with the ``set_P_ped_n_ped`` pedestal model (for the
-  ``rho_norm_ped_top`` and composition it provides). The pedestal model's own
-  ``P_ped`` is not used here -- this saturation model determines when the
-  pedestal stops growing purely from the alpha vs. alpha_crit comparison, not
-  from any target pressure/temperature.
+  Only compatible with the ``set_P_ped_n_ped`` and ``set_T_ped_n_ped``
+  pedestal models, for the ``rho_norm_ped_top`` they provide -- that is the
+  only quantity this saturation model uses from the pedestal model. Neither
+  model's own pressure/temperature/density target (``P_ped``, or
+  ``T_i_ped``/``T_e_ped``/``n_e_ped``) is used here -- this saturation model
+  determines when the pedestal stops growing purely from the alpha vs.
+  alpha_crit comparison.
   """
 
   def __call__(

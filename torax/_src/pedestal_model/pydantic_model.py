@@ -220,8 +220,12 @@ class AlphaCritSaturation(torax_pydantic.BaseModelFrozen):
   by TORAX -- it must be supplied externally (e.g. from a local ideal
   ballooning mode stability calculation).
 
-  Only compatible with the ``set_P_ped_n_ped`` pedestal model. That model's
-  own ``P_ped`` is not used by this saturation model.
+  Only compatible with pedestal models that provide a ``rho_norm_ped_top``
+  location, i.e. ``set_P_ped_n_ped`` or ``set_T_ped_n_ped`` -- that is the
+  only quantity this saturation model actually uses from the pedestal model.
+  In particular, the pedestal model's own pressure/temperature/density
+  target (``P_ped``, or ``T_i_ped``/``T_e_ped``/``n_e_ped``) is not used by
+  this saturation model.
 
   The formula is
     transport_multiplier = 1 + base_multiplier * softplus(steepness * x),
@@ -409,11 +413,12 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
       )
     if (
         isinstance(self.saturation_model, AlphaCritSaturation)
-        and getattr(self, "model_name", None) != "set_P_ped_n_ped"
+        and getattr(self, "model_name", None)
+        not in ("set_P_ped_n_ped", "set_T_ped_n_ped")
     ):
       raise ValueError(
           "The alpha_crit saturation model is only compatible with the"
-          " set_P_ped_n_ped pedestal model."
+          " set_P_ped_n_ped or set_T_ped_n_ped pedestal models."
       )
     return self
 

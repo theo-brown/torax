@@ -159,10 +159,21 @@ class AlphaCritSaturationModelTest(parameterized.TestCase):
         multipliers_1.chi_e_multiplier, multipliers_2.chi_e_multiplier
     )
 
-  def test_incompatible_with_non_pped_pedestal_model(self):
+  def test_compatible_with_set_T_ped_n_ped(self):
+    # set_T_ped_n_ped provides rho_norm_ped_top, the only quantity this
+    # saturation model uses from the pedestal model, so it should build
+    # successfully (T_i_ped/T_e_ped/n_e_ped are unused).
     config = default_configs.get_default_config_dict()
     config['pedestal'] = {
         'model_name': 'set_T_ped_n_ped',
+        'saturation_model': {'model_name': 'alpha_crit', 'alpha_crit': 1.0},
+    }
+    model_config.ToraxConfig.from_dict(config)
+
+  def test_incompatible_with_no_pedestal(self):
+    config = default_configs.get_default_config_dict()
+    config['pedestal'] = {
+        'model_name': 'no_pedestal',
         'saturation_model': {'model_name': 'alpha_crit', 'alpha_crit': 1.0},
     }
     with self.assertRaises(pydantic.ValidationError):
