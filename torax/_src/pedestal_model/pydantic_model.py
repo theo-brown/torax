@@ -23,10 +23,10 @@ from torax._src import array_typing
 from torax._src.pedestal_model import no_pedestal
 from torax._src.pedestal_model import pedestal_model
 from torax._src.pedestal_model import runtime_params
-from torax._src.pedestal_model import set_alpha_crit_nped
 from torax._src.pedestal_model import set_pped_tpedratio_nped
 from torax._src.pedestal_model import set_tped_nped
 from torax._src.pedestal_model.formation import power_scaling_formation_model
+from torax._src.pedestal_model.saturation import alpha_crit_saturation_model
 from torax._src.pedestal_model.saturation import profile_value_saturation_model
 from torax._src.physics import scaling_laws
 from torax._src.torax_pydantic import torax_pydantic
@@ -210,9 +210,72 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
     )
 
 
+class AlphaCritSaturation(torax_pydantic.BaseModelFrozen):
+  r"""Configuration for the alpha_crit ballooning-stability saturation model.
+
+  This saturation model triggers an increase in pedestal transport once the
+  local infinite-n ideal ballooning mode normalized pressure gradient
+  ``alpha``, evaluated at the pedestal top from the current core profiles,
+  exceeds the critical value ``alpha_crit``. ``alpha_crit`` is not computed
+  by TORAX -- it must be supplied externally (e.g. from a local ideal
+  ballooning mode stability calculation).
+
+  Only compatible with the ``set_P_ped_n_ped`` pedestal model. That model's
+  own ``P_ped`` is not used by this saturation model.
+
+  The formula is
+    transport_multiplier = 1 + base_multiplier * softplus(steepness * x),
+  where
+    x = (alpha - alpha_crit) / alpha_crit - offset.
+
+  Attributes:
+    alpha_crit: Critical normalized pressure gradient (infinite-n ideal
+      ballooning mode parameter) [dimensionless].
+    steepness: Scaling factor applied to the argument of the softplus
+      function, setting the steepness of the smooth saturation function.
+      Decrease for a smoother saturation, which may be more numerically
+      stable but may lead to starting saturation at an alpha below
+      alpha_crit.
+    offset: Bias applied to the argument of the softplus function, setting
+      the dimensionless offset of the saturation window. Increase to start
+      saturation at a higher alpha.
+    base_multiplier: The base value of the transport multiplier. Increase
+      for stronger increases in transport once saturation starts.
+  """
+
+  model_name: Annotated[Literal['alpha_crit'], torax_pydantic.JAX_STATIC] = (
+      'alpha_crit'
+  )
+  alpha_crit: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0)
+  )
+  steepness: pydantic.PositiveFloat = 100.0
+  offset: Annotated[
+      array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
+  ] = 0.1
+  base_multiplier: Annotated[
+      array_typing.FloatScalar, pydantic.Field(gt=1.0)
+  ] = 1e6
+
+  def build_saturation_model(
+      self,
+  ) -> alpha_crit_saturation_model.AlphaCritSaturationModel:
+    return alpha_crit_saturation_model.AlphaCritSaturationModel()
+
+  def build_runtime_params(
+      self, t: chex.Numeric
+  ) -> alpha_crit_saturation_model.AlphaCritSaturationRuntimeParams:
+    return alpha_crit_saturation_model.AlphaCritSaturationRuntimeParams(
+        steepness=self.steepness,
+        offset=self.offset,
+        base_multiplier=self.base_multiplier,
+        alpha_crit=self.alpha_crit.get_value(t),
+    )
+
+
 # For new formation and saturation models, add to these TypeAliases via Union.
 FormationConfig: TypeAlias = DelabieScalingFormation | MartinScalingFormation
-SaturationConfig: TypeAlias = ProfileValueSaturation
+SaturationConfig: TypeAlias = ProfileValueSaturation | AlphaCritSaturation
 
 
 class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
@@ -344,6 +407,14 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
           "use_formation_model_with_internal_boundary_condition can only be"
           " True when formation_model is PowerScalingFormationModel"
       )
+    if (
+        isinstance(self.saturation_model, AlphaCritSaturation)
+        and getattr(self, "model_name", None) != "set_P_ped_n_ped"
+    ):
+      raise ValueError(
+          "The alpha_crit saturation model is only compatible with the"
+          " set_P_ped_n_ped pedestal model."
+      )
     return self
 
   @abc.abstractmethod
@@ -433,82 +504,6 @@ class SetPpedTpedRatioNped(BasePedestal):
         pedestal_profile_form=base_runtime_params.pedestal_profile_form,
         P_ped=self.P_ped.get_value(t),
         P_ped_multiplier=self.P_ped_multiplier.get_value(t),
-        n_e_ped=self.n_e_ped.get_value(t),
-        n_e_ped_is_fGW=self.n_e_ped_is_fGW,
-        T_i_T_e_ratio=self.T_i_T_e_ratio.get_value(t),
-        rho_norm_ped_top=self.rho_norm_ped_top.get_value(t),
-        formation=base_runtime_params.formation,
-        saturation=base_runtime_params.saturation,
-        chi_max=self.chi_max.get_value(t),
-        D_e_max=self.D_e_max.get_value(t),
-        V_e_max=self.V_e_max.get_value(t),
-        V_e_min=self.V_e_min.get_value(t),
-        pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
-            t
-        ),
-    )
-
-
-class SetAlphaCritNped(BasePedestal):
-  """Model with pedestal height set by a ballooning-stability limit.
-
-  The pedestal-top pressure is set to the value at which the local
-  infinite-n ideal ballooning mode normalized pressure gradient, evaluated
-  between the pedestal top and the separatrix, reaches the user-provided
-  critical value `alpha_crit`. See `set_alpha_crit_nped.py` for the formula.
-  `alpha_crit` is not computed by TORAX -- it must be supplied externally
-  (e.g. from a local ideal ballooning mode stability calculation).
-
-  Attributes:
-    alpha_crit: The critical normalized pressure gradient (infinite-n ideal
-      ballooning mode parameter) [dimensionless].
-    n_e_ped: The electron density at the pedestal [m^-3] or fGW.
-    n_e_ped_is_fGW: Whether the electron density at the pedestal is in units
-      of fGW.
-    T_i_T_e_ratio: Ratio of the ion and electron temperature at the pedestal
-      [dimensionless].
-    rho_norm_ped_top: The location of the pedestal top.
-  """
-
-  model_name: Annotated[
-      Literal["set_alpha_crit_n_ped"], torax_pydantic.JAX_STATIC
-  ] = "set_alpha_crit_n_ped"
-  alpha_crit: torax_pydantic.TimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(1.0)
-  )
-  n_e_ped: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
-      0.7e20
-  )
-  n_e_ped_is_fGW: bool = False
-  T_i_T_e_ratio: torax_pydantic.TimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(1.0)
-  )
-  rho_norm_ped_top: torax_pydantic.TimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(0.91)
-  )
-
-  def build_pedestal_model(
-      self,
-  ) -> set_alpha_crit_nped.SetAlphaCritDensityPedestalModel:
-    return set_alpha_crit_nped.SetAlphaCritDensityPedestalModel(
-        formation_model=self.formation_model.build_formation_model(),
-        saturation_model=self.saturation_model.build_saturation_model(),
-    )
-
-  def build_runtime_params(
-      self, t: chex.Numeric
-  ) -> set_alpha_crit_nped.RuntimeParams:
-    base_runtime_params = super().build_runtime_params(t)
-    return set_alpha_crit_nped.RuntimeParams(
-        set_pedestal=base_runtime_params.set_pedestal,
-        mode=base_runtime_params.mode,
-        use_formation_model_with_internal_boundary_condition=base_runtime_params.use_formation_model_with_internal_boundary_condition,
-        transition_time_width=base_runtime_params.transition_time_width,
-        P_LH_hysteresis_factor=base_runtime_params.P_LH_hysteresis_factor,
-        include_dW_dt_in_P_SOL=base_runtime_params.include_dW_dt_in_P_SOL,
-        explicit_pedestal=base_runtime_params.explicit_pedestal,
-        pedestal_profile_form=base_runtime_params.pedestal_profile_form,
-        alpha_crit=self.alpha_crit.get_value(t),
         n_e_ped=self.n_e_ped.get_value(t),
         n_e_ped_is_fGW=self.n_e_ped_is_fGW,
         T_i_T_e_ratio=self.T_i_T_e_ratio.get_value(t),
@@ -638,6 +633,4 @@ class NoPedestal(BasePedestal):
     )
 
 
-PedestalConfig = (
-    SetPpedTpedRatioNped | SetTpedNped | SetAlphaCritNped | NoPedestal
-)
+PedestalConfig = SetPpedTpedRatioNped | SetTpedNped | NoPedestal

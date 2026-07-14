@@ -968,6 +968,35 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
     * ``base_multiplier`` (float [default = 0.0]): Base multiplier for the
       saturation function.
 
+  * ``'alpha_crit'``: Triggers saturation once the local infinite-n ideal
+    ballooning mode normalized pressure gradient, evaluated at the pedestal
+    top from the current core profiles, exceeds a critical value
+    ``alpha_crit``:
+
+    .. math::
+
+      \alpha = \frac{2 \mu_0 R_{major} q^2}{B_0^2}
+        \left(-\frac{\mathrm{d}p}{\mathrm{d}r}\right)
+
+    evaluated at the pedestal top, where :math:`r` is the midplane minor
+    radius. This uses the same alpha_MHD convention (reference length
+    :math:`R_{major}`, radial coordinate the midplane minor radius) as the
+    ``alpha_MHD`` parameter used internally by the QuaLiKiz- and TGLF-based
+    transport models. ``alpha_crit`` is not computed by TORAX -- it must be
+    supplied externally, e.g. from a local ideal ballooning mode stability
+    calculation. Only compatible with the ``set_P_ped_n_ped`` pedestal model
+    (whose own ``P_ped`` is not used by this saturation model). Additional
+    parameters:
+
+    * ``alpha_crit`` (**time-varying-scalar** [default = 1.0]): Critical
+      normalized pressure gradient (infinite-n ideal ballooning mode
+      parameter), dimensionless.
+    * ``steepness`` (float [default = 100.0]): Controls the steepness of the
+      saturation function.
+    * ``offset`` (float [default = 0.1]): Offset for the saturation function.
+    * ``base_multiplier`` (float [default = 1e6]): Base multiplier for the
+      saturation function.
+
 ``pedestal_top_smoothing_width`` (**time-varying-scalar** [default = 0.02])
   Width of the smoothing region at the pedestal top boundary, in units of
   :math:`\hat{\rho}`.
@@ -1031,46 +1060,6 @@ total pressure at the pedestal and the ratio of ion to electron temperature.
 ``n_e_ped`` (**time-varying-scalar** [default = 0.7])
   Electron density at the pedestal top. In units of reference density if
   ``n_e_ped_is_fGW==False``. In units of  Greenwald fraction if
-  ``n_e_ped_is_fGW==True``.
-
-``n_e_ped_is_fGW`` (**time-varying-scalar** [default = False])
-  Toggles units of ``n_e_ped``.
-
-``T_i_T_e_ratio`` (**time-varying-scalar** [default = 1.0])
-  Ratio of the ion and electron temperature at the pedestal.
-
-``rho_norm_ped_top`` (**time-varying-scalar** [default = 0.91])
-  Location of pedestal top, in units of :math:`\hat{\rho}`.
-
-set_alpha_crit_n_ped
-^^^^^^^^^^^^^^^^^^^^
-Set the pedestal-top pressure to the value at which the local infinite-n
-ideal ballooning mode normalized pressure gradient, evaluated between the
-pedestal top and the separatrix, reaches a user-provided critical value
-``alpha_crit``:
-
-.. math::
-
-  \alpha_{crit} = \frac{2 \mu_0 R_{major} q_{ped}^2}{B_0^2}
-    \frac{p_{ped} - p_{sep}}{r_{sep} - r_{ped}}
-
-where :math:`q_{ped}` is the safety factor at the pedestal top, :math:`r` is
-the midplane minor radius, and :math:`p_{ped}`, :math:`p_{sep}` are the total
-(electron + ion + impurity) pressures at the pedestal top and separatrix.
-This uses the same alpha_MHD convention (reference length :math:`R_{major}`,
-radial coordinate the midplane minor radius) as the ``alpha_MHD`` parameter
-used internally by the QuaLiKiz- and TGLF-based transport models.
-
-Note that ``alpha_crit`` is not computed by TORAX -- it must be supplied
-externally, e.g. from a local ideal ballooning mode stability calculation.
-
-``alpha_crit`` (**time-varying-scalar** [default = 1.0])
-  Critical normalized pressure gradient (infinite-n ideal ballooning mode
-  parameter), dimensionless.
-
-``n_e_ped`` (**time-varying-scalar** [default = 0.7e20])
-  Electron density at the pedestal top. In units of reference density if
-  ``n_e_ped_is_fGW==False``. In units of Greenwald fraction if
   ``n_e_ped_is_fGW==True``.
 
 ``n_e_ped_is_fGW`` (**time-varying-scalar** [default = False])
