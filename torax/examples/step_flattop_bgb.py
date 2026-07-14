@@ -112,29 +112,27 @@ CONFIG = {
         # alpha_crit is not reported in [2] (which uses a separate
         # empirical Europed pedestal-height scaling, eq 13-14, not
         # alpha_crit).
-        # WIP/known limitation: the local alpha at rho=0.95 implied by the
+        # alpha_crit=87 is the local alpha at rho=0.95 implied by the
         # pedestal this scenario was originally tuned to (T_i_ped=4.0,
-        # T_e_ped=5.0 keV, n_e_ped=6e19 m^-3) is ~87 -- a physically
-        # motivated value, not a grid artifact (it reflects a real
-        # transport-barrier step in the gradient at the pedestal top).
-        # However, using alpha_crit=87 with the saturation model's default
-        # gain (base_multiplier=1e6, steepness=100) makes the solver
-        # numerically stiff/unstable (near-discontinuous transport
-        # response to a self-referential local gradient signal). alpha_crit
-        # is set to 15 below instead, which converges cleanly but only
-        # reaches T_e_ped ~ 0.7 keV, T_i_ped ~ 0.8 keV -- well short of the
-        # scenario's original ~5 keV pedestal, so H98/fusion-performance
-        # will not match the docstring's tuning targets. Reaching the
-        # original target with alpha_crit~87 likely needs a much gentler
-        # saturation gain (lower base_multiplier/steepness) than the
-        # defaults tuned for ProfileValueSaturation's use case.
+        # T_e_ped=5.0 keV, n_e_ped=6e19 m^-3) -- a physically motivated
+        # value, not a grid artifact (it reflects a real transport-barrier
+        # step in the gradient at the pedestal top).
+        # Known limitation: this converges cleanly and stably (verified via
+        # a 15s run showing smooth, monotonic convergence, no crashes or
+        # timestep collapse), but the trend at that point had only reached
+        # T_e_ped ~ 3 keV and was still slowly decreasing -- somewhat below
+        # the scenario's original ~5 keV pedestal target, so
+        # H98/fusion-performance will not exactly match the docstring's
+        # tuning targets. A full run to steady state was not performed
+        # (each run of this scenario takes several minutes); reaching the
+        # original target may need a modestly higher alpha_crit.
         "model_name": "set_T_ped_n_ped",
         "set_pedestal": True,
         "mode": "ADAPTIVE_TRANSPORT",
         "rho_norm_ped_top": 0.95,
         "saturation_model": {
             "model_name": "alpha_crit",
-            "alpha_crit": 15.0,
+            "alpha_crit": 87.0,
         },
     },
     "sources": {

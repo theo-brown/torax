@@ -54,7 +54,8 @@ class AlphaCritSaturationModelTest(parameterized.TestCase):
         self.neoclassical_models,
     )
 
-  def _compute_reference_alpha(self, ped_top_idx):
+  def _compute_reference_alpha_max(self, rho_norm_ped_top):
+    """Reference max alpha over the pedestal region, mirroring production."""
     normalized_logarithmic_gradients = quasilinear_transport_model.NormalizedLogarithmicGradients.from_profiles(
         core_profiles=self.core_profiles,
         radial_coordinate=self.geo.r_mid,
@@ -67,7 +68,8 @@ class AlphaCritSaturationModelTest(parameterized.TestCase):
         reference_magnetic_field=self.geo.B_0,
         normalized_logarithmic_gradients=normalized_logarithmic_gradients,
     )
-    return alpha_face[ped_top_idx]
+    in_region = np.array(self.geo.rho_face_norm) >= rho_norm_ped_top
+    return np.max(np.where(in_region, np.array(alpha_face), -np.inf))
 
   @parameterized.named_parameters(
       dict(
@@ -84,11 +86,11 @@ class AlphaCritSaturationModelTest(parameterized.TestCase):
   def test_saturation_multiplier(self, alpha_crit_over_alpha):
     ped_top_idx = -2
     rho_norm_ped_top = self.geo.rho_face_norm[ped_top_idx]
-    reference_alpha = self._compute_reference_alpha(ped_top_idx)
+    reference_alpha_max = self._compute_reference_alpha_max(rho_norm_ped_top)
 
     config = _get_config()
     config['pedestal']['saturation_model']['alpha_crit'] = float(
-        reference_alpha * alpha_crit_over_alpha
+        reference_alpha_max * alpha_crit_over_alpha
     )
     torax_config = model_config.ToraxConfig.from_dict(config)
     provider = build_runtime_params.RuntimeParamsProvider.from_config(
@@ -178,6 +180,62 @@ class AlphaCritSaturationModelTest(parameterized.TestCase):
     }
     with self.assertRaises(pydantic.ValidationError):
       model_config.ToraxConfig.from_dict(config)
+
+  def test_triggers_on_max_alpha_in_region_not_just_boundary(self):
+    """The trigger must use the max alpha in the region, not just the value
+    at rho_norm_ped_top.
+
+    Regression test: an earlier version of this model only checked alpha at
+    the single grid face nearest rho_norm_ped_top, which let the gradient
+    run away anywhere further into the pedestal region (towards the
+    separatrix) without ever triggering saturation.
+    """
+    ped_top_idx = -2  # Leaves exactly one further face (-1) in the region.
+    rho_norm_ped_top = self.geo.rho_face_norm[ped_top_idx]
+
+    normalized_logarithmic_gradients = quasilinear_transport_model.NormalizedLogarithmicGradients.from_profiles(
+        core_profiles=self.core_profiles,
+        radial_coordinate=self.geo.r_mid,
+        radial_face_coordinate=self.geo.r_mid_face,
+        reference_length=self.geo.R_major,
+    )
+    alpha_face = np.array(
+        quasilinear_transport_model.calculate_alpha(
+            core_profiles=self.core_profiles,
+            q=self.core_profiles.q_face,
+            reference_magnetic_field=self.geo.B_0,
+            normalized_logarithmic_gradients=normalized_logarithmic_gradients,
+        )
+    )
+    alpha_at_boundary = alpha_face[ped_top_idx]
+    alpha_further_in = alpha_face[-1]
+    # Pick alpha_crit strictly between the two, so the boundary-only check
+    # would say "not saturated" but the max-over-region check must trigger.
+    self.assertNotEqual(alpha_at_boundary, alpha_further_in)
+    alpha_crit = float((alpha_at_boundary + alpha_further_in) / 2)
+    self.assertLess(min(alpha_at_boundary, alpha_further_in), alpha_crit)
+    self.assertGreater(max(alpha_at_boundary, alpha_further_in), alpha_crit)
+
+    config = _get_config()
+    config['pedestal']['rho_norm_ped_top'] = float(rho_norm_ped_top)
+    config['pedestal']['saturation_model']['alpha_crit'] = alpha_crit
+    torax_config = model_config.ToraxConfig.from_dict(config)
+    provider = build_runtime_params.RuntimeParamsProvider.from_config(
+        torax_config
+    )
+    runtime_params = provider(t=0.0)
+
+    saturation_model = alpha_crit_saturation_model.AlphaCritSaturationModel()
+    pedestal_output = pedestal_model_output.PedestalModelOutput(
+        rho_norm_ped_top=rho_norm_ped_top,
+        T_i_ped=1.0,
+        T_e_ped=1.0,
+        n_e_ped=1.0,
+    )
+    transport_multipliers = saturation_model(
+        runtime_params, self.geo, self.core_profiles, pedestal_output
+    )
+    self.assertGreater(transport_multipliers.chi_e_multiplier, 1.0)
 
 
 if __name__ == '__main__':

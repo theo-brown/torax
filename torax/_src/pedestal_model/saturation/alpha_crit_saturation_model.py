@@ -44,13 +44,21 @@ class AlphaCritSaturationModel(base.SaturationModel):
   r"""Saturation model based on a local ballooning-stability limit.
 
   Increases pedestal-region transport once the local infinite-n ideal
-  ballooning mode normalized pressure gradient ``alpha``, evaluated at the
-  pedestal top from the *current* (evolving) core profiles, exceeds a
-  user-provided critical value ``alpha_crit``. This uses the same alpha_MHD
-  convention (reference length :math:`R_{major}`, radial coordinate the
-  midplane minor radius) as
-  ``quasilinear_transport_model.calculate_alpha``, which is used by the
-  QuaLiKiz- and TGLF-based transport models.
+  ballooning mode normalized pressure gradient ``alpha``, evaluated
+  *anywhere in the pedestal region* (``rho_face_norm >= rho_norm_ped_top``)
+  from the *current* (evolving) core profiles, exceeds a user-provided
+  critical value ``alpha_crit``. This uses the same alpha_MHD convention
+  (reference length :math:`R_{major}`, radial coordinate the midplane minor
+  radius) as ``quasilinear_transport_model.calculate_alpha``, which is used
+  by the QuaLiKiz- and TGLF-based transport models.
+
+  The saturation trigger uses the *maximum* alpha over the pedestal region,
+  not just the value at ``rho_norm_ped_top`` itself: the resulting
+  transport multiplier is applied uniformly across the whole pedestal
+  region (see ``PedestalModelOutput.modify_core_transport``), so checking
+  only the boundary point would let the gradient run away anywhere further
+  into the pedestal (e.g. near the separatrix) without triggering a
+  transport response.
 
   ``alpha_crit`` is not computed by TORAX -- it must be supplied externally
   (e.g. from a local ideal ballooning mode stability calculation).
@@ -87,18 +95,15 @@ class AlphaCritSaturationModel(base.SaturationModel):
         normalized_logarithmic_gradients=normalized_logarithmic_gradients,
     )
 
-    # As in ProfileValueSaturationModel, use the nearest grid point rather
-    # than interpolating: alpha is itself a gradient-based quantity, and is
-    # noisy under interpolation near the pedestal top where gradients change
-    # rapidly.
-    rho_norm_face_ped_top_idx = jnp.argmin(
-        jnp.abs(geo.rho_face_norm - pedestal_output.rho_norm_ped_top)
-    )
-    alpha_ped = alpha_face[rho_norm_face_ped_top_idx]  # pyrefly: ignore[bad-index]
+    # Use the maximum alpha anywhere in the pedestal region (not just at
+    # rho_norm_ped_top) as the saturation trigger -- see class docstring.
+    in_pedestal_region = geo.rho_face_norm >= pedestal_output.rho_norm_ped_top
+    alpha_in_region = jnp.where(in_pedestal_region, alpha_face, -jnp.inf)
+    alpha_max = jnp.max(alpha_in_region)
 
     alpha_crit = saturation_params.alpha_crit
     normalized_deviation = (
-        (alpha_ped - alpha_crit) / alpha_crit - saturation_params.offset
+        (alpha_max - alpha_crit) / alpha_crit - saturation_params.offset
     )
     transport_multiplier = 1 + saturation_params.base_multiplier * jax.nn.softplus(
         normalized_deviation * saturation_params.steepness
