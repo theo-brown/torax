@@ -99,12 +99,26 @@ CONFIG = {
         "n_rho": 100,
     },
     "pedestal": {
-        "model_name": "set_T_ped_n_ped",
+        # Ballooning-stability-limited pedestal: pedestal-top pressure is set
+        # so that the local infinite-n ideal ballooning parameter reaches
+        # alpha_crit. Note: alpha_crit is not reported in [2] (which uses a
+        # separate empirical Europed pedestal-height scaling, eq 13-14, not
+        # alpha_crit).
+        # STEP's edge safety factor is very high (q ~ 9 at the pedestal top
+        # here, vs ~3-4 in conventional-aspect-ratio tokamaks), and since
+        # alpha ~ q^2, generic literature alpha_crit values (~2-4) collapse
+        # the pedestal almost to the separatrix value for this scenario.
+        # alpha_crit below is instead calibrated (via this model's own
+        # alpha formula, using this scenario's converged q/geometry) to
+        # reproduce the pedestal this scenario was originally tuned to
+        # (T_i_ped=4.0, T_e_ped=5.0 keV @ n_e_ped=6e19 m^-3, rho=0.95), so
+        # the H98/fusion-performance tuning described above still holds.
+        "model_name": "set_alpha_crit_n_ped",
         "set_pedestal": True,
         "rho_norm_ped_top": 0.95,
-        "T_i_ped": 4.0,  # [keV]
-        "T_e_ped": 5.0,  # [keV]
+        "alpha_crit": 90.4,
         "n_e_ped": 6e19,  # [m^-3]
+        "T_i_T_e_ratio": 4.0 / 5.0,  # from previous T_i_ped=4.0, T_e_ped=5.0
     },
     "sources": {
         # Physics-based sources
