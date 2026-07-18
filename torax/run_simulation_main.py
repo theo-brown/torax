@@ -33,7 +33,7 @@ import jax
 import torax
 from torax._src import simulation_app
 from torax._src.config import config_loader
-from torax._src.plotting import plotruns_lib
+from torax._src.plotting import dashboard
 from torax._src.torax_pydantic import model_config
 
 from absl import app
@@ -111,14 +111,6 @@ if 'output_dir' not in FLAGS:
   )
 else:
   _OUTPUT_DIR = FLAGS['output_dir']
-
-_PLOT_CONFIG_PATH = flags.DEFINE_string(
-    'plot_config',
-    'plotting/configs/default_plot_config.py',
-    'Path to a Python file containing a `PLOT_CONFIG` variable. If it is a'
-    ' relative path, it will first be attempted to be resolved relative to the'
-    ' working directory, and then the Torax base directory.',
-)
 
 jax.config.parse_flags_with_absl()
 
@@ -319,32 +311,19 @@ def _post_run_plotting(
         color=simulation_app.AnsiColors.RED,
     )
     return
-  try:
-    plot_config = config_loader.get_plot_config_from_file(
-        _PLOT_CONFIG_PATH.value
-    )
-  except ValueError as e:
-    logging.exception(
-        'Error loading plot config module %s: %s', _PLOT_CONFIG_PATH.value, e
-    )
-    return
   match input_text:
     case '0':
-      return plotruns_lib.plot_run(
-          plot_config, {'Run 1': output_files[-1]}
-      )
+      dashboard.plot_run({'Run 1': output_files[-1]})
     case '1':
       if len(output_files) == 1:
         simulation_app.log_to_stdout(
             'Only one output run file found, only plotting the last run.',
             color=simulation_app.AnsiColors.RED,
         )
-        return plotruns_lib.plot_run(
-            plot_config, {'Run 1': output_files[-1]}
-        )
-      return plotruns_lib.plot_run(
-          plot_config,
-          {'Run 1': output_files[-1], 'Run 2': output_files[-2]},
+        dashboard.plot_run({'Run 1': output_files[-1]})
+        return
+      dashboard.plot_run(
+          {'Run 1': output_files[-1], 'Run 2': output_files[-2]}
       )
     case '2':
       reference_run = _REFERENCE_RUN.value
@@ -356,7 +335,7 @@ def _post_run_plotting(
       outfiles = {'Run 1': output_files[-1]}
       if reference_run is not None:
         outfiles['Reference Run'] = reference_run
-      return plotruns_lib.plot_run(plot_config, outfiles)
+      dashboard.plot_run(outfiles)
     case _:
       raise ValueError('Unknown command')
 

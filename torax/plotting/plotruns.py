@@ -12,56 +12,75 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Basic post-run plotting tool. Plot a single run or comparison of two runs.
+"""Post-run plotting tool: opens TORAX output files in the React dashboard.
 
-Includes a time slider. Reads output files with xarray data or legacy h5 data.
-
-Plots are configured by a plot_config module.
+Loads one or more output files (several files enable run comparison) into a
+self-contained HTML page and opens it in the default browser. Which variables
+are plotted is configured interactively in the dashboard's settings popup;
+plot configurations can be saved to and loaded from JSON files there.
 """
-from absl import app
-from absl import logging
-from absl.flags import argparse_flags
-import matplotlib
-from torax._src.config import config_loader
-from torax._src.plotting import plotruns_lib
 
-matplotlib.use('TkAgg')
+import json
+import pathlib
+
+from absl import app
+from absl.flags import argparse_flags
+from torax._src.plotting import dashboard
 
 
 def parse_flags(_):
-  """Parse flags for the plotting tool."""
-  parser = argparse_flags.ArgumentParser(description='Plot finished run')
+  """Parses flags for the plotting tool."""
+  parser = argparse_flags.ArgumentParser(description='Plot finished run(s)')
   parser.add_argument(
       '--outfile',
-      nargs='*',
+      nargs='+',
+      required=True,
       help=(
-          'Relative location of output files (if two are provided, a'
-          ' comparison is done)'
+          'Relative location of output files (pass several to compare runs)'
       ),
   )
   parser.add_argument(
-      '--plot_config',
-      default='plotting/configs/default_plot_config.py',
-      help='Name of the plot config module.',
+      '--output',
+      default=None,
+      help=(
+          'Path to write the dashboard HTML page to (default: a temporary'
+          ' file).'
+      ),
+  )
+  parser.add_argument(
+      '--no_open',
+      action='store_true',
+      help='Do not open the written HTML page in a browser.',
+  )
+  parser.add_argument(
+      '--export_json',
+      action='store_true',
+      help=(
+          'Instead of building an HTML page, write each run as a dashboard'
+          ' JSON file next to the output file (loadable via the dashboard'
+          " app's Open runs button)."
+      ),
   )
   return parser.parse_args()
 
 
 def main(args):
-  plot_config_module_path = args.plot_config
-  try:
-    plot_config = config_loader.import_module(plot_config_module_path)[
-        'PLOT_CONFIG'
-    ]
-  except (ModuleNotFoundError, AttributeError) as e:
-    logging.exception(
-        'Error loading plot config: %s: %s', plot_config_module_path, e
-    )
-    raise
-  outfiles = {
-      f'Data {i + 1}': f for i, f in enumerate(args.outfile)
-  }
-  plotruns_lib.plot_run(plot_config, outfiles)
+  if args.export_json:
+    for outfile in args.outfile:
+      document = dashboard.load_run(outfile)
+      json_path = pathlib.Path(outfile).with_suffix('.json')
+      json_path.write_text(
+          json.dumps(document, separators=(',', ':')), encoding='utf-8'
+      )
+      print(f'Wrote {json_path}')
+    return
+
+  html_path = dashboard.plot_run(
+      args.outfile,
+      output_path=args.output,
+      open_browser=not args.no_open,
+  )
+  print(f'Dashboard written to {html_path}')
 
 
 # Method used by the `plot_torax` binary.

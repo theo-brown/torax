@@ -111,19 +111,6 @@ of inner solver iterations.
   run_torax --config='torax.examples.basic_config' \
   --output_dir=</path/to/output_dir>
 
-``plot_config`` (default: `plotting/configs/default_plot_config.py`) -
-Sets the plotting configuration used for the post-simulation plotting options.
-This flag should give the path to a Python file containing a ``PLOT_CONFIG``
-variable which is an instance of ``torax.plotting.plotruns_lib.FigureProperties``.
-By default, `plotting/configs/default_plot_config.py` is used.
-See :ref:`plotting` for further details and examples. An example using a
-non-default plot config is shown below.
-
-.. code-block:: console
-
-  run_torax --config='torax.examples.basic_config' \
-  --plot_config=plotting/configs/simple_plot_config.py
-
 ``log_output`` (default: `False`) - Logs a subset of the initial and final
 state of the simulation, including: ion and electron temperature, electron
 density, safety factor and magnetic shear. Used for debugging.

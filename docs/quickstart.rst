@@ -75,11 +75,9 @@ To plot the output of a single simulation, run the following command:
   plot_torax --outfile <full_path_to_simulation_output>
 
 Replace ``<full_path_to_simulation_output>`` with the full path to your
-simulation's output file. Optionally, specify a custom plot configuration using
-``--plot_config``, with the path for the plotting configuration module.
-If no ``--plot_config`` is specified, the default configuration at
-``plotting/configs/default_plot_config.py`` is used. See :ref:`plotting` for
-more details.
+simulation's output file. This opens the results in a browser dashboard;
+which variables are plotted is configured in the dashboard's settings popup.
+See :ref:`plotting` for more details.
 
 A slider allows scrolling through the output of all simulation timesteps.
 
