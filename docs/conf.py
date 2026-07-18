@@ -250,9 +250,6 @@ remove_from_toctrees = ['_autosummary/*']
 # Various github links with dynamic version from "version"
 
 rst_epilog = f"""
-.. |default_plot_config.py| replace:: `default_plot_config.py <default_plot_config_target_>`_
-.. _default_plot_config_target: {github_base_url}/torax/plotting/configs/default_plot_config.py
-
 .. |run_simulation_main.py| replace:: `run_simulation_main.py <run_simulation_main_target_>`_
 .. _run_simulation_main_target: {github_base_url}/torax/run_simulation_main.py
 
