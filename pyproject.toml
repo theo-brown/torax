@@ -114,6 +114,7 @@ exclude = ["*tests*"]
 
 [tool.setuptools.package-data]
 "torax.data.third_party.geo" = ["*"]
+"torax._src.plotting" = ["dashboard.html"]
 
 
 [tool.pytest.ini_options]

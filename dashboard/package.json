@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "bundle": "npm run build && node scripts/bundle.mjs",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" index.html vite.config.ts",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" index.html vite.config.ts"
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" index.html vite.config.ts \"scripts/*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" index.html vite.config.ts \"scripts/*.mjs\""
   },
   "dependencies": {
     "plotly.js-basic-dist-min": "^3.7.0",
