@@ -367,14 +367,27 @@ def root_newton_krylov(
     # Rebuild the preconditioner at the current iterate; reused for all
     # Krylov iterations within this Newton iteration.
     precond_apply = precond_fn(x) if precond_fn is not None else None
+    # Left-precondition explicitly, i.e. solve (M o J) d = M (-R), rather
+    # than passing M to gmres. jax's gmres measures its stopping criterion
+    # on the preconditioned residual but scales the tolerance by the
+    # unpreconditioned ||b||; when ||R|| is very large relative to the
+    # state-space scale this mismatch makes gmres accept the zero vector
+    # without iterating. Applying M to both operator and right-hand side
+    # keeps the stopping rule self-consistent in the preconditioned norm
+    # (which is also better balanced across channels).
+    if precond_apply is not None:
+      operator = lambda v: precond_apply(jvp_fun(v))
+      rhs = precond_apply(-residual_now)
+    else:
+      operator = jvp_fun
+      rhs = -residual_now
     direction, _ = jax.scipy.sparse.linalg.gmres(
-        jvp_fun,
-        -residual_now,
+        operator,
+        rhs,
         tol=gmres_rtol,
         atol=0.0,
         restart=gmres_restart,
         maxiter=gmres_maxiter,
-        M=precond_apply,
         solve_method='batched',
     )
     return _linesearch_update(
