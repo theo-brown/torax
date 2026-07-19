@@ -18,55 +18,75 @@ Compares `jax_root_finding.root_newton_raphson` (materializes the full N x N
 Jacobian via `jax.jacfwd` and solves densely) against the prototype
 `jax_root_finding.root_newton_krylov` (matrix-free preconditioned GMRES with
 J v products from `jax.linearize`) on a single implicit theta-method step of
-the STEP flat-top scenario with the TGLFNN-ukaea transport surrogate
-(N = 4 equations x 100 cells = 400).
+one or more TORAX configs, starting both solvers from the identical LINEAR
+initial guess.
 
 The JFNK preconditioner is the block-tridiagonal LHS matrix of the theta-method
 discretization, frozen at the initial guess and applied with the Thomas
 algorithm (O(N)). This matrix is the exact Jacobian minus the
 transport-coefficient sensitivity terms, so it captures the dominant
-diffusion/convection structure. A second variant additionally includes
-Pereverzev-Corrigan terms in the preconditioner as a proxy for transport
-stiffness.
+diffusion/convection structure.
 
-Usage: python benchmarks/newton_krylov_benchmark.py [--dt_mult 0.03125]
+Usage:
+  # Built-in STEP flat-top + TGLFNN-ukaea stress case (N=400):
+  python benchmarks/newton_krylov_benchmark.py
+
+  # Any config file(s) exposing a module-level CONFIG dict:
+  python benchmarks/newton_krylov_benchmark.py \
+      --configs torax/tests/test_data/test_psi_heat_dens.py --csv results.csv
+
+Each config is benchmarked on one implicit step at the dt chosen by its own
+time-step calculator (scaled by --dt_mult). Results are printed and optionally
+appended to a CSV for aggregation across many configs. Run each config in its
+own process when sweeping a large suite (jit caches accumulate memory).
 """
 
 import argparse
+import csv
 import functools
 import importlib.util
+import os
 import pathlib
 import time
+import traceback
 
 import jax
 import jax.numpy as jnp
 
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_BUILTIN_STEP_TGLFNN = 'step_tglfnn'
 
-def _load_step_config():
-  """Loads the STEP flat-top example config with TGLFNN-ukaea transport."""
-  examples_dir = pathlib.Path(__file__).resolve().parent.parent / 'torax'
-  spec = importlib.util.spec_from_file_location(
-      'step_flattop_bgb', examples_dir / 'examples' / 'step_flattop_bgb.py'
-  )
+
+def _load_config_dict(config_spec: str):
+  """Loads a CONFIG dict from a builtin name or a config file path."""
+  if config_spec == _BUILTIN_STEP_TGLFNN:
+    path = _REPO_ROOT / 'torax' / 'examples' / 'step_flattop_bgb.py'
+  else:
+    path = pathlib.Path(config_spec)
+  spec = importlib.util.spec_from_file_location(path.stem, path)
   mod = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(mod)
-  mod.CONFIG['transport'] = {
-      'model_name': 'tglfnn-ukaea',
-      # Public weights. The 'step' weights are not publicly distributed.
-      'machine': 'multimachine',
-      'chi_min': 0.15,
-      'chi_max': 100.0,
-      'D_e_min': 1e-3,
-      'D_e_max': 100.0,
-      'V_e_min': -50.0,
-      'V_e_max': 50.0,
-      'smooth_everywhere': True,
-      'smoothing_width': 0.05,
-  }
-  return mod.CONFIG
+  if not hasattr(mod, 'CONFIG'):
+    raise ValueError(f'{path} does not define a module-level CONFIG dict.')
+  config = mod.CONFIG
+  if config_spec == _BUILTIN_STEP_TGLFNN:
+    config['transport'] = {
+        'model_name': 'tglfnn-ukaea',
+        # Public weights. The 'step' weights are not publicly distributed.
+        'machine': 'multimachine',
+        'chi_min': 0.15,
+        'chi_max': 100.0,
+        'D_e_min': 1e-3,
+        'D_e_max': 100.0,
+        'V_e_min': -50.0,
+        'V_e_max': 50.0,
+        'smooth_everywhere': True,
+        'smoothing_width': 0.05,
+    }
+  return config
 
 
-def _build_problem(dt_mult: float):
+def _build_problem(config_dict, dt_mult: float):
   """Builds the residual function and solver inputs for one implicit step."""
   # Imported here so --help works without a full TORAX import.
   import torax  # pylint: disable=g-import-not-at-top
@@ -81,7 +101,7 @@ def _build_problem(dt_mult: float):
   from torax._src.orchestration import step_function_processing  # pylint: disable=g-import-not-at-top
   from torax._src.solver import predictor_corrector_method  # pylint: disable=g-import-not-at-top
 
-  torax_config = torax.ToraxConfig.from_dict(_load_step_config())
+  torax_config = torax.ToraxConfig.from_dict(config_dict)
   step_fn = run_simulation.make_step_fn(torax_config)
   state0, _ = initial_state_lib.get_initial_state_and_post_processed_outputs(
       step_fn=step_fn,
@@ -98,6 +118,9 @@ def _build_problem(dt_mult: float):
        geometry_provider=geo_provider,
        models=models,
    )
+
+  if not runtime_params_t.numerics.evolving_names:
+    raise ValueError('Config evolves no PDE variables; nothing to benchmark.')
 
   dt = step_fn.time_step_calculator.next_dt(runtime_params_t, state0) * dt_mult
   runtime_params_t_plus_dt, geo_t_plus_dt = (
@@ -222,27 +245,19 @@ def _build_problem(dt_mult: float):
   return residual_fun, x_init_vec, dt, build_precond
 
 
-def main():
-  parser = argparse.ArgumentParser()
-  parser.add_argument(
-      '--dt_mult', type=float, default=0.03125,
-      help='Multiplier on the nominal dt=10s. Default 0.03125 (dt=0.3125s), '
-      'the largest dt at which the dense Newton solver converges for this '
-      'case.',
-  )
-  parser.add_argument('--maxiter', type=int, default=30)
-  parser.add_argument('--tol', type=float, default=1e-5)
-  parser.add_argument('--gmres_restart', type=int, default=20)
-  parser.add_argument('--gmres_rtol', type=float, default=1e-2)
-  args = parser.parse_args()
-
+def _benchmark_config(config_spec: str, args) -> list[dict]:
+  """Runs all solver variants on one config. Returns CSV-ready row dicts."""
   from torax._src.solver import jax_root_finding  # pylint: disable=g-import-not-at-top
 
-  print('Building problem (STEP flat-top + TGLFNN-ukaea)...', flush=True)
-  residual_fun, x_init_vec, dt, build_precond = _build_problem(args.dt_mult)
+  name = pathlib.Path(config_spec).stem
+  print(f'=== {name}: building problem... ===', flush=True)
+  config_dict = _load_config_dict(config_spec)
+  residual_fun, x_init_vec, dt, build_precond = _build_problem(
+      config_dict, args.dt_mult
+  )
   residual_fun = jax.tree_util.Partial(residual_fun)
-  n = x_init_vec.shape[0]
-  print(f'N = {n}, dt = {float(dt):.4f} s', flush=True)
+  n = int(x_init_vec.shape[0])
+  print(f'N = {n}, dt = {float(dt):.4e} s', flush=True)
 
   common = dict(maxiter=args.maxiter, tol=args.tol)
 
@@ -261,32 +276,102 @@ def main():
     )
 
   variants = [
-      ('dense Newton (jacfwd)', jax.jit(dense)),
-      ('JFNK unpreconditioned', jax.jit(
+      ('dense_newton', jax.jit(dense)),
+      ('jfnk_noprecond', jax.jit(
           functools.partial(
               jfnk, precond_apply=None, restart=2 * args.gmres_restart))),
-      ('JFNK + Thomas precond', jax.jit(
+      ('jfnk_thomas', jax.jit(
           functools.partial(
               jfnk, precond_apply=build_precond(False),
               restart=args.gmres_restart))),
-      ('JFNK + Pereverzev precond', jax.jit(
-          functools.partial(
-              jfnk, precond_apply=build_precond(True),
-              restart=args.gmres_restart))),
   ]
+  if args.include_pereverzev_precond:
+    variants.append(
+        ('jfnk_pereverzev', jax.jit(
+            functools.partial(
+                jfnk, precond_apply=build_precond(True),
+                restart=args.gmres_restart))))
 
-  print(f'{"variant":28} {"iters":>5} {"error":>5} {"resid":>10} '
+  rows = []
+  print(f'{"variant":18} {"iters":>5} {"error":>5} {"resid":>10} '
         f'{"compile+run":>12} {"run":>9}')
-  for name, fn in variants:
+  for variant, fn in variants:
     t0 = time.perf_counter()
-    x_root, meta = jax.block_until_ready(fn(x_init_vec))
+    _, meta = jax.block_until_ready(fn(x_init_vec))
     t_first = time.perf_counter() - t0
     t0 = time.perf_counter()
-    x_root, meta = jax.block_until_ready(fn(x_init_vec))
+    _, meta = jax.block_until_ready(fn(x_init_vec))
     t_run = time.perf_counter() - t0
     resid = float(jnp.mean(jnp.abs(meta.residual)))
-    print(f'{name:28} {int(meta.iterations):5d} {int(meta.error):5d} '
-          f'{resid:10.2e} {t_first:11.1f}s {t_run:8.1f}s', flush=True)
+    print(f'{variant:18} {int(meta.iterations):5d} {int(meta.error):5d} '
+          f'{resid:10.2e} {t_first:11.1f}s {t_run:8.2f}s', flush=True)
+    rows.append({
+        'config': name,
+        'N': n,
+        'dt': float(dt),
+        'variant': variant,
+        'iters': int(meta.iterations),
+        'error': int(meta.error),
+        'residual': resid,
+        'compile_run_s': round(t_first, 2),
+        'run_s': round(t_run, 3),
+    })
+  return rows
+
+
+_CSV_FIELDS = [
+    'config', 'N', 'dt', 'variant', 'iters', 'error', 'residual',
+    'compile_run_s', 'run_s',
+]
+
+
+def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--configs', nargs='+', default=[_BUILTIN_STEP_TGLFNN],
+      help='Config .py files exposing a CONFIG dict, or the builtin name '
+      f"'{_BUILTIN_STEP_TGLFNN}' (STEP flat-top with TGLFNN-ukaea transport).",
+  )
+  parser.add_argument(
+      '--dt_mult', type=float, default=1.0,
+      help='Multiplier on each config\'s own nominal dt.',
+  )
+  parser.add_argument('--maxiter', type=int, default=30)
+  parser.add_argument('--tol', type=float, default=1e-5)
+  parser.add_argument('--gmres_restart', type=int, default=20)
+  parser.add_argument('--gmres_rtol', type=float, default=1e-2)
+  parser.add_argument(
+      '--include_pereverzev_precond', action='store_true',
+      help='Also run the Pereverzev-stiffened preconditioner variant '
+      '(counterproductive in benchmarks to date; off by default).',
+  )
+  parser.add_argument(
+      '--csv', type=str, default='',
+      help='Append per-variant results to this CSV file.',
+  )
+  args = parser.parse_args()
+
+  all_rows = []
+  for config_spec in args.configs:
+    try:
+      all_rows.extend(_benchmark_config(config_spec, args))
+    except Exception as e:  # pylint: disable=broad-except
+      print(f'FAILED to benchmark {config_spec}: {e}', flush=True)
+      traceback.print_exc()
+      all_rows.append({
+          'config': pathlib.Path(config_spec).stem,
+          'N': -1, 'dt': -1.0, 'variant': 'BUILD_FAIL',
+          'iters': -1, 'error': -1, 'residual': float('nan'),
+          'compile_run_s': -1.0, 'run_s': -1.0,
+      })
+
+  if args.csv:
+    write_header = not os.path.exists(args.csv)
+    with open(args.csv, 'a', newline='') as f:
+      writer = csv.DictWriter(f, fieldnames=_CSV_FIELDS)
+      if write_header:
+        writer.writeheader()
+      writer.writerows(all_rows)
 
 
 if __name__ == '__main__':
