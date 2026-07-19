@@ -201,20 +201,16 @@ def _cond(
   )
 
 
-def _body(
+def _linesearch_update(
     input_state: dict[str, jax.Array],
-    jacobian_fun: Callable[[jax.Array], jax.Array],
+    direction: jax.Array,
     residual_fun: Callable[[jax.Array], jax.Array],
     log_iterations: bool,
     delta_reduction_factor: float,
     sufficient_decrease: float,
 ) -> dict[str, jax.Array]:
-  """Calculates next guess in Newton-Raphson iteration."""
+  """Backtracking line search along `direction` and iteration state update."""
   dtype = input_state['x'].dtype
-  a_mat = jacobian_fun(input_state['x'])
-  rhs = -input_state['residual']
-
-  direction = jnp.linalg.solve(a_mat, rhs)
 
   def norm_fn(res):
     return jnp.mean(jnp.abs(res))
@@ -255,3 +251,141 @@ def _body(
     )
 
   return output_state
+
+
+def _body(
+    input_state: dict[str, jax.Array],
+    jacobian_fun: Callable[[jax.Array], jax.Array],
+    residual_fun: Callable[[jax.Array], jax.Array],
+    log_iterations: bool,
+    delta_reduction_factor: float,
+    sufficient_decrease: float,
+) -> dict[str, jax.Array]:
+  """Calculates next guess in Newton-Raphson iteration."""
+  a_mat = jacobian_fun(input_state['x'])
+  rhs = -input_state['residual']
+
+  direction = jnp.linalg.solve(a_mat, rhs)
+
+  return _linesearch_update(
+      input_state=input_state,
+      direction=direction,
+      residual_fun=residual_fun,
+      log_iterations=log_iterations,
+      delta_reduction_factor=delta_reduction_factor,
+      sufficient_decrease=sufficient_decrease,
+  )
+
+
+def root_newton_krylov(
+    fun: Callable[[jax.Array], jax.Array],
+    x0: jax.Array | np.ndarray,
+    *,
+    maxiter: int = 30,
+    tol: float = 1e-5,
+    coarse_tol: float = 1e-2,
+    delta_reduction_factor: float = 0.5,
+    tau_min: float = 0.01,
+    sufficient_decrease: float = 1e-4,
+    gmres_rtol: float = 1e-2,
+    gmres_restart: int = 20,
+    gmres_maxiter: int = 1,
+    precond_apply: Callable[[jax.Array], jax.Array] | None = None,
+    log_iterations: bool = False,
+) -> tuple[jax.Array, RootMetadata]:
+  """A Jacobian-free Newton-Krylov (JFNK) root finder.
+
+  Prototype alternative to `root_newton_raphson`. Instead of materializing the
+  dense Jacobian with `jax.jacfwd` (cost ~= N residual evaluations) and solving
+  with `jnp.linalg.solve`, each Newton direction is obtained by solving
+  J(x) d = -R(x) with matrix-free GMRES, where J v products are computed via
+  `jax.linearize` (cost ~= 1 residual evaluation per Krylov iteration).
+
+  The outer iteration (backtracking line search, convergence and tau_min exit
+  conditions, error classification) is identical to `root_newton_raphson`.
+
+  Note: this prototype does not support `jax.lax.custom_root`; use
+  `root_newton_raphson` if implicit differentiation through the solve is
+  required.
+
+  Args:
+    fun: The function to find the root of.
+    x0: The initial guess of the location of the root.
+    maxiter: Quit iterating after this many Newton iterations.
+    tol: Quit iterating after the average absolute value of the residual is <=
+      tol.
+    coarse_tol: Coarser allowed tolerance for cases when solver develops small
+      steps in the vicinity of the solution.
+    delta_reduction_factor: Multiply by delta_reduction_factor after each failed
+      line search step.
+    tau_min: Minimum step_size allowed before the Newton routine gives up.
+    sufficient_decrease: Acceptance threshold for sufficient decrease in the
+      line search.
+    gmres_rtol: Relative tolerance for the inner GMRES solve (an inexact-Newton
+      forcing term). The Krylov solve stops when the linear residual norm is
+      below gmres_rtol * ||R(x)||.
+    gmres_restart: Size of the Krylov subspace per GMRES cycle. Each Krylov
+      iteration costs one J v product (~1 residual evaluation).
+    gmres_maxiter: Number of GMRES restart cycles. Total J v products are at
+      most gmres_restart * gmres_maxiter per Newton iteration.
+    precond_apply: Optional preconditioner. A callable approximating v ->
+      J^{-1} v, applied within GMRES. For the theta-method residual, an
+      effective and cheap choice is a Thomas solve against the block-
+      tridiagonal LHS matrix of the discretized PDE (which is the exact
+      Jacobian minus the transport-coefficient sensitivity terms).
+    log_iterations: If true, output diagnostic information from within
+      iteration loop.
+
+  Returns:
+    A tuple `(x_root, RootMetadata(...))`.
+  """
+  residual_fun = jax_utils.xla_metadata_call(
+      jax.jit(fun), compilation_unit='residual_fun_block'
+  )
+
+  residual_vec_init = residual_fun(x0)
+  initial_state = {
+      'x': x0,
+      'iterations': jnp.array(0, dtype=jax_utils.get_dtype()),
+      'residual': residual_vec_init,
+      'last_tau': jnp.array(1.0, dtype=jax_utils.get_dtype()),
+  }
+
+  def krylov_body(input_state: dict[str, jax.Array]) -> dict[str, jax.Array]:
+    x = input_state['x']
+    residual_now = input_state['residual']
+    # One primal evaluation; jvp_fun then computes J v at ~1 residual eval per
+    # call without rematerializing the primal.
+    _, jvp_fun = jax.linearize(residual_fun, x)
+    direction, _ = jax.scipy.sparse.linalg.gmres(
+        jvp_fun,
+        -residual_now,
+        tol=gmres_rtol,
+        atol=0.0,
+        restart=gmres_restart,
+        maxiter=gmres_maxiter,
+        M=precond_apply,
+        solve_method='batched',
+    )
+    return _linesearch_update(
+        input_state=input_state,
+        direction=direction,
+        residual_fun=residual_fun,
+        log_iterations=log_iterations,
+        delta_reduction_factor=delta_reduction_factor,
+        sufficient_decrease=sufficient_decrease,
+    )
+
+  cond_fun = functools.partial(
+      _cond, tol=tol, tau_min=tau_min, maxiter=maxiter
+  )
+  output_state = jax.lax.while_loop(cond_fun, krylov_body, initial_state)
+  x_out = output_state.pop('x')
+
+  error = _error_cond(
+      residual=output_state['residual'], coarse_tol=coarse_tol, tol=tol
+  )
+  output_state['iterations'] = output_state['iterations'].astype(
+      jax_utils.get_int_dtype()
+  )
+  return x_out, RootMetadata(**output_state, error=error)

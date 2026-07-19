@@ -100,5 +100,74 @@ class NewtonRaphsonSolveBlockTest(parameterized.TestCase):
       chex.assert_trees_all_close(b_grad, b_grad_diff, atol=1e-4)
 
 
+class NewtonKrylovTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    jax.config.update('jax_enable_x64', True)
+
+  @parameterized.named_parameters(
+      ('positive_search', 0.5, 0.1, (0.0, 0.0)),
+      ('negative_search', 1.0, 1.0, (2.0, 1.0)),
+  )
+  def test_root_newton_krylov_matches_scipy(
+      self, a: float, b: float, x0: tuple[float, float]):
+    dtype = np.float64
+    tol = 1e-9
+    f_closed = functools.partial(function_to_find_root, a=a, b=b)
+
+    x_init = np.array(x0, dtype=dtype)
+    sol_np = optimize.root(f_closed, x0, tol=tol)
+
+    @jax.jit(static_argnames=['tol', 'maxiter'])
+    def root_jax(x, tol, maxiter):
+      return jax_root_finding.root_newton_krylov(
+          f_closed, x, tol=tol, maxiter=maxiter, gmres_rtol=1e-8
+      )
+
+    sol_jax, metadata = root_jax(x_init, tol=tol, maxiter=100)
+
+    with self.subTest('solver_correctness_against_scipy'):
+      chex.assert_trees_all_close(sol_np.x, sol_jax, atol=tol)
+      self.assertEqual(int(metadata.error), 0)
+      self.assertGreater(int(metadata.iterations), 0)
+
+  def test_root_newton_krylov_larger_system_with_preconditioner(self):
+    """Stiff tridiagonal-dominated system, as in the theta-method residual."""
+    tol = 1e-9
+    n = 50
+    rng = np.random.RandomState(0)
+    # Diagonally dominant tridiagonal linear part + a mild nonlinearity.
+    diag = 4.0 + rng.rand(n)
+    off = -1.0 + 0.1 * rng.rand(n - 1)
+    a_mat = np.diag(diag) + np.diag(off, 1) + np.diag(off, -1)
+    b_vec = rng.rand(n)
+
+    def f(x):
+      xp = jnp if isinstance(x, jax.Array) else np
+      return a_mat @ x + 0.1 * xp.tanh(x) - b_vec
+
+    sol_np = optimize.root(f, np.zeros(n), tol=tol)
+
+    a_inv = np.linalg.inv(a_mat)
+    precond_apply = lambda v: jnp.asarray(a_inv) @ v
+
+    for precond in (None, precond_apply):
+      with self.subTest(preconditioned=precond is not None):
+        sol_jax, metadata = jax.jit(
+            functools.partial(
+                jax_root_finding.root_newton_krylov,
+                f,
+                tol=tol,
+                maxiter=50,
+                gmres_rtol=1e-8,
+                gmres_restart=n,
+                precond_apply=precond,
+            )
+        )(jnp.zeros(n))
+        chex.assert_trees_all_close(sol_np.x, sol_jax, atol=1e-7)
+        self.assertEqual(int(metadata.error), 0)
+
+
 if __name__ == '__main__':
   absltest.main()
