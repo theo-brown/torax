@@ -271,6 +271,7 @@ def _benchmark_config(config_spec: str, args) -> list[dict]:
         fun=residual_fun, x0=x0,
         gmres_rtol=args.gmres_rtol,
         gmres_restart=restart,
+        gmres_maxiter=args.gmres_maxiter,
         precond_apply=precond_apply,
         **common,
     )
@@ -340,6 +341,8 @@ def main():
   parser.add_argument('--tol', type=float, default=1e-5)
   parser.add_argument('--gmres_restart', type=int, default=20)
   parser.add_argument('--gmres_rtol', type=float, default=1e-2)
+  parser.add_argument('--gmres_maxiter', type=int, default=1,
+                      help='Number of GMRES restart cycles.')
   parser.add_argument(
       '--include_pereverzev_precond', action='store_true',
       help='Also run the Pereverzev-stiffened preconditioner variant '
