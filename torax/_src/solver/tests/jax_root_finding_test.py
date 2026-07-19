@@ -150,10 +150,19 @@ class NewtonKrylovTest(parameterized.TestCase):
     sol_np = optimize.root(f, np.zeros(n), tol=tol)
 
     a_inv = np.linalg.inv(a_mat)
-    precond_apply = lambda v: jnp.asarray(a_inv) @ v
+    frozen_precond_fn = lambda x: (lambda v: jnp.asarray(a_inv) @ v)
 
-    for precond in (None, precond_apply):
-      with self.subTest(preconditioned=precond is not None):
+    def refresh_precond_fn(x):
+      # x-dependent preconditioner: the exact Jacobian inverse at x.
+      jac = jnp.asarray(a_mat) + jnp.diag(0.1 * (1.0 - jnp.tanh(x) ** 2))
+      return lambda v: jnp.linalg.solve(jac, v)
+
+    for name, precond_fn in (
+        ('none', None),
+        ('frozen', frozen_precond_fn),
+        ('refresh', refresh_precond_fn),
+    ):
+      with self.subTest(preconditioner=name):
         sol_jax, metadata = jax.jit(
             functools.partial(
                 jax_root_finding.root_newton_krylov,
@@ -162,7 +171,7 @@ class NewtonKrylovTest(parameterized.TestCase):
                 maxiter=50,
                 gmres_rtol=1e-8,
                 gmres_restart=n,
-                precond_apply=precond,
+                precond_fn=precond_fn,
             )
         )(jnp.zeros(n))
         chex.assert_trees_all_close(sol_np.x, sol_jax, atol=1e-7)

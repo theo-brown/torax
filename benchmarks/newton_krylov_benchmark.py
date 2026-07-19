@@ -198,11 +198,11 @@ def _build_problem(config_dict, dt_mult: float):
   )
   x_init_vec = fvm_conversions.cell_variable_tuple_to_vec(x_init_tuple)
 
-  def build_precond(allow_pereverzev: bool):
-    """Frozen block-tridiagonal preconditioner from coeffs at the guess."""
-    coeffs_init = coeffs_callback(
+  def _make_precond_apply(x_tuple, allow_pereverzev: bool):
+    """Builds v -> M(x)^{-1} v from the theta-method LHS matrix at x."""
+    coeffs_x = coeffs_callback(
         runtime_params_t_plus_dt, geo_t_plus_dt, core_profiles_t_plus_dt,
-        prev_core_profiles=core_profiles_t, dt=dt, x=x_init_tuple,
+        prev_core_profiles=core_profiles_t, dt=dt, x=x_tuple,
         explicit_source_profiles=explicit_source_profiles,
         allow_pereverzev=allow_pereverzev,
         pedestal_transition_state=pedestal_transition_state,
@@ -212,20 +212,20 @@ def _build_problem(config_dict, dt_mult: float):
         residual_and_loss.theta_method_matrix_equation(
             dt=dt,
             x_old=x_old,
-            x_new_guess=x_init_tuple,
+            x_new_guess=x_tuple,
             coeffs_old=coeffs_old,
-            coeffs_new=coeffs_init,
+            coeffs_new=coeffs_x,
             theta_implicit=solver_params.theta_implicit,
             convection_dirichlet_mode=solver_params.convection_dirichlet_mode,
             convection_neumann_mode=solver_params.convection_neumann_mode,
         )
     )
-    if coeffs_init.has_internal_boundary_conditions:
+    if coeffs_x.has_internal_boundary_conditions:
       lhs, lhs_vec, rhs, rhs_vec = (
           residual_and_loss.apply_internal_boundary_conditions(
               lhs, lhs_vec, rhs, rhs_vec,
-              coeffs_init.internal_boundary_condition_mask,
-              coeffs_init.internal_boundary_condition_target_vec,
+              coeffs_x.internal_boundary_condition_mask,
+              coeffs_x.internal_boundary_condition_target_vec,
           )
       )
     num_cells = lhs.num_blocks
@@ -242,7 +242,21 @@ def _build_problem(config_dict, dt_mult: float):
 
     return precond_apply
 
-  return residual_fun, x_init_vec, dt, build_precond
+  def build_precond_fn(refresh: bool, allow_pereverzev: bool = False):
+    """Preconditioner builder: frozen at the initial guess, or refreshed."""
+    if refresh:
+
+      def precond_fn(x_vec):
+        x_tuple = fvm_conversions.vec_to_cell_variable_tuple(
+            x_vec, core_profiles_t_plus_dt, evolving_names
+        )
+        return _make_precond_apply(x_tuple, allow_pereverzev)
+
+      return precond_fn
+    frozen_apply = _make_precond_apply(x_init_tuple, allow_pereverzev)
+    return lambda x_vec: frozen_apply
+
+  return residual_fun, x_init_vec, dt, build_precond_fn
 
 
 def _benchmark_config(config_spec: str, args) -> list[dict]:
@@ -252,7 +266,7 @@ def _benchmark_config(config_spec: str, args) -> list[dict]:
   name = pathlib.Path(config_spec).stem
   print(f'=== {name}: building problem... ===', flush=True)
   config_dict = _load_config_dict(config_spec)
-  residual_fun, x_init_vec, dt, build_precond = _build_problem(
+  residual_fun, x_init_vec, dt, build_precond_fn = _build_problem(
       config_dict, args.dt_mult
   )
   residual_fun = jax.tree_util.Partial(residual_fun)
@@ -266,13 +280,13 @@ def _benchmark_config(config_spec: str, args) -> list[dict]:
         fun=residual_fun, x0=x0, use_jax_custom_root=False, **common
     )
 
-  def jfnk(x0, precond_apply, restart):
+  def jfnk(x0, precond_fn, restart):
     return jax_root_finding.root_newton_krylov(
         fun=residual_fun, x0=x0,
         gmres_rtol=args.gmres_rtol,
         gmres_restart=restart,
         gmres_maxiter=args.gmres_maxiter,
-        precond_apply=precond_apply,
+        precond_fn=precond_fn,
         **common,
     )
 
@@ -280,17 +294,23 @@ def _benchmark_config(config_spec: str, args) -> list[dict]:
       ('dense_newton', jax.jit(dense)),
       ('jfnk_noprecond', jax.jit(
           functools.partial(
-              jfnk, precond_apply=None, restart=2 * args.gmres_restart))),
+              jfnk, precond_fn=None, restart=2 * args.gmres_restart))),
       ('jfnk_thomas', jax.jit(
           functools.partial(
-              jfnk, precond_apply=build_precond(False),
+              jfnk, precond_fn=build_precond_fn(refresh=False),
+              restart=args.gmres_restart))),
+      ('jfnk_refresh', jax.jit(
+          functools.partial(
+              jfnk, precond_fn=build_precond_fn(refresh=True),
               restart=args.gmres_restart))),
   ]
   if args.include_pereverzev_precond:
     variants.append(
         ('jfnk_pereverzev', jax.jit(
             functools.partial(
-                jfnk, precond_apply=build_precond(True),
+                jfnk,
+                precond_fn=build_precond_fn(
+                    refresh=False, allow_pereverzev=True),
                 restart=args.gmres_restart))))
 
   rows = []

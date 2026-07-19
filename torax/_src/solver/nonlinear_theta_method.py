@@ -52,6 +52,7 @@ class NewtonRaphsonRuntimeParams(solver_runtime_params_lib.RuntimeParams):
   use_newton_krylov: bool = dataclasses.field(metadata={'static': True})
   gmres_restart: int = dataclasses.field(metadata={'static': True})
   gmres_rtol: float = dataclasses.field(metadata={'static': True})
+  gmres_precond_refresh: bool = dataclasses.field(metadata={'static': True})
 
 
 class NonlinearThetaMethod(solver.Solver):
@@ -266,6 +267,7 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         use_newton_krylov=solver_params.use_newton_krylov,
         gmres_restart=solver_params.gmres_restart,
         gmres_rtol=solver_params.gmres_rtol,
+        gmres_precond_refresh=solver_params.gmres_precond_refresh,
     )
     return (
         x_new,

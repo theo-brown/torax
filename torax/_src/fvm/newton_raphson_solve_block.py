@@ -56,6 +56,7 @@ MIN_DELTA: Final[float] = 1e-7
         'use_newton_krylov',
         'gmres_restart',
         'gmres_rtol',
+        'gmres_precond_refresh',
     ],
 )
 def newton_raphson_solve_block(
@@ -82,6 +83,7 @@ def newton_raphson_solve_block(
     use_newton_krylov: bool = False,
     gmres_restart: int = 40,
     gmres_rtol: float = 1e-3,
+    gmres_precond_refresh: bool = True,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -242,48 +244,71 @@ def newton_raphson_solve_block(
 
   if use_newton_krylov:
     # Jacobian-free Newton-Krylov: preconditioned with the block-tridiagonal
-    # LHS matrix of the theta-method discretization, frozen at the initial
-    # guess and applied via the Thomas algorithm. This matrix is the exact
-    # Jacobian minus the coefficient-sensitivity terms.
-    coeffs_init = coeffs_callback(
-        runtime_params_t_plus_dt,
-        geo_t_plus_dt,
-        core_profiles_t_plus_dt,
-        prev_core_profiles=core_profiles_t,
-        dt=dt,
-        x=init_x_new,
-        explicit_source_profiles=explicit_source_profiles,
-        pedestal_transition_state=pedestal_transition_state,
-    )
-    solver_params = runtime_params_t_plus_dt.solver
-    lhs_matrix, lhs_vec, rhs_matrix, rhs_vec = (
-        residual_and_loss.theta_method_matrix_equation(
-            dt=dt,
-            x_old=x_old,
-            x_new_guess=init_x_new,
-            coeffs_old=coeffs_old,
-            coeffs_new=coeffs_init,
-            theta_implicit=solver_params.theta_implicit,
-            convection_dirichlet_mode=solver_params.convection_dirichlet_mode,
-            convection_neumann_mode=solver_params.convection_neumann_mode,
-        )
-    )
-    if coeffs_init.has_internal_boundary_conditions:
+    # LHS matrix of the theta-method discretization, applied via the Thomas
+    # algorithm. This matrix is the exact Jacobian minus the
+    # coefficient-sensitivity terms.
+
+    def make_precond_apply(
+        x_tuple: tuple[cell_variable.CellVariable, ...],
+    ):
+      """Builds v -> M(x)^{-1} v with M the theta-method LHS matrix at x."""
+      coeffs_x = coeffs_callback(
+          runtime_params_t_plus_dt,
+          geo_t_plus_dt,
+          core_profiles_t_plus_dt,
+          prev_core_profiles=core_profiles_t,
+          dt=dt,
+          x=x_tuple,
+          explicit_source_profiles=explicit_source_profiles,
+          pedestal_transition_state=pedestal_transition_state,
+      )
+      solver_params = runtime_params_t_plus_dt.solver
       lhs_matrix, lhs_vec, rhs_matrix, rhs_vec = (
-          residual_and_loss.apply_internal_boundary_conditions(
-              lhs_matrix, lhs_vec, rhs_matrix, rhs_vec,
-              coeffs_init.internal_boundary_condition_mask,
-              coeffs_init.internal_boundary_condition_target_vec,
+          residual_and_loss.theta_method_matrix_equation(
+              dt=dt,
+              x_old=x_old,
+              x_new_guess=x_tuple,
+              coeffs_old=coeffs_old,
+              coeffs_new=coeffs_x,
+              theta_implicit=solver_params.theta_implicit,
+              convection_dirichlet_mode=solver_params.convection_dirichlet_mode,
+              convection_neumann_mode=solver_params.convection_neumann_mode,
           )
       )
-    num_cells = lhs_matrix.num_blocks
-    num_channels = lhs_matrix.block_size
+      if coeffs_x.has_internal_boundary_conditions:
+        lhs_matrix, lhs_vec, rhs_matrix, rhs_vec = (
+            residual_and_loss.apply_internal_boundary_conditions(
+                lhs_matrix, lhs_vec, rhs_matrix, rhs_vec,
+                coeffs_x.internal_boundary_condition_mask,
+                coeffs_x.internal_boundary_condition_target_vec,
+            )
+        )
+      num_cells = lhs_matrix.num_blocks
+      num_channels = lhs_matrix.block_size
 
-    def precond_apply(v: jax.Array) -> jax.Array:
-      # The flattened state/residual vector is channel-major; reshape to the
-      # (num_cells, num_channels) layout used by the block-tridiagonal solve.
-      arr = v.reshape(num_channels, num_cells).T
-      return tridiagonal.thomas_solve(lhs_matrix, arr).T.reshape(-1)
+      def precond_apply(v: jax.Array) -> jax.Array:
+        # The flattened state/residual vector is channel-major; reshape to
+        # the (num_cells, num_channels) layout used by the block-tridiagonal
+        # solve.
+        arr = v.reshape(num_channels, num_cells).T
+        return tridiagonal.thomas_solve(lhs_matrix, arr).T.reshape(-1)
+
+      return precond_apply
+
+    if gmres_precond_refresh:
+      # Rebuild the preconditioner at each Newton iterate. One extra
+      # calc_coeffs per iteration, but robust to transport coefficients
+      # changing regime between the initial guess and the solution.
+      def precond_fn(x_vec: jax.Array):
+        x_tuple = fvm_conversions.vec_to_cell_variable_tuple(
+            x_vec, core_profiles_t_plus_dt, evolving_names
+        )
+        return make_precond_apply(x_tuple)
+
+    else:
+      # Preconditioner frozen at the initial guess.
+      frozen_apply = make_precond_apply(init_x_new)
+      precond_fn = lambda x_vec: frozen_apply
 
     root_finder = functools.partial(
         jax_root_finding.root_newton_krylov,
@@ -295,7 +320,7 @@ def newton_raphson_solve_block(
         tau_min=tau_min,
         gmres_restart=gmres_restart,
         gmres_rtol=gmres_rtol,
-        precond_apply=precond_apply,
+        precond_fn=precond_fn,
         log_iterations=log_iterations,
     )
   else:

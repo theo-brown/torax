@@ -290,7 +290,9 @@ def root_newton_krylov(
     gmres_rtol: float = 1e-2,
     gmres_restart: int = 20,
     gmres_maxiter: int = 1,
-    precond_apply: Callable[[jax.Array], jax.Array] | None = None,
+    precond_fn: (
+        Callable[[jax.Array], Callable[[jax.Array], jax.Array]] | None
+    ) = None,
     log_iterations: bool = False,
 ) -> tuple[jax.Array, RootMetadata]:
   """A Jacobian-free Newton-Krylov (JFNK) root finder.
@@ -328,11 +330,16 @@ def root_newton_krylov(
       iteration costs one J v product (~1 residual evaluation).
     gmres_maxiter: Number of GMRES restart cycles. Total J v products are at
       most gmres_restart * gmres_maxiter per Newton iteration.
-    precond_apply: Optional preconditioner. A callable approximating v ->
-      J^{-1} v, applied within GMRES. For the theta-method residual, an
-      effective and cheap choice is a Thomas solve against the block-
-      tridiagonal LHS matrix of the discretized PDE (which is the exact
-      Jacobian minus the transport-coefficient sensitivity terms).
+    precond_fn: Optional preconditioner builder. Called once per Newton
+      iteration with the current iterate x; must return a callable
+      approximating v -> J(x)^{-1} v, which is applied within GMRES. This
+      allows the preconditioner to be refreshed at each iterate (important
+      when e.g. transport coefficients switch regimes between the initial
+      guess and the solution). For a preconditioner frozen at the initial
+      guess, return the same callable regardless of x. For the theta-method
+      residual, an effective and cheap choice is a Thomas solve against the
+      block-tridiagonal LHS matrix of the discretized PDE (which is the
+      exact Jacobian minus the transport-coefficient sensitivity terms).
     log_iterations: If true, output diagnostic information from within
       iteration loop.
 
@@ -357,6 +364,9 @@ def root_newton_krylov(
     # One primal evaluation; jvp_fun then computes J v at ~1 residual eval per
     # call without rematerializing the primal.
     _, jvp_fun = jax.linearize(residual_fun, x)
+    # Rebuild the preconditioner at the current iterate; reused for all
+    # Krylov iterations within this Newton iteration.
+    precond_apply = precond_fn(x) if precond_fn is not None else None
     direction, _ = jax.scipy.sparse.linalg.gmres(
         jvp_fun,
         -residual_now,

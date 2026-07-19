@@ -187,6 +187,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
   gmres_rtol: Annotated[pydantic.PositiveFloat, torax_pydantic.JAX_STATIC] = (
       1e-3
   )
+  gmres_precond_refresh: Annotated[bool, torax_pydantic.JAX_STATIC] = True
 
   @functools.cached_property
   def build_runtime_params(
@@ -212,6 +213,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         use_newton_krylov=self.use_newton_krylov,
         gmres_restart=self.gmres_restart,
         gmres_rtol=self.gmres_rtol,
+        gmres_precond_refresh=self.gmres_precond_refresh,
         fixed_point_atol=self.fixed_point_atol,
         fixed_point_rtol=self.fixed_point_rtol,
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,
