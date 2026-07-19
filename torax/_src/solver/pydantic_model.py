@@ -180,6 +180,13 @@ class NewtonRaphsonThetaMethod(BaseSolver):
   residual_tol: float = 1e-5
   residual_coarse_tol: float = 1e-2
   tau_min: float = 0.01
+  use_newton_krylov: Annotated[bool, torax_pydantic.JAX_STATIC] = False
+  gmres_restart: Annotated[pydantic.PositiveInt, torax_pydantic.JAX_STATIC] = (
+      40
+  )
+  gmres_rtol: Annotated[pydantic.PositiveFloat, torax_pydantic.JAX_STATIC] = (
+      1e-3
+  )
 
   @functools.cached_property
   def build_runtime_params(
@@ -202,6 +209,9 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         tau_min=self.tau_min,
         initial_guess_mode=self.initial_guess_mode.value,  # pyrefly: ignore[bad-argument-type]
         log_iterations=self.log_iterations,
+        use_newton_krylov=self.use_newton_krylov,
+        gmres_restart=self.gmres_restart,
+        gmres_rtol=self.gmres_rtol,
         fixed_point_atol=self.fixed_point_atol,
         fixed_point_rtol=self.fixed_point_rtol,
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,

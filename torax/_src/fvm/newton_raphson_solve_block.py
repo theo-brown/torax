@@ -24,6 +24,7 @@ import jax
 import jax.numpy as jnp
 from torax._src import array_typing
 from torax._src import jax_utils
+from torax._src import tridiagonal
 from torax._src import models as models_lib
 from torax._src import state as state_module
 from torax._src.config import runtime_params as runtime_params_lib
@@ -52,6 +53,9 @@ MIN_DELTA: Final[float] = 1e-7
         'coeffs_callback',
         'initial_guess_mode',
         'log_iterations',
+        'use_newton_krylov',
+        'gmres_restart',
+        'gmres_rtol',
     ],
 )
 def newton_raphson_solve_block(
@@ -75,6 +79,9 @@ def newton_raphson_solve_block(
     tau_min: float,
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     log_iterations: bool = False,
+    use_newton_krylov: bool = False,
+    gmres_restart: int = 40,
+    gmres_rtol: float = 1e-3,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -208,6 +215,7 @@ def newton_raphson_solve_block(
       )
       init_x_new_vec = fvm_conversions.cell_variable_tuple_to_vec(init_x_new)
     case enums.InitialGuessMode.X_OLD:
+      init_x_new = x_old
       init_x_new_vec = fvm_conversions.cell_variable_tuple_to_vec(x_old)
     case _:
       raise ValueError(
@@ -232,16 +240,75 @@ def newton_raphson_solve_block(
       pedestal_transition_state=pedestal_transition_state,
   )
 
-  root_finder = functools.partial(
-      jax_root_finding.root_newton_raphson,
-      fun=residual_fun,
-      maxiter=maxiter,
-      tol=tol,
-      coarse_tol=coarse_tol,
-      delta_reduction_factor=delta_reduction_factor,
-      tau_min=tau_min,
-      log_iterations=log_iterations,
-  )
+  if use_newton_krylov:
+    # Jacobian-free Newton-Krylov: preconditioned with the block-tridiagonal
+    # LHS matrix of the theta-method discretization, frozen at the initial
+    # guess and applied via the Thomas algorithm. This matrix is the exact
+    # Jacobian minus the coefficient-sensitivity terms.
+    coeffs_init = coeffs_callback(
+        runtime_params_t_plus_dt,
+        geo_t_plus_dt,
+        core_profiles_t_plus_dt,
+        prev_core_profiles=core_profiles_t,
+        dt=dt,
+        x=init_x_new,
+        explicit_source_profiles=explicit_source_profiles,
+        pedestal_transition_state=pedestal_transition_state,
+    )
+    solver_params = runtime_params_t_plus_dt.solver
+    lhs_matrix, lhs_vec, rhs_matrix, rhs_vec = (
+        residual_and_loss.theta_method_matrix_equation(
+            dt=dt,
+            x_old=x_old,
+            x_new_guess=init_x_new,
+            coeffs_old=coeffs_old,
+            coeffs_new=coeffs_init,
+            theta_implicit=solver_params.theta_implicit,
+            convection_dirichlet_mode=solver_params.convection_dirichlet_mode,
+            convection_neumann_mode=solver_params.convection_neumann_mode,
+        )
+    )
+    if coeffs_init.has_internal_boundary_conditions:
+      lhs_matrix, lhs_vec, rhs_matrix, rhs_vec = (
+          residual_and_loss.apply_internal_boundary_conditions(
+              lhs_matrix, lhs_vec, rhs_matrix, rhs_vec,
+              coeffs_init.internal_boundary_condition_mask,
+              coeffs_init.internal_boundary_condition_target_vec,
+          )
+      )
+    num_cells = lhs_matrix.num_blocks
+    num_channels = lhs_matrix.block_size
+
+    def precond_apply(v: jax.Array) -> jax.Array:
+      # The flattened state/residual vector is channel-major; reshape to the
+      # (num_cells, num_channels) layout used by the block-tridiagonal solve.
+      arr = v.reshape(num_channels, num_cells).T
+      return tridiagonal.thomas_solve(lhs_matrix, arr).T.reshape(-1)
+
+    root_finder = functools.partial(
+        jax_root_finding.root_newton_krylov,
+        fun=residual_fun,
+        maxiter=maxiter,
+        tol=tol,
+        coarse_tol=coarse_tol,
+        delta_reduction_factor=delta_reduction_factor,
+        tau_min=tau_min,
+        gmres_restart=gmres_restart,
+        gmres_rtol=gmres_rtol,
+        precond_apply=precond_apply,
+        log_iterations=log_iterations,
+    )
+  else:
+    root_finder = functools.partial(
+        jax_root_finding.root_newton_raphson,
+        fun=residual_fun,
+        maxiter=maxiter,
+        tol=tol,
+        coarse_tol=coarse_tol,
+        delta_reduction_factor=delta_reduction_factor,
+        tau_min=tau_min,
+        log_iterations=log_iterations,
+    )
   root_finder = jax_utils.xla_metadata_call(
       jax.jit(root_finder), compilation_unit='newton_raphson_root_finder'
   )
