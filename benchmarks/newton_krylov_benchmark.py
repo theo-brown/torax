@@ -359,8 +359,9 @@ def main():
   )
   parser.add_argument('--maxiter', type=int, default=30)
   parser.add_argument('--tol', type=float, default=1e-5)
-  parser.add_argument('--gmres_restart', type=int, default=20)
-  parser.add_argument('--gmres_rtol', type=float, default=1e-2)
+  # Defaults match the newton_raphson solver config's gmres_* defaults.
+  parser.add_argument('--gmres_restart', type=int, default=40)
+  parser.add_argument('--gmres_rtol', type=float, default=1e-3)
   parser.add_argument('--gmres_maxiter', type=int, default=1,
                       help='Number of GMRES restart cycles.')
   parser.add_argument(
