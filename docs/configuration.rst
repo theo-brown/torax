@@ -2603,10 +2603,13 @@ newton_raphson
   initial guess (a one-step Ruiz equilibration). The converged solution is
   unchanged (up to solver tolerance), but the Jacobian seen by the solver is
   much better conditioned (measured 10-50x on representative cases), and
-  ``residual_tol``, ``residual_coarse_tol`` and ``tau_min`` become
-  scale-invariant across machines and unit conventions. With scaling enabled
-  the residual tolerances apply to the scaled residual. Costs one extra
-  Jacobian evaluation per solve (roughly one additional Newton iteration).
+  the internal line search and step-size thresholds become scale-invariant
+  across machines and unit conventions. The Newton iterations operate on the
+  scaled residual, but the exit error state (including the
+  ``residual_coarse_tol`` acceptance that suppresses dt backoff) is
+  reclassified on the unscaled residual, so step acceptance behaves
+  identically to the unscaled solver. Costs one extra Jacobian evaluation and
+  one extra residual evaluation per solve.
 
 ``residual_tol`` (float [default = 1e-5])
   PDE residual magnitude tolerance for successfully exiting the iterative

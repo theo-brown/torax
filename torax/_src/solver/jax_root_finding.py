@@ -167,6 +167,20 @@ def root_newton_raphson(
   return x_out, RootMetadata(**metadata, error=error)  # pytype: disable=bad-return-type
 
 
+def classify_residual_error(
+    residual: jax.Array, *, tol: float, coarse_tol: float
+) -> jax.Array:
+  """Classifies a residual vector into the solver error states.
+
+  Returns 0 if mean|residual| < tol, 2 if it is within coarse_tol, and 1
+  otherwise. This is the same classification applied at the exit of
+  root_newton_raphson, exposed for callers that need to (re)classify a
+  residual computed externally (e.g. the unscaled residual when the solve was
+  performed on an equilibrated system).
+  """
+  return _error_cond(residual=residual, coarse_tol=coarse_tol, tol=tol)
+
+
 def _error_cond(residual: jax.Array, coarse_tol: float, tol: float):
   return jax.lax.cond(
       _residual_scalar(residual) < tol,
