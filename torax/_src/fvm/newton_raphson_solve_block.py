@@ -32,6 +32,7 @@ from torax._src.fvm import calc_coeffs
 from torax._src.fvm import cell_variable
 from torax._src.fvm import enums
 from torax._src.fvm import fvm_conversions
+from torax._src.fvm import jacobian_scaling
 from torax._src.fvm import residual_and_loss
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
@@ -52,6 +53,7 @@ MIN_DELTA: Final[float] = 1e-7
         'coeffs_callback',
         'initial_guess_mode',
         'log_iterations',
+        'use_jacobian_scaling',
     ],
 )
 def newton_raphson_solve_block(
@@ -75,6 +77,7 @@ def newton_raphson_solve_block(
     tau_min: float,
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     log_iterations: bool = False,
+    use_jacobian_scaling: bool = False,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -147,6 +150,15 @@ def newton_raphson_solve_block(
       transitions.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
+    use_jacobian_scaling: If True, the Newton iterations are performed on a
+      row/column-equilibrated version of the residual (see
+      fvm.jacobian_scaling): columns are scaled per channel by max|x_old| and
+      rows by the reciprocal row maxima of the Jacobian at the initial guess
+      (one-step Ruiz equilibration). The root is unchanged, but the Jacobian
+      seen by the solver is much better conditioned (measured 10-50x) and
+      tol / coarse_tol / tau_min become scale-invariant. Note that with
+      scaling enabled, tol applies to the scaled residual. Costs one extra
+      Jacobian evaluation per solve.
 
 
   Returns:
@@ -232,6 +244,26 @@ def newton_raphson_solve_block(
       pedestal_transition_state=pedestal_transition_state,
   )
 
+  if use_jacobian_scaling:
+    # Solve the equivalent equilibrated system
+    #   R_hat(x_hat) = row_scale * R(col_scale * x_hat) = 0
+    # which has the same root (x = col_scale * x_hat) but a much better
+    # conditioned Jacobian row_scale * J * col_scale. The row scales require
+    # one extra Jacobian evaluation at the initial guess (roughly the cost of
+    # one additional Newton iteration per solve).
+    col_scale = jacobian_scaling.compute_column_scales(x_old)
+    jacobian_at_guess = jax.jacfwd(residual_fun)(init_x_new_vec)
+    row_scale = jacobian_scaling.compute_row_scales(
+        jacobian_at_guess, col_scale
+    )
+    unscaled_residual_fun = residual_fun
+    residual_fun = lambda x_hat: row_scale * unscaled_residual_fun(
+        x_hat * col_scale
+    )
+    init_x_new_vec = init_x_new_vec / col_scale
+  else:
+    col_scale = None
+
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
       fun=residual_fun,
@@ -247,6 +279,8 @@ def newton_raphson_solve_block(
   )
 
   x_root, metadata = root_finder(x0=init_x_new_vec)
+  if col_scale is not None:
+    x_root = x_root * col_scale
 
   # Create updated CellVariable instances based on state_plus_dt which has
   # updated boundary conditions and prescribed profiles.

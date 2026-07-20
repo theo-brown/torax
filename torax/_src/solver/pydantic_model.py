@@ -167,6 +167,13 @@ class NewtonRaphsonThetaMethod(BaseSolver):
     delta_reduction_factor: The delta reduction factor for the Newton-Raphson
       solver.
     tau_min: The minimum value of tau for the Newton-Raphson solver.
+    use_jacobian_scaling: If True, Newton iterations run on a row/column
+      equilibrated residual (rows scaled by the reciprocal row maxima of the
+      Jacobian at the initial guess, columns per-channel by max|x_old|).
+      Improves Jacobian conditioning and makes tolerances scale-invariant;
+      the converged solution is unchanged up to solver tolerance.
+      residual_tol then applies to the scaled residual. Costs one extra
+      Jacobian evaluation per solve.
   """
 
   solver_type: Annotated[
@@ -180,6 +187,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
   residual_tol: float = 1e-5
   residual_coarse_tol: float = 1e-2
   tau_min: float = 0.01
+  use_jacobian_scaling: Annotated[bool, torax_pydantic.JAX_STATIC] = False
 
   @functools.cached_property
   def build_runtime_params(
@@ -202,6 +210,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         tau_min=self.tau_min,
         initial_guess_mode=self.initial_guess_mode.value,  # pyrefly: ignore[bad-argument-type]
         log_iterations=self.log_iterations,
+        use_jacobian_scaling=self.use_jacobian_scaling,
         fixed_point_atol=self.fixed_point_atol,
         fixed_point_rtol=self.fixed_point_rtol,
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,

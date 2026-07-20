@@ -49,6 +49,9 @@ class NewtonRaphsonRuntimeParams(solver_runtime_params_lib.RuntimeParams):
   tau_min: float
   initial_guess_mode: int = dataclasses.field(metadata={'static': True})
   log_iterations: bool = dataclasses.field(metadata={'static': True})
+  use_jacobian_scaling: bool = dataclasses.field(
+      default=False, metadata={'static': True}
+  )
 
 
 class NonlinearThetaMethod(solver.Solver):
@@ -251,6 +254,7 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         coeffs_callback=coeffs_callback,
         evolving_names=evolving_names,
         log_iterations=solver_params.log_iterations,
+        use_jacobian_scaling=solver_params.use_jacobian_scaling,
         initial_guess_mode=enums.InitialGuessMode(
             solver_params.initial_guess_mode
         ),
