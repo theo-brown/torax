@@ -263,12 +263,23 @@ def newton_raphson_solve_block(
         x_hat * col_scale
     )
     init_x_new_vec = init_x_new_vec / col_scale
+    # The physical residual is exactly recoverable from the scaled one
+    # (R = R_hat / row_scale): make the convergence test and error
+    # classification (including the coarse_tol acceptance that suppresses dt
+    # backoff) apply to the physical residual, so stopping and acceptance
+    # semantics are identical to the unscaled solver. Without this, tol and
+    # coarse_tol measured on the equilibrated (approximately relative)
+    # residual are far laxer, and badly unconverged steps were observed to
+    # be accepted at coarse tolerance.
+    convergence_weights = 1.0 / row_scale
   else:
     col_scale = None
+    convergence_weights = None
 
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
       fun=residual_fun,
+      convergence_weights=convergence_weights,
       maxiter=maxiter,
       tol=tol,
       coarse_tol=coarse_tol,
@@ -284,16 +295,6 @@ def newton_raphson_solve_block(
   error = metadata.error
   if col_scale is not None:
     x_root = x_root * col_scale
-    # Reclassify the exit error on the UNSCALED residual with the standard
-    # tolerances, so acceptance semantics (in particular the coarse_tol
-    # acceptance that suppresses dt backoff) are identical to the unscaled
-    # solver. Without this, coarse_tol measured on the equilibrated
-    # (approximately relative) residual is far laxer than on the raw
-    # residual, and badly unconverged steps were observed to be accepted.
-    # Costs one extra residual evaluation per solve.
-    error = jax_root_finding.classify_residual_error(
-        unscaled_residual_fun(x_root), tol=tol, coarse_tol=coarse_tol
-    )
 
   # Create updated CellVariable instances based on state_plus_dt which has
   # updated boundary conditions and prescribed profiles.
