@@ -11,7 +11,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Combined test for Jacobian scaling + smooth transport clipping."""
+"""Combined test for Jacobian scaling + smooth transport clipping.
+
+Measured behavior (single-step probes, with convergence and acceptance
+always classified on the physical residual):
+
+  Stiff QLKNN retry scenario (n_rho=15, dt=2.0):
+    baseline:                  4 dt-backoff attempts, 39 total iterations
+    clip_smoothing_width=0.02: 0 attempts (first try), 13 iterations
+    use_jacobian_scaling:      7 attempts, 72 iterations (worse)
+
+  STEP flat-top + TGLFNN-ukaea step network (N=400):
+    dt=0.02: baseline converges in 15 iterations, scaling in 11;
+      clip_smoothing_width=0.02 breaks convergence at this dt.
+    dt>=0.0625: all variants fail (the convergence boundary is set by the
+      nonlinearity, not by conditioning).
+
+  I.e. the two options help disjoint, roughly opposite regimes: the smooth
+  clip fixes cases stalling against the *lower* transport clip bound but
+  hurts cases saturated at the *upper* bound (where the hard clip
+  beneficially zeroes stiff derivatives); the scaling gives a modest
+  iteration reduction on the stiff NN-transport case and scale-invariant
+  thresholds, but does not extend the dt convergence boundary. Earlier,
+  larger apparent wins for the scaling were artifacts of the scaled
+  tolerance semantics fixed in the convergence_weights change.
+"""
 
 from absl.testing import absltest
 import numpy as np
