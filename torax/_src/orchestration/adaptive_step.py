@@ -26,6 +26,7 @@ from torax._src.core_profiles import convertors
 from torax._src.core_profiles import updaters
 from torax._src.edge import base as edge_base
 from torax._src.fvm import cell_variable
+from torax._src.fvm import fvm_conversions
 from torax._src.geometry import geometry
 from torax._src.geometry import geometry_provider as geometry_provider_lib
 from torax._src.orchestration import sim_state
@@ -76,6 +77,7 @@ def create_initial_state(
 
 def compute_state(
     i: chex.Numeric,
+    prev_state: AdaptiveStepState,
     loop_statistics: dict[str, array_typing.IntScalar],
     initial_dt: chex.Numeric,
     runtime_params_t: runtime_params_lib.RuntimeParams,
@@ -108,6 +110,34 @@ def compute_state(
       geo_t_plus_dt=geo_t_plus_dt,
       core_profiles_t=input_state.core_profiles,
   )
+  if runtime_params_t.numerics.warm_start_dt_retries:
+    # Warm-start retry attempts (i > 0) from the previous (failed) attempt's
+    # iterate, time-interpolated from the failed dt down to the current dt:
+    #   x_guess = x_old + (x_fail - x_old) * (dt / dt_fail).
+    # The failed attempt typically made partial progress towards the solution
+    # before stalling, so the interpolant is usually a better initial guess
+    # than restarting from scratch. Guarded to remain inactive on the first
+    # attempt and whenever the failed iterate is non-finite. stop_gradient is
+    # required by the whilei_loop contract: prev_state must not carry
+    # gradients (the initial guess does not affect the converged solution).
+    evolving_names = runtime_params_t.numerics.evolving_names
+    x_old_vec = fvm_conversions.cell_variable_tuple_to_vec(
+        convertors.core_profiles_to_solver_x_tuple(
+            input_state.core_profiles, evolving_names
+        )
+    )
+    x_fail_vec = fvm_conversions.cell_variable_tuple_to_vec(prev_state.x_new)
+    warm_vec = jax.lax.stop_gradient(
+        x_old_vec + (x_fail_vec - x_old_vec) * (dt / prev_state.dt)
+    )
+    x_guess_override = fvm_conversions.vec_to_cell_variable_tuple(
+        warm_vec, core_profiles_t_plus_dt, evolving_names
+    )
+    apply_x_guess_override = (i > 0) & jnp.all(jnp.isfinite(warm_vec))
+  else:
+    x_guess_override = None
+    apply_x_guess_override = None
+
   # The solver returned state is still "intermediate" since the CoreProfiles
   # need to be updated by the evolved CellVariables in x_new
   x_new, solver_numeric_outputs = solver(
@@ -121,6 +151,8 @@ def compute_state(
       core_profiles_t_plus_dt=core_profiles_t_plus_dt,
       explicit_source_profiles=explicit_source_profiles,
       pedestal_transition_state=pedestal_transition_state,
+      x_guess_override=x_guess_override,
+      apply_x_guess_override=apply_x_guess_override,
   )
   loop_statistics[
       'inner_solver_iterations'

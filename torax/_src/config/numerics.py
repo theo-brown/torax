@@ -52,6 +52,9 @@ class RuntimeParams:
   exact_t_final: bool = dataclasses.field(metadata={'static': True})
   adaptive_dt: bool = dataclasses.field(metadata={'static': True})
   enable_fast_ions: bool = dataclasses.field(metadata={'static': True})
+  warm_start_dt_retries: bool = dataclasses.field(
+      default=False, metadata={'static': True}
+  )
 
   @functools.cached_property
   def evolving_names(self) -> tuple[str, ...]:
@@ -90,6 +93,16 @@ class Numerics(torax_pydantic.BaseModelFrozen):
       if nonlinear step does not converge, then the step is redone iteratively
       at successively lower dt until convergence is reached.
     dt_reduction_factor: Factor by which to reduce dt if adaptive_dt is True.
+    warm_start_dt_retries: If True, retries of a non-converged step at reduced
+      dt (see adaptive_dt) warm-start the nonlinear solver from the failed
+      attempt's iterate, time-interpolated to the reduced dt, instead of
+      restarting from the standard initial guess. The failed attempt usually
+      made partial progress (the line search enforces monotone residual
+      decrease), so this typically saves solver iterations and can allow the
+      retry to converge at a larger dt. Only affects iterative (e.g.
+      newton_raphson) solvers. Note: with a very small n_max_iterations the
+      failed iterate can be a poor guess and warm-starting may be
+      counterproductive.
     evolve_ion_heat: Solve the ion heat equation (ion temperature evolves over
       time).
     evolve_electron_heat: Solve the electron heat equation (electron temperature
@@ -119,6 +132,7 @@ class Numerics(torax_pydantic.BaseModelFrozen):
   )
   adaptive_dt: Annotated[bool, torax_pydantic.JAX_STATIC] = True
   dt_reduction_factor: pydantic.PositiveFloat = 3.0
+  warm_start_dt_retries: Annotated[bool, torax_pydantic.JAX_STATIC] = False
   evolve_ion_heat: Annotated[bool, torax_pydantic.JAX_STATIC] = True
   evolve_electron_heat: Annotated[bool, torax_pydantic.JAX_STATIC] = True
   evolve_current: Annotated[bool, torax_pydantic.JAX_STATIC] = False
@@ -181,4 +195,5 @@ class Numerics(torax_pydantic.BaseModelFrozen):
         exact_t_final=self.exact_t_final,
         adaptive_dt=self.adaptive_dt,
         enable_fast_ions=self.enable_fast_ions,
+        warm_start_dt_retries=self.warm_start_dt_retries,
     )

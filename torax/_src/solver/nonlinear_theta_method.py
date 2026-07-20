@@ -66,6 +66,8 @@ class NonlinearThetaMethod(solver.Solver):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -91,6 +93,8 @@ class NonlinearThetaMethod(solver.Solver):
         coeffs_callback=coeffs_callback,
         evolving_names=evolving_names,
         pedestal_transition_state=pedestal_transition_state,
+        x_guess_override=x_guess_override,
+        apply_x_guess_override=apply_x_guess_override,
     )
 
     return (
@@ -112,6 +116,8 @@ class NonlinearThetaMethod(solver.Solver):
       coeffs_callback: calc_coeffs.CoeffsCallback,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -145,6 +151,9 @@ class NonlinearThetaMethod(solver.Solver):
         should evolve.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      x_guess_override: see the docstring of Solver.__call__. Solvers that do
+        not support an initial guess override may ignore it.
+      apply_x_guess_override: see the docstring of Solver.__call__.
 
     Returns:
       A tuple containing:
@@ -170,11 +179,15 @@ class OptimizerThetaMethod(NonlinearThetaMethod):
       coeffs_callback: calc_coeffs.CoeffsCallback,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
   ]:
     """See abstract method docstring in NonlinearThetaMethod."""
+    # The optimizer-based solver does not support an initial guess override.
+    del x_guess_override, apply_x_guess_override
     solver_params = runtime_params_t.solver
     assert isinstance(solver_params, OptimizerRuntimeParams)
     (
@@ -224,6 +237,8 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
       coeffs_callback: calc_coeffs.CoeffsCallback,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -260,6 +275,8 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         delta_reduction_factor=solver_params.delta_reduction_factor,
         tau_min=solver_params.tau_min,
         pedestal_transition_state=pedestal_transition_state,
+        x_guess_override=x_guess_override,
+        apply_x_guess_override=apply_x_guess_override,
     )
     return (
         x_new,

@@ -18,6 +18,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from jax import numpy as jnp
 from torax._src import jax_utils
+from torax._src import state
 from torax._src.orchestration import adaptive_step
 from torax._src.orchestration import run_simulation
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
@@ -70,24 +71,33 @@ class AdaptiveStepTest(parameterized.TestCase):
         initial_state.x_new, len(self.runtime_params.numerics.evolving_names)
     )
 
-  def test_compute_state_smoke(self):
+  def _compute_state(self, runtime_params, i=0, prev_state=None):
     initial_dt = 0.1
     loop_statistics = {
         'inner_solver_iterations': jnp.array(0, jax_utils.get_int_dtype()),
     }
     explicit_source_profiles = source_profile_builders.build_source_profiles(
-        runtime_params=self.runtime_params,
+        runtime_params=runtime_params,
         geo=self.geo,
         core_profiles=self.sim_state.core_profiles,
         source_models=self.step_fn.solver.models.source_models,
         neoclassical_models=self.step_fn.solver.models.neoclassical_models,
         explicit=True,
     )
-    adaptive_step_state, _ = adaptive_step.compute_state(
-        i=0,
+    if prev_state is None:
+      prev_state = adaptive_step.create_initial_state(
+          input_state=self.sim_state,
+          evolving_names=runtime_params.numerics.evolving_names,
+          initial_dt=initial_dt,
+          runtime_params_t=runtime_params,
+          geo_t=self.geo,
+      )
+    return adaptive_step.compute_state(
+        i=i,
+        prev_state=prev_state,
         loop_statistics=loop_statistics,  # pyrefly: ignore[bad-argument-type]
         initial_dt=initial_dt,
-        runtime_params_t=self.runtime_params,
+        runtime_params_t=runtime_params,
         geo_t=self.geo,
         input_state=self.sim_state,
         explicit_source_profiles=explicit_source_profiles,
@@ -97,7 +107,58 @@ class AdaptiveStepTest(parameterized.TestCase):
         pedestal_transition_state=pedestal_transition_state_lib.PedestalTransitionState.empty_L_mode(),
         solver=self.step_fn.solver,
     )
+
+  def test_compute_state_smoke(self):
+    adaptive_step_state, _ = self._compute_state(self.runtime_params)
     self.assertIsInstance(adaptive_step_state, adaptive_step.AdaptiveStepState)
+
+  def test_compute_state_with_warm_start_dt_retries(self):
+    """Warm-start branch is traceable and produces a valid state."""
+    runtime_params = dataclasses.replace(
+        self.runtime_params,
+        numerics=dataclasses.replace(
+            self.runtime_params.numerics, warm_start_dt_retries=True
+        ),
+    )
+    # i=1 emulates a retry attempt: the previous attempt's state is the
+    # initial state, whose x_new equals x_old, so the warm-start interpolant
+    # equals x_old and the step must still produce a valid state.
+    adaptive_step_state, _ = self._compute_state(runtime_params, i=1)
+    self.assertIsInstance(adaptive_step_state, adaptive_step.AdaptiveStepState)
+    # The result should be identical to the non-warm-started attempt at the
+    # same dt, since the initial-state interpolant coincides with x_old and
+    # the default (linear) solver ignores the override entirely.
+    baseline_state, _ = self._compute_state(self.runtime_params, i=1)
+    for x_warm, x_base in zip(
+        adaptive_step_state.x_new, baseline_state.x_new
+    ):
+      self.assertTrue(jnp.allclose(x_warm.value, x_base.value))
+
+  def test_warm_start_dt_retries_end_to_end(self):
+    """Simulation with warm-started retries completes and actually retries."""
+    cfg = default_configs.get_default_config_dict()
+    # A nonlinear transport model with an over-ambitious dt and a small Newton
+    # iteration budget forces dt-backoff retries, exercising the applied
+    # warm-start override end to end.
+    cfg['transport'] = {'model_name': 'CGM'}
+    cfg['solver'] = {
+        'solver_type': 'newton_raphson',
+        'n_max_iterations': 5,
+        'residual_tol': 1e-7,
+        'use_pereverzev': True,
+    }
+    cfg['numerics'] = {
+        't_final': 4.0,
+        'fixed_dt': 4.0,
+        'dt_reduction_factor': 2.0,
+        'warm_start_dt_retries': True,
+    }
+    cfg['time_step_calculator'] = {'calculator_type': 'fixed'}
+    data_tree, state_history = run_simulation.run_simulation(
+        model_config.ToraxConfig.from_dict(cfg), progress_bar=False
+    )
+    self.assertEqual(state_history.sim_error, state.SimError.NO_ERROR)
+    self.assertEqual(float(data_tree.time[-1]), 4.0)
 
   @parameterized.named_parameters(
       dict(

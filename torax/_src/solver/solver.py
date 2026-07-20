@@ -60,6 +60,8 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles_t_plus_dt: state.CoreProfiles,
       explicit_source_profiles: source_profiles.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -90,6 +92,14 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
         non-JAX-friendly ways.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      x_guess_override: Optional tuple of CellVariables to use as the initial
+        guess for iterative solvers, overriding the solver's own initial guess
+        (e.g. to warm-start retries of the same step at a reduced dt). Ignored
+        by non-iterative solvers.
+      apply_x_guess_override: Boolean (possibly traced) selecting whether the
+        override is actually applied. Must be provided if x_guess_override is
+        provided. This allows the decision to be made dynamically (e.g. only
+        on retry attempts) without changing the traced program structure.
 
     Returns:
       x_new: Tuple containing new cell-grid values of the evolving variables.
@@ -115,6 +125,8 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
           explicit_source_profiles=explicit_source_profiles,
           evolving_names=runtime_params_t.numerics.evolving_names,
           pedestal_transition_state=pedestal_transition_state,
+          x_guess_override=x_guess_override,
+          apply_x_guess_override=apply_x_guess_override,
       )
     else:
       x_new = tuple()
@@ -142,6 +154,8 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -169,6 +183,8 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       evolving_names: The names of core_profiles variables that should evolve.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      x_guess_override: see the docstring of __call__.
+      apply_x_guess_override: see the docstring of __call__.
 
     Returns:
       x_new: The values of the evolving variables at time t + dt.

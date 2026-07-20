@@ -39,7 +39,7 @@ class WhileiLoopTest(parameterized.TestCase):
         _, counter = state
         return counter < terminating_step
 
-      def compute_state(counter, loop_statistics, alpha):
+      def compute_state(counter, unused_prev_state, loop_statistics, alpha):
         loop_statistics += 20
         return (jnp.sin(alpha * counter), counter), loop_statistics
 
@@ -80,7 +80,7 @@ class WhileiLoopTest(parameterized.TestCase):
       _, counter = state
       return counter < terminating_step
 
-    def compute_state(counter, loop_statistics, alpha):
+    def compute_state(counter, unused_prev_state, loop_statistics, alpha):
       loop_statistics += 20
       return (jnp.sin(alpha * counter), counter), loop_statistics
 
@@ -106,7 +106,9 @@ class WhileiLoopTest(parameterized.TestCase):
         _, counter = state
         return counter < terminating_step
 
-      def compute_state(counter, loop_statistics, alpha, beta):
+      def compute_state(
+          counter, unused_prev_state, loop_statistics, alpha, beta
+      ):
         loop_statistics += 20
         return (jnp.sin(alpha * counter) * beta, counter), loop_statistics
 
@@ -131,6 +133,75 @@ class WhileiLoopTest(parameterized.TestCase):
       self.assertEqual(f(0.4, 0.5), g(0.4, 0.5))
     with self.subTest('grad_test'):
       self.assertEqual(jax.grad(f)(0.4, 0.5), jax.grad(g)(0.4, 0.5))
+
+  def test_whilei_loop_passes_previous_state(self):
+    """prev_state passed to compute_state is the previously computed state."""
+    terminating_step = 4
+
+    def cond_fun(state, unused_alpha):
+      _, counter = state
+      return counter < terminating_step
+
+    def compute_state(counter, prev_state, loop_statistics, alpha):
+      # Record the previous state's value in the new state so we can check
+      # the chaining outside the loop. The final *value* only depends on
+      # counter/alpha (whilei_loop contract); prev_val is just carried along.
+      prev_val, _ = prev_state
+      return (jnp.sin(alpha * counter) + 0.0 * prev_val, counter), (
+          loop_statistics + 1
+      )
+
+    x = jnp.cos(0.4)
+    result = whilei_loop.whilei_loop(
+        cond_fun,
+        compute_state,
+        ((x, jnp.array(0)), jnp.array(0)),
+        x,
+    )
+    # After the loop, prev_state is the state that was passed into the final
+    # compute_state call, i.e. the state computed at counter - 2.
+    self.assertEqual(result.counter, terminating_step + 1)
+    self.assertEqual(result.state[1], terminating_step)
+    self.assertEqual(result.prev_state[1], terminating_step - 1)
+    self.assertEqual(
+        result.prev_state[0], jnp.sin(x * (terminating_step - 1))
+    )
+
+  def test_whilei_loop_no_gradient_through_prev_state(self):
+    """Gradients treat prev_state as a constant (zero tangent)."""
+    terminating_step = 3
+
+    @jax.jit
+    def f(alpha: jax.Array) -> jax.Array:
+      def cond_fun(state, unused_alpha):
+        _, counter = state
+        return counter < terminating_step
+
+      def compute_state(counter, prev_state, loop_statistics, alpha):
+        prev_val, _ = prev_state
+        # Use prev_state in a way that does not change the primal value:
+        # (prev_val - stop_gradient(prev_val)) == 0, but a naive gradient
+        # through prev_state would produce a nonzero contribution. The
+        # whilei_loop contract zeroes the prev_state tangent, so the gradient
+        # must equal the gradient of sin(alpha * counter) alone.
+        zero = prev_val - jax.lax.stop_gradient(prev_val)
+        return (jnp.sin(alpha * counter) + zero, counter), loop_statistics
+
+      x = jnp.cos(alpha)
+      result = whilei_loop.whilei_loop(
+          cond_fun,
+          compute_state,
+          ((x, jnp.array(0)), jnp.array(0)),
+          alpha,
+      )
+      return result.state[0]
+
+    @jax.jit
+    def g(alpha: jax.Array) -> jax.Array:
+      return jnp.sin(alpha * terminating_step)
+
+    self.assertEqual(f(0.4), g(0.4))
+    self.assertEqual(jax.grad(f)(0.4), jax.grad(g)(0.4))
 
 
 if __name__ == '__main__':

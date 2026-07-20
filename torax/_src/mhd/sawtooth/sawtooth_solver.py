@@ -51,6 +51,8 @@ class SawtoothSolver(solver.Solver):
       pedestal_transition_state: (
           pedestal_transition_state_lib.PedestalTransitionState
       ),
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -82,6 +84,9 @@ class SawtoothSolver(solver.Solver):
       Updated tuple of evolving CellVariables from CoreProfiles
       SolverNumericOutputs indicating a sawtooth crash.
     """
+    # The sawtooth solver is non-iterative and does not use an initial guess
+    # override.
+    del x_guess_override, apply_x_guess_override
     sawtooth_models = self.models.mhd_models.sawtooth_models
     if sawtooth_models is None:
       raise ValueError('Sawtooth model is None.')

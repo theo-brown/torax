@@ -75,6 +75,8 @@ def newton_raphson_solve_block(
     tau_min: float,
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     log_iterations: bool = False,
+    x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+    apply_x_guess_override: array_typing.BoolScalar | None = None,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -147,6 +149,14 @@ def newton_raphson_solve_block(
       transitions.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
+    x_guess_override: Optional tuple of CellVariables used as the initial guess
+      for the Newton iterations instead of the one selected by
+      initial_guess_mode, e.g. to warm-start a retry of the same step at a
+      reduced dt from the previous (failed) attempt's iterate. Note that when
+      provided, the initial_guess_mode guess is still computed (the traced
+      program structure is fixed) and the override is selected with jnp.where.
+    apply_x_guess_override: Boolean (possibly traced) selecting whether
+      x_guess_override is applied. Must be provided iff x_guess_override is.
 
 
   Returns:
@@ -213,6 +223,17 @@ def newton_raphson_solve_block(
       raise ValueError(
           f'Unknown option for first guess in iterations: {initial_guess_mode}'
       )
+
+  if x_guess_override is not None:
+    if apply_x_guess_override is None:
+      raise ValueError(
+          'apply_x_guess_override must be provided when x_guess_override is.'
+      )
+    override_vec = fvm_conversions.cell_variable_tuple_to_vec(x_guess_override)
+    init_x_new_vec = jnp.where(
+        apply_x_guess_override, override_vec, init_x_new_vec
+    )
+
   # Create a residual() function with only one argument: x_new.
   # The other arguments (dt, x_old, etc.) are fixed.
   # Note that core_profiles_t_plus_dt only contains the known quantities at

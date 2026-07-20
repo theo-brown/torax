@@ -21,6 +21,7 @@ from typing import Any, Callable
 import chex
 import jax
 from jax import numpy as jnp
+import numpy as np
 from torax._src import array_typing
 
 
@@ -36,14 +37,27 @@ _Counter = array_typing.IntScalar
 class WhileiLoopState:
   counter: _Counter
   state: _State
+  prev_state: _State
   loop_statistics: _LoopStatistics
+
+
+def _zeros_tangent(pytree: Any) -> Any:
+  """Returns a zero tangent for a pytree, using float0 for integer leaves."""
+
+  def _zero(x):
+    x = jnp.asarray(x)
+    if jnp.issubdtype(x.dtype, jnp.inexact):
+      return jnp.zeros_like(x)
+    return np.zeros(x.shape, dtype=jax.dtypes.float0)
+
+  return jax.tree_util.tree_map(_zero, pytree)
 
 
 @functools.partial(jax.custom_jvp, nondiff_argnums=[0, 1])
 def whilei_loop(
     cond_fun: Callable[[_State, tuple[Any, ...]], jax.Array],
     compute_state: Callable[
-        [_Counter, _LoopStatistics, tuple[Any, ...]],
+        [_Counter, _State, _LoopStatistics, tuple[Any, ...]],
         tuple[_State, _LoopStatistics],
     ],
     init_val: tuple[_State, _LoopStatistics],
@@ -58,11 +72,19 @@ def whilei_loop(
   i = 0
   state, loop_statistics = init_val
   while cond_fun(state, *args):
-    state, loop_statistics = compute_state(i, loop_statistics, *args)
+    prev_state = state
+    state, loop_statistics = compute_state(i, prev_state, loop_statistics, *args)
     i += 1
 
-  Importantly any previously computed states are not used to compute future
-  states.
+  The state computed by the previous iteration (or the initial state on the
+  first iteration) is passed to `compute_state` as `prev_state`. IMPORTANT:
+  `prev_state` must only be used in ways that do not change the value of the
+  converged final state, e.g. as an initial guess for an iterative solver
+  inside `compute_state`. Gradients are NOT propagated through `prev_state`:
+  the custom JVP below differentiates only the final `compute_state` call and
+  assigns a zero tangent to its `prev_state` input. Any genuine (value-
+  changing) dependence on `prev_state` would make the gradients inconsistent
+  with the primal computation.
 
   Functionality to accumulate statistics for a loop are exposed in the function
   signature but these are assumed to be integers that gradients will not be
@@ -76,7 +98,8 @@ def whilei_loop(
       args and returns a boolean that indicates whether the loop should
       continue. It is assumed that no pytrees are closed over into this
       function.
-    compute_state: A function that takes the current counter, loop stats and
+    compute_state: A function that takes the current counter, the previously
+      computed state (see above for restrictions on its use), loop stats and
       any other pytree args and returns the next state and loop statistics.
     init_val: The initial state and initial loop statistics.
     *args: Additional pytree arguments to be passed to cond_fun and
@@ -88,11 +111,12 @@ def whilei_loop(
 
   def whilei_loop_body_fun(x: WhileiLoopState) -> WhileiLoopState:
     new_state, new_loop_statistics = compute_state(
-        x.counter, x.loop_statistics, *args
+        x.counter, x.state, x.loop_statistics, *args
     )
     return WhileiLoopState(
         counter=x.counter + 1,
         state=new_state,
+        prev_state=x.state,
         loop_statistics=new_loop_statistics,
     )
 
@@ -105,6 +129,7 @@ def whilei_loop(
       WhileiLoopState(
           counter=0,
           state=init_val[0],
+          prev_state=init_val[0],
           loop_statistics=init_val[1],
       ),
   )
@@ -132,7 +157,7 @@ def whilei_loop_jvp(
 
   Returns:
     The loop result and the tangents of the loop result. The tangents of the
-    counter and loop_statistics are set to zeros.
+    counter, prev_state and loop_statistics are set to zeros.
   """
   result = whilei_loop(
       cond_fun,
@@ -146,18 +171,33 @@ def whilei_loop_jvp(
       functools.partial(jnp.zeros_like, dtype=jax.dtypes.float0),
       result.loop_statistics,
   )
+  # `prev_state` is by contract only used as an initial guess (or other
+  # value-preserving hint) inside `compute_state`, so it carries no gradient.
+  prev_state_tangent = _zeros_tangent(result.prev_state)
 
   def final_step():
     _, compute_state_tangents = jax.jvp(
         compute_state,
-        # Compute the jvp for the final_counter - 1.
-        (final_counter - 1, result.loop_statistics, *primals[1:]),
-        (counter_tangent, loop_statistics_tangent, *in_tangents[1:]),
+        # Compute the jvp for the final_counter - 1. `result.prev_state` is
+        # exactly the state that was passed to the final compute_state call.
+        (
+            final_counter - 1,
+            result.prev_state,
+            result.loop_statistics,
+            *primals[1:],
+        ),
+        (
+            counter_tangent,
+            prev_state_tangent,
+            loop_statistics_tangent,
+            *in_tangents[1:],
+        ),
     )
     state_tangents, unused_loop_statistics_tangents = compute_state_tangents
     out_tangents_whilei_loop_state = WhileiLoopState(
         counter=counter_tangent,
         state=state_tangents,
+        prev_state=prev_state_tangent,
         loop_statistics=loop_statistics_tangent,
     )
     return (
@@ -171,6 +211,7 @@ def whilei_loop_jvp(
     out_tangents_whilei_loop_state = WhileiLoopState(
         counter=counter_tangent,
         state=init_state_tangents,
+        prev_state=prev_state_tangent,
         loop_statistics=loop_statistics_tangent,
     )
 

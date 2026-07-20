@@ -523,6 +523,13 @@ equations being solved, constant numerical variables.
   Used only if ``adaptive_dt`` is True. Factor by which the timestep is reduced
   if a nonlinear solver does not converge for a given timestep.
 
+``warm_start_dt_retries`` (bool [default = False])
+  Used only if ``adaptive_dt`` is True. If True, retries of a non-converged
+  step at reduced timestep warm-start the nonlinear solver from the failed
+  attempt's iterate, time-interpolated to the reduced timestep, instead of
+  restarting from the standard initial guess. Only affects iterative solvers
+  (e.g. ``newton_raphson``).
+
 ``evolve_ion_heat`` (bool [default = True])
   Solve the ion heat equation in the time-dependent PDE.
 

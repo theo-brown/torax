@@ -50,11 +50,16 @@ class LinearThetaMethod(solver_lib.Solver):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_guess_override: tuple[cell_variable.CellVariable, ...] | None = None,
+      apply_x_guess_override: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
   ]:
     """See Solver._x_new docstring."""
+    # The linear solver is non-iterative and does not use an initial guess
+    # override.
+    del x_guess_override, apply_x_guess_override
 
     x_old = convertors.core_profiles_to_solver_x_tuple(
         core_profiles_t, evolving_names
