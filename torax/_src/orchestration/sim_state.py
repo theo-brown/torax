@@ -67,6 +67,10 @@ class SimState:
     t: time coordinate.
     dt: timestep interval.
     core_profiles: Core plasma profiles at time t.
+    core_profiles_t_minus_dt: Core plasma profiles at the start of the
+      previous step, i.e. at time t - dt. Together with dt this provides the
+      time history needed for extrapolated initial guesses in iterative
+      solvers. Equal to core_profiles at the initial state (zero slope).
     core_transport: Core plasma transport coefficients computed at time t.
     core_sources: Profiles for all sources/sinks. These are the profiles that
       are used to calculate the coefficients for the t+dt time step. For the
@@ -85,6 +89,7 @@ class SimState:
   t: array_typing.FloatScalar
   dt: array_typing.FloatScalar
   core_profiles: state.CoreProfiles
+  core_profiles_t_minus_dt: state.CoreProfiles
   core_transport: state.CoreTransport
   core_sources: source_profiles.SourceProfiles
   edge_outputs: edge_base.EdgeModelOutputs | None

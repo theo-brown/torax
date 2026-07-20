@@ -27,3 +27,10 @@ class InitialGuessMode(enum.StrEnum):
 
   # Use the linear solver to guess x_new
   LINEAR = 'linear'
+
+  # Extrapolate x_new from the previous time step's states:
+  # x_guess = x_old + dt * (x_old - x_prev) / dt_prev.
+  # Requires no additional physics evaluations, unlike LINEAR which runs
+  # predictor-corrector iterations. Falls back to X_OLD behavior on the first
+  # step (where no history exists, the slope is zero).
+  EXTRAPOLATED = 'extrapolated'

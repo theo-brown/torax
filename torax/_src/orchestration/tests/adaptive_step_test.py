@@ -16,8 +16,12 @@ from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
+import numpy as np
+import pydantic
 from jax import numpy as jnp
 from torax._src import jax_utils
+from torax._src import state
+from torax._src.solver import pydantic_model as solver_pydantic_model
 from torax._src.orchestration import adaptive_step
 from torax._src.orchestration import run_simulation
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
@@ -95,9 +99,87 @@ class AdaptiveStepTest(parameterized.TestCase):
         runtime_params_provider=self.step_fn.runtime_params_provider,
         geometry_provider=self.step_fn.geometry_provider,
         pedestal_transition_state=pedestal_transition_state_lib.PedestalTransitionState.empty_L_mode(),
+        x_extrapolation_slope=None,
         solver=self.step_fn.solver,
     )
     self.assertIsInstance(adaptive_step_state, adaptive_step.AdaptiveStepState)
+
+  def test_extrapolation_slope_none_for_default_solver(self):
+    self.assertIsNone(
+        adaptive_step.extrapolation_slope(self.runtime_params, self.sim_state)
+    )
+
+  def test_extrapolation_slope_values(self):
+    torax_config = model_config.ToraxConfig.from_dict(
+        default_configs.get_default_config_dict()
+        | {
+            'solver': {
+                'solver_type': 'newton_raphson',
+                'initial_guess_mode': 'extrapolated',
+            }
+        }
+    )
+    (sim_state_initial, _, step_fn) = run_simulation.prepare_simulation(
+        torax_config
+    )
+    runtime_params = step_fn.runtime_params_provider(
+        torax_config.numerics.t_initial
+    )
+    # At the initial state there is no history, so the slope must be zero.
+    slope = adaptive_step.extrapolation_slope(
+        runtime_params, sim_state_initial
+    )
+    self.assertIsNotNone(slope)
+    np.testing.assert_array_equal(np.asarray(slope), 0.0)
+
+    # With a crafted history (previous T_i scaled by 0.5, dt_prev = 2.0), the
+    # slope of the T_i channel must be (T_i - 0.5 * T_i) / 2 = T_i / 4.
+    import dataclasses as dc
+    core_profiles = sim_state_initial.core_profiles
+    prev_core_profiles = dc.replace(
+        core_profiles,
+        T_i=dc.replace(
+            core_profiles.T_i, value=0.5 * core_profiles.T_i.value
+        ),
+    )
+    crafted_state = dc.replace(
+        sim_state_initial,
+        core_profiles_t_minus_dt=prev_core_profiles,
+        dt=jnp.asarray(2.0),
+    )
+    slope = adaptive_step.extrapolation_slope(runtime_params, crafted_state)
+    evolving_names = runtime_params.numerics.evolving_names
+    n_cells = core_profiles.T_i.value.shape[0]
+    slope_by_channel = np.asarray(slope).reshape(len(evolving_names), n_cells)
+    for k, name in enumerate(evolving_names):
+      if name == 'T_i':
+        np.testing.assert_allclose(
+            slope_by_channel[k], np.asarray(core_profiles.T_i.value) / 4.0
+        )
+      else:
+        np.testing.assert_array_equal(slope_by_channel[k], 0.0)
+
+  def test_extrapolated_initial_guess_end_to_end(self):
+    cfg = default_configs.get_default_config_dict()
+    cfg['transport'] = {'model_name': 'CGM'}
+    cfg['solver'] = {
+        'solver_type': 'newton_raphson',
+        'initial_guess_mode': 'extrapolated',
+        'use_pereverzev': True,
+    }
+    cfg['numerics'] = {'t_final': 4.0, 'fixed_dt': 2.0}
+    cfg['time_step_calculator'] = {'calculator_type': 'fixed'}
+    data_tree, state_history = run_simulation.run_simulation(
+        model_config.ToraxConfig.from_dict(cfg), progress_bar=False
+    )
+    self.assertEqual(state_history.sim_error, state.SimError.NO_ERROR)
+    self.assertEqual(float(data_tree.time[-1]), 4.0)
+
+  def test_extrapolated_mode_rejected_for_optimizer(self):
+    with self.assertRaisesRegex(pydantic.ValidationError, 'EXTRAPOLATED'):
+      solver_pydantic_model.OptimizerThetaMethod.from_dict(
+          {'solver_type': 'optimizer', 'initial_guess_mode': 'extrapolated'}
+      )
 
   @parameterized.named_parameters(
       dict(
@@ -194,6 +276,7 @@ class AdaptiveStepTest(parameterized.TestCase):
             runtime_params,
             mock.ANY,
             sim_state,
+            mock.ANY,
             mock.ANY,
             mock.ANY,
             mock.ANY,

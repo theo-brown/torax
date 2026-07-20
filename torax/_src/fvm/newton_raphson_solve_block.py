@@ -75,6 +75,7 @@ def newton_raphson_solve_block(
     tau_min: float,
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     log_iterations: bool = False,
+    x_extrapolation_slope: jax.Array | None = None,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -147,6 +148,10 @@ def newton_raphson_solve_block(
       transitions.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
+    x_extrapolation_slope: Per-second time derivative of the flattened evolving
+      x-vector over the previous time step. Required for (and only used by)
+      the EXTRAPOLATED initial_guess_mode, where the initial guess is
+      x_old + dt * x_extrapolation_slope.
 
 
   Returns:
@@ -209,6 +214,19 @@ def newton_raphson_solve_block(
       init_x_new_vec = fvm_conversions.cell_variable_tuple_to_vec(init_x_new)
     case enums.InitialGuessMode.X_OLD:
       init_x_new_vec = fvm_conversions.cell_variable_tuple_to_vec(x_old)
+    case enums.InitialGuessMode.EXTRAPOLATED:
+      if x_extrapolation_slope is None:
+        raise ValueError(
+            'x_extrapolation_slope must be provided for the EXTRAPOLATED '
+            'initial guess mode.'
+        )
+      # Second-order-accurate predictor from the previous step's time
+      # derivative. On the first step (or after a restart) the slope is zero
+      # and this reduces to the X_OLD guess.
+      init_x_new_vec = (
+          fvm_conversions.cell_variable_tuple_to_vec(x_old)
+          + dt * x_extrapolation_slope
+      )
     case _:
       raise ValueError(
           f'Unknown option for first guess in iterations: {initial_guess_mode}'

@@ -175,6 +175,9 @@ def _get_initial_state(
           runtime_params.numerics.fixed_dt, dtype=jax_utils.get_dtype()
       ),
       core_profiles=initial_core_profiles,
+      # No time history exists at the initial state: setting the previous
+      # profiles equal to the current ones yields a zero extrapolation slope.
+      core_profiles_t_minus_dt=initial_core_profiles,
       core_sources=initial_core_sources,
       core_transport=transport_coeffs,
       solver_numeric_outputs=state.SolverNumericOutputs(
@@ -317,6 +320,9 @@ def get_initial_state_and_post_processed_outputs_from_file(
       dataclasses.replace(
           initial_state,
           core_profiles=core_profiles,
+          # Restarts have no usable time history: keep a zero extrapolation
+          # slope by setting the previous profiles equal to the current ones.
+          core_profiles_t_minus_dt=core_profiles,
           solver_numeric_outputs=state.SolverNumericOutputs(
               sawtooth_crash=sawtooth_crash,
               solver_error_state=jnp.zeros((), jax_utils.get_int_dtype()),

@@ -26,6 +26,8 @@ from torax._src.core_profiles import convertors
 from torax._src.core_profiles import updaters
 from torax._src.edge import base as edge_base
 from torax._src.fvm import cell_variable
+from torax._src.fvm import enums as fvm_enums
+from torax._src.fvm import fvm_conversions
 from torax._src.geometry import geometry
 from torax._src.geometry import geometry_provider as geometry_provider_lib
 from torax._src.orchestration import sim_state
@@ -74,6 +76,41 @@ def create_initial_state(
   )
 
 
+def extrapolation_slope(
+    runtime_params_t: runtime_params_lib.RuntimeParams,
+    input_state: sim_state.SimState,
+) -> jax.Array | None:
+  """Slope of the evolving x-vector over the previous step, or None.
+
+  Returns the per-second time derivative of the flattened evolving-variables
+  vector across the previous time step, used as the extrapolation slope for
+  the EXTRAPOLATED initial guess mode:
+    slope = (x(t) - x(t - dt_prev)) / dt_prev.
+  Returns None (statically) unless the solver is configured with the
+  EXTRAPOLATED initial guess mode, so other configurations pay no cost. The
+  slope is zero on the first step, where no history exists.
+  """
+  guess_mode = getattr(runtime_params_t.solver, 'initial_guess_mode', None)
+  if guess_mode != fvm_enums.InitialGuessMode.EXTRAPOLATED.value:
+    return None
+  evolving_names = runtime_params_t.numerics.evolving_names
+  x_t_vec = fvm_conversions.cell_variable_tuple_to_vec(
+      convertors.core_profiles_to_solver_x_tuple(
+          input_state.core_profiles, evolving_names
+      )
+  )
+  x_t_minus_dt_vec = fvm_conversions.cell_variable_tuple_to_vec(
+      convertors.core_profiles_to_solver_x_tuple(
+          input_state.core_profiles_t_minus_dt, evolving_names
+      )
+  )
+  dt_prev = input_state.dt
+  safe_dt_prev = jnp.where(dt_prev > 0.0, dt_prev, 1.0)
+  return jnp.where(
+      dt_prev > 0.0, (x_t_vec - x_t_minus_dt_vec) / safe_dt_prev, 0.0
+  )
+
+
 def compute_state(
     i: chex.Numeric,
     loop_statistics: dict[str, array_typing.IntScalar],
@@ -88,6 +125,7 @@ def compute_state(
     pedestal_transition_state: (
         pedestal_transition_state_lib.PedestalTransitionState | None
     ),
+    x_extrapolation_slope: jax.Array | None,
     solver: solver_lib.Solver,
 ) -> tuple[AdaptiveStepState, dict[str, array_typing.IntScalar]]:
   """Computes the state for attempt i of the adaptive step."""
@@ -121,6 +159,7 @@ def compute_state(
       core_profiles_t_plus_dt=core_profiles_t_plus_dt,
       explicit_source_profiles=explicit_source_profiles,
       pedestal_transition_state=pedestal_transition_state,
+      x_extrapolation_slope=x_extrapolation_slope,
   )
   loop_statistics[
       'inner_solver_iterations'
@@ -152,6 +191,7 @@ def cond_fun(
     unused_pedestal_transition_state: (
         pedestal_transition_state_lib.PedestalTransitionState | None
     ),
+    unused_x_extrapolation_slope: jax.Array | None,
 ) -> array_typing.BoolScalar:
   """Condition function for the adaptive step to keep stepping."""
   solver_outputs = inputs.solver_numeric_outputs

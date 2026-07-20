@@ -66,6 +66,7 @@ class NonlinearThetaMethod(solver.Solver):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -91,6 +92,7 @@ class NonlinearThetaMethod(solver.Solver):
         coeffs_callback=coeffs_callback,
         evolving_names=evolving_names,
         pedestal_transition_state=pedestal_transition_state,
+        x_extrapolation_slope=x_extrapolation_slope,
     )
 
     return (
@@ -112,6 +114,7 @@ class NonlinearThetaMethod(solver.Solver):
       coeffs_callback: calc_coeffs.CoeffsCallback,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -145,6 +148,8 @@ class NonlinearThetaMethod(solver.Solver):
         should evolve.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      x_extrapolation_slope: see the docstring of Solver.__call__. Solvers
+        that do not support the EXTRAPOLATED initial guess mode may ignore it.
 
     Returns:
       A tuple containing:
@@ -170,11 +175,15 @@ class OptimizerThetaMethod(NonlinearThetaMethod):
       coeffs_callback: calc_coeffs.CoeffsCallback,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
   ]:
     """See abstract method docstring in NonlinearThetaMethod."""
+    # The optimizer-based solver does not support the EXTRAPOLATED initial
+    # guess mode (enforced at config validation time).
+    del x_extrapolation_slope
     solver_params = runtime_params_t.solver
     assert isinstance(solver_params, OptimizerRuntimeParams)
     (
@@ -224,6 +233,7 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
       coeffs_callback: calc_coeffs.CoeffsCallback,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -260,6 +270,7 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         delta_reduction_factor=solver_params.delta_reduction_factor,
         tau_min=solver_params.tau_min,
         pedestal_transition_state=pedestal_transition_state,
+        x_extrapolation_slope=x_extrapolation_slope,
     )
     return (
         x_new,

@@ -2596,6 +2596,14 @@ newton_raphson
     solver and several corrector steps. It is also strongly recommended to
     ``use_pereverzev=True`` if a stiff transport model like qlknn is used.
 
+* ``extrapolated``
+    Extrapolate the state forward in time from the previous timestep's states:
+    ``x_guess = x_old + dt * (x_old - x_prev) / dt_prev``. Unlike
+    ``linear_step`` this requires no additional physics evaluations, and is
+    often a better guess than ``x_old`` during smooth transient phases. On the
+    first timestep (or following a simulation restart) it reduces to
+    ``x_old``. Only supported by the ``newton_raphson`` solver.
+
 ``residual_tol`` (float [default = 1e-5])
   PDE residual magnitude tolerance for successfully exiting the iterative
   solver.

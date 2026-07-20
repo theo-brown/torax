@@ -50,11 +50,15 @@ class LinearThetaMethod(solver_lib.Solver):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
   ]:
     """See Solver._x_new docstring."""
+    # The linear solver computes its own initial guess and does not use the
+    # extrapolation slope.
+    del x_extrapolation_slope
 
     x_old = convertors.core_profiles_to_solver_x_tuple(
         core_profiles_t, evolving_names

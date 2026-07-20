@@ -84,6 +84,7 @@ class SimStateTest(parameterized.TestCase):
         t=jnp.array(0.0),
         dt=jnp.array(0.1),
         core_profiles=core_profiles,
+        core_profiles_t_minus_dt=core_profiles,
         core_transport=core_transport,
         core_sources=sp,
         edge_outputs=None,

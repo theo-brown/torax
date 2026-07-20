@@ -536,6 +536,7 @@ def finalize_outputs(
       t=t + dt,
       dt=dt,
       core_profiles=final_core_profiles,
+      core_profiles_t_minus_dt=core_profiles_t,
       core_sources=final_source_profiles,
       core_transport=final_total_transport,
       geometry=geometry_t_plus_dt,

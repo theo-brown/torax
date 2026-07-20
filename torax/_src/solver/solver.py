@@ -60,6 +60,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles_t_plus_dt: state.CoreProfiles,
       explicit_source_profiles: source_profiles.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -90,6 +91,10 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
         non-JAX-friendly ways.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      x_extrapolation_slope: Optional per-second time derivative of the
+        flattened evolving-variables vector over the previous time step, used
+        by iterative solvers configured with the EXTRAPOLATED initial guess
+        mode (x_guess = x_old + dt * slope). Ignored by other solvers/modes.
 
     Returns:
       x_new: Tuple containing new cell-grid values of the evolving variables.
@@ -115,6 +120,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
           explicit_source_profiles=explicit_source_profiles,
           evolving_names=runtime_params_t.numerics.evolving_names,
           pedestal_transition_state=pedestal_transition_state,
+          x_extrapolation_slope=x_extrapolation_slope,
       )
     else:
       x_new = tuple()
@@ -142,6 +148,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      x_extrapolation_slope: jax.Array | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -169,6 +176,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       evolving_names: The names of core_profiles variables that should evolve.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      x_extrapolation_slope: see the docstring of __call__.
 
     Returns:
       x_new: The values of the evolving variables at time t + dt.

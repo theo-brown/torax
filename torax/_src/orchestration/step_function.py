@@ -487,6 +487,7 @@ class SimulationStepFn:
         runtime_params_provider,
         geometry_provider,
         pedestal_transition_state,
+        adaptive_step.extrapolation_slope(runtime_params_t, input_state),
     )
     assert isinstance(
         result.state, adaptive_step.AdaptiveStepState
@@ -581,6 +582,9 @@ class SimulationStepFn:
         core_profiles_t_plus_dt=core_profiles_t_plus_dt,
         explicit_source_profiles=explicit_source_profiles,
         pedestal_transition_state=pedestal_transition_state,
+        x_extrapolation_slope=adaptive_step.extrapolation_slope(
+            runtime_params_t, input_state
+        ),
     )
     output_state, post_processed_outputs = (
         step_function_processing.finalize_outputs(

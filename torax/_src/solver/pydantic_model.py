@@ -237,6 +237,15 @@ class OptimizerThetaMethod(BaseSolver):
   n_max_iterations: pydantic.NonNegativeInt = 100
   loss_tol: float = 1e-10
 
+  @pydantic.model_validator(mode='after')
+  def _validate_initial_guess_mode(self) -> 'OptimizerThetaMethod':
+    if self.initial_guess_mode == enums.InitialGuessMode.EXTRAPOLATED:
+      raise ValueError(
+          'The EXTRAPOLATED initial guess mode is only supported by the '
+          'newton_raphson solver.'
+      )
+    return self
+
   @functools.cached_property
   def build_runtime_params(
       self,
