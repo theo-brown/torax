@@ -52,6 +52,7 @@ def root_newton_raphson(
     log_iterations: bool = False,
     use_jax_custom_root: bool = True,
     custom_jac: Callable[[jax.Array], jax.Array] | None = None,
+    convergence_weights: jax.Array | None = None,
 ) -> tuple[jax.Array, RootMetadata]:
   """A differentiable Newton-Raphson root finder.
 
@@ -78,10 +79,19 @@ def root_newton_raphson(
       derivatives are requested.
     custom_jac: If provided, use this function to compute the Jacobian of `fun`
       instead of jax.jacfwd.
+    convergence_weights: Optional elementwise weights applied to the residual
+      in the convergence test and error classification ONLY (the Newton
+      direction and line search are unaffected). Used when `fun` is a
+      rescaled version of the physical residual (e.g. row-equilibrated for
+      conditioning): passing the reciprocal row scales makes tol/coarse_tol
+      apply to the physical residual, so stopping and acceptance semantics
+      match the unscaled solve.
 
   Returns:
     A tuple `(x_root, RootMetadata(...))`.
   """
+  if convergence_weights is None:
+    convergence_weights = jnp.array(1.0)
 
   def _newton_raphson(f, x, jacobian_fun=None):
     init_x_new_vec = x
@@ -110,7 +120,11 @@ def root_newton_raphson(
 
     # carry out iterations.
     cond_fun = functools.partial(
-        _cond, tol=tol, tau_min=tau_min, maxiter=maxiter
+        _cond,
+        tol=tol,
+        tau_min=tau_min,
+        maxiter=maxiter,
+        convergence_weights=convergence_weights,
     )
     body_fun = functools.partial(
         _body,
@@ -157,7 +171,9 @@ def root_newton_raphson(
   # tolerance (coarse_tol). Can occur when solver exits early due to small steps
   # in solution vicinity. Proceed but provide a warning to user.
   error = _error_cond(
-      residual=metadata['residual'], coarse_tol=coarse_tol, tol=tol
+      residual=metadata['residual'] * convergence_weights,
+      coarse_tol=coarse_tol,
+      tol=tol,
   )
   # Workaround for https://github.com/google/jax/issues/24295: cast iterations
   # to the correct int dtype.
@@ -165,20 +181,6 @@ def root_newton_raphson(
       jax_utils.get_int_dtype()
   )
   return x_out, RootMetadata(**metadata, error=error)  # pytype: disable=bad-return-type
-
-
-def classify_residual_error(
-    residual: jax.Array, *, tol: float, coarse_tol: float
-) -> jax.Array:
-  """Classifies a residual vector into the solver error states.
-
-  Returns 0 if mean|residual| < tol, 2 if it is within coarse_tol, and 1
-  otherwise. This is the same classification applied at the exit of
-  root_newton_raphson, exposed for callers that need to (re)classify a
-  residual computed externally (e.g. the unscaled residual when the solve was
-  performed on an equilibrated system).
-  """
-  return _error_cond(residual=residual, coarse_tol=coarse_tol, tol=tol)
 
 
 def _error_cond(residual: jax.Array, coarse_tol: float, tol: float):
@@ -202,13 +204,15 @@ def _cond(
     tau_min: float,
     maxiter: int,
     tol: float,
+    convergence_weights: jax.Array,
 ) -> bool:
   """Check if exit condition reached for Newton-Raphson iterations."""
   iteration = state['iterations'][...]
   return jnp.bool_(
       jnp.logical_and(
           jnp.logical_and(
-              _residual_scalar(state['residual']) > tol, iteration < maxiter
+              _residual_scalar(state['residual'] * convergence_weights) > tol,
+              iteration < maxiter,
           ),
           state['last_tau'] > tau_min,
       )
