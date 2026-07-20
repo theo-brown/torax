@@ -33,6 +33,15 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
 
   Attributes:
     chi_min: Lower bound on heat conductivity.
+    clip_smoothing_width: If positive, the min/max clipping of transport
+      coefficients (chi, D_e, V_e) is replaced by a smooth (softplus-based)
+      clamp whose transition zone at each bound has width equal to this
+      fraction of that bound's magnitude. The hard clip makes the residual
+      Jacobian discontinuous at the clip boundaries, which degrades nonlinear
+      solver convergence; a small width (e.g. 0.01-0.1) keeps the Jacobian
+      continuous while perturbing each bound only relative to its own value
+      (by ~0.7 * width * |bound| at the bound itself). 0 (default) keeps the
+      exact hard clip.
     chi_max: Upper bound on heat conductivity (can be helpful for stability).
     D_e_min: minimum electron density diffusivity.
     D_e_max: maximum electron density diffusivity.
@@ -71,6 +80,9 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
   """
 
   chi_min: torax_pydantic.MeterSquaredPerSecond = 0.05
+  clip_smoothing_width: Annotated[
+      pydantic.NonNegativeFloat, torax_pydantic.JAX_STATIC
+  ] = 0.0
   chi_max: torax_pydantic.MeterSquaredPerSecond = 100.0
   D_e_min: torax_pydantic.MeterSquaredPerSecond = 0.05
   D_e_max: torax_pydantic.MeterSquaredPerSecond = 100.0
@@ -150,6 +162,12 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
   def _check_fields(self) -> typing_extensions.Self:
     if not self.chi_max > self.chi_min:
       raise ValueError('chi_min must be less than chi_max.')
+    if self.clip_smoothing_width >= 0.5:
+      raise ValueError(
+          'clip_smoothing_width must be < 0.5 (it is a fraction of the clip'
+          ' interval; larger values make the upper and lower smooth'
+          f' transitions overlap). Got {self.clip_smoothing_width}.'
+      )
     if not self.D_e_min < self.D_e_max:
       raise ValueError('D_e_min must be less than D_e_max.')
     if not self.V_e_min < self.V_e_max:
@@ -216,6 +234,7 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
         chi_e_outer=self.chi_e_outer.get_value(t),
         rho_outer=self.rho_outer.get_value(t),
         smoothing_width=self.smoothing_width,
+        clip_smoothing_width=self.clip_smoothing_width,
         smooth_everywhere=self.smooth_everywhere,
         disable_chi_i=self.disable_chi_i.get_value(t),
         disable_chi_e=self.disable_chi_e.get_value(t),

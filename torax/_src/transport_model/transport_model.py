@@ -20,6 +20,7 @@ coefficients.
 
 import abc
 import dataclasses
+import functools
 from typing import Final, Mapping, Sequence
 
 import immutabledict
@@ -246,23 +247,36 @@ class TransportModel(static_dataclass.StaticDataclass, abc.ABC):
       transport_runtime_params: transport_runtime_params_lib.RuntimeParams,
       transport_coeffs: TurbulentTransport,
   ) -> TurbulentTransport:
-    """Applies min/max clipping to transport coefficients for PDE stability."""
-    chi_face_ion = jnp.clip(
+    """Applies min/max clipping to transport coefficients for PDE stability.
+
+    If clip_smoothing_width > 0, the hard clip is replaced by a smooth
+    (softplus-based) clamp: the hard clip makes the residual Jacobian
+    discontinuous at the clip boundaries, which degrades nonlinear solver
+    convergence near marginally-clipped states.
+    """
+    if transport_runtime_params.clip_smoothing_width > 0.0:
+      clip = functools.partial(
+          smooth_clip,
+          width_fraction=transport_runtime_params.clip_smoothing_width,
+      )
+    else:
+      clip = jnp.clip
+    chi_face_ion = clip(
         transport_coeffs.chi_face_ion,
         transport_runtime_params.chi_min,
         transport_runtime_params.chi_max,
     )
-    chi_face_el = jnp.clip(
+    chi_face_el = clip(
         transport_coeffs.chi_face_el,
         transport_runtime_params.chi_min,
         transport_runtime_params.chi_max,
     )
-    d_face_el = jnp.clip(
+    d_face_el = clip(
         transport_coeffs.d_face_el,
         transport_runtime_params.D_e_min,
         transport_runtime_params.D_e_max,
     )
-    v_face_el = jnp.clip(
+    v_face_el = clip(
         transport_coeffs.v_face_el,
         transport_runtime_params.V_e_min,
         transport_runtime_params.V_e_max,
@@ -402,6 +416,50 @@ class TransportModel(static_dataclass.StaticDataclass, abc.ABC):
       )
 
     return jax.tree_util.tree_map(smooth_single_coeff, transport_coeffs)
+
+
+def smooth_clip(
+    x: jax.Array,
+    lower: jax.Array,
+    upper: jax.Array,
+    width_fraction: float,
+) -> jax.Array:
+  """Smoothly clamps x to [lower, upper].
+
+  A softplus-based smooth version of jnp.clip(x, lower, upper). The
+  transition zone around each bound b has width w_b = width_fraction * |b|
+  (with a small floor for bounds at zero), so each bound is perturbed only
+  *relative to its own magnitude*: at the bound the output differs from the
+  hard clip by w_b * log(2) ~ 0.7 * width_fraction * |b|. Away from the
+  bounds (more than a few w_b) the function asymptotes to jnp.clip exactly.
+  Unlike the hard clip, the result is C-infinity with derivative bounded by 1
+  everywhere, which keeps the residual Jacobian continuous through the clip
+  boundary.
+
+  Note the width is deliberately NOT relative to the clip interval
+  (upper - lower): for intervals spanning orders of magnitude (e.g. chi in
+  [0.05, 100]) an interval-relative width would perturb the lower bound by
+  many times its own value.
+
+  Args:
+    x: Values to clamp.
+    lower: Lower bound (may be an array broadcastable against x).
+    upper: Upper bound (must satisfy upper > lower).
+    width_fraction: Transition width of each bound as a fraction of that
+      bound's magnitude. Should be small (e.g. 0.01-0.1).
+
+  Returns:
+    The smoothly clamped values, in (lower, upper + O(w)).
+  """
+  # Floor for bounds at (or very near) zero, where the smooth clip degrades
+  # gracefully to the hard clip.
+  w_lower = width_fraction * jnp.maximum(jnp.abs(lower), 1e-6)
+  w_upper = width_fraction * jnp.maximum(jnp.abs(upper), 1e-6)
+  # Smooth maximum with the lower bound, then smooth minimum with the upper
+  # bound. jax.nn.softplus is numerically stable for large |arguments|.
+  x = lower + w_lower * jax.nn.softplus((x - lower) / w_lower)
+  x = upper - w_upper * jax.nn.softplus((upper - x) / w_upper)
+  return x
 
 
 def _build_smoothing_matrix(

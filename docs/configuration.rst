@@ -1445,6 +1445,18 @@ transport model.
   Lower allowed bound for heat conductivities :math:`\chi`, in units of
   :math:`m^2/s`.
 
+``clip_smoothing_width`` (float [default = 0.0])
+  If positive, the min/max clipping of the transport coefficients
+  (:math:`\chi`, ``D_e``, ``V_e``) is replaced by a smooth (softplus-based)
+  clamp whose transition zone at each bound has width equal to this fraction
+  of that bound's magnitude. The hard clip makes the residual Jacobian
+  discontinuous at the clip boundaries, which can degrade nonlinear solver
+  convergence when the state sits near a clip boundary; a small width
+  (0.01-0.1) keeps the Jacobian continuous while perturbing each bound only
+  relative to its own value (by :math:`\sim 0.7 \cdot` width
+  :math:`\cdot |b|` at bound :math:`b`). 0 keeps the exact hard clip. Must
+  be < 0.5.
+
 ``chi_max`` (float [default = 100.0])
   Upper allowed bound for heat conductivities :math:`\chi`, in units of
   :math:`m^2/s`.
