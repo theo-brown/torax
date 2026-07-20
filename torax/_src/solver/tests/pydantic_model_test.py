@@ -40,6 +40,11 @@ class PydanticModelTest(parameterized.TestCase):
           solver_type='optimizer',
           expected_type=nonlinear_theta_method.OptimizerThetaMethod,
       ),
+      dict(
+          testcase_name='levenberg_marquardt',
+          solver_type='levenberg_marquardt',
+          expected_type=nonlinear_theta_method.LevenbergMarquardtThetaMethod,
+      ),
   )
   def test_build_solver_from_config(self, solver_type, expected_type):
     """Builds a solver from the config."""
@@ -56,7 +61,9 @@ class PydanticModelTest(parameterized.TestCase):
     self.assertIsInstance(solver, expected_type)
     self.assertEqual(torax_config.solver.theta_implicit, 0.5)
 
-  @parameterized.parameters('linear', 'newton_raphson', 'optimizer')
+  @parameterized.parameters(
+      'linear', 'newton_raphson', 'optimizer', 'levenberg_marquardt'
+  )
   def test_solver_under_jit(self, solver_type):
     config = default_configs.get_default_config_dict()
     config['solver'] = {

@@ -23,6 +23,7 @@ from torax._src.core_profiles import convertors
 from torax._src.fvm import calc_coeffs
 from torax._src.fvm import cell_variable
 from torax._src.fvm import enums
+from torax._src.fvm import levenberg_marquardt_solve_block
 from torax._src.fvm import newton_raphson_solve_block
 from torax._src.fvm import optimizer_solve_block
 from torax._src.geometry import geometry
@@ -37,6 +38,19 @@ from torax._src.sources import source_profiles
 class OptimizerRuntimeParams(solver_runtime_params_lib.RuntimeParams):
   n_max_iterations: int
   loss_tol: float
+  initial_guess_mode: int = dataclasses.field(metadata={'static': True})
+
+
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class LevenbergMarquardtRuntimeParams(solver_runtime_params_lib.RuntimeParams):
+  residual_tol: float
+  residual_coarse_tol: float
+  # maxiter and the step tolerances are consumed as static Python values by
+  # optimistix (max_steps and the solver's termination tolerances).
+  maxiter: int = dataclasses.field(metadata={'static': True})
+  step_rtol: float = dataclasses.field(metadata={'static': True})
+  step_atol: float = dataclasses.field(metadata={'static': True})
   initial_guess_mode: int = dataclasses.field(metadata={'static': True})
 
 
@@ -200,6 +214,64 @@ class OptimizerThetaMethod(NonlinearThetaMethod):
         ),
         maxiter=solver_params.n_max_iterations,
         tol=solver_params.loss_tol,
+        pedestal_transition_state=pedestal_transition_state,
+    )
+    return (
+        x_new,
+        solver_numeric_outputs,
+    )
+
+
+class LevenbergMarquardtThetaMethod(NonlinearThetaMethod):
+  """Theta method solved with optimistix's Levenberg-Marquardt solver."""
+
+  def _x_new_helper(
+      self,
+      dt: jax.Array,
+      runtime_params_t: runtime_params_lib.RuntimeParams,
+      runtime_params_t_plus_dt: runtime_params_lib.RuntimeParams,
+      geo_t: geometry.Geometry,
+      geo_t_plus_dt: geometry.Geometry,
+      core_profiles_t: state.CoreProfiles,
+      core_profiles_t_plus_dt: state.CoreProfiles,
+      explicit_source_profiles: source_profiles.SourceProfiles,
+      coeffs_callback: calc_coeffs.CoeffsCallback,
+      evolving_names: tuple[str, ...],
+      pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+  ) -> tuple[
+      tuple[cell_variable.CellVariable, ...],
+      state.SolverNumericOutputs,
+  ]:
+    """See abstract method docstring in NonlinearThetaMethod."""
+    solver_params = runtime_params_t.solver
+    assert isinstance(solver_params, LevenbergMarquardtRuntimeParams)
+
+    (
+        x_new,
+        solver_numeric_outputs,
+    ) = levenberg_marquardt_solve_block.levenberg_marquardt_solve_block(
+        dt=dt,
+        runtime_params_t=runtime_params_t,
+        runtime_params_t_plus_dt=runtime_params_t_plus_dt,
+        geo_t=geo_t,
+        geo_t_plus_dt=geo_t_plus_dt,
+        x_old=convertors.core_profiles_to_solver_x_tuple(
+            core_profiles_t, evolving_names
+        ),
+        core_profiles_t=core_profiles_t,
+        core_profiles_t_plus_dt=core_profiles_t_plus_dt,
+        explicit_source_profiles=explicit_source_profiles,
+        models=self.models,
+        coeffs_callback=coeffs_callback,
+        evolving_names=evolving_names,
+        initial_guess_mode=enums.InitialGuessMode(
+            solver_params.initial_guess_mode
+        ),
+        maxiter=solver_params.maxiter,
+        tol=solver_params.residual_tol,
+        coarse_tol=solver_params.residual_coarse_tol,
+        step_rtol=solver_params.step_rtol,
+        step_atol=solver_params.step_atol,
         pedestal_transition_state=pedestal_transition_state,
     )
     return (

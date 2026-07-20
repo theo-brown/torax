@@ -2504,6 +2504,13 @@ specific solver are defined in the relevant section below.
 * ``'optimizer'``
     Nonlinear solver using the jaxopt library.
 
+* ``'levenberg_marquardt'``
+    Nonlinear solver using the optimistix library's Levenberg-Marquardt
+    algorithm: a damped least-squares trust-region method minimizing the
+    squared residual norm. Interpolates between Gauss-Newton and
+    gradient-descent steps. Supports timestep backtracking like
+    ``'newton_raphson'``.
+
 ``theta_implicit`` (float [default = 1.0])
   theta value in the theta method of time discretization. 0 = explicit, 1 =
   fully implicit, 0.5 = Crank-Nicolson.
@@ -2649,6 +2656,33 @@ optimizer
 
 ``n_max_iterations`` (int [default = 100])
   Maximum number of allowed optimizer iterations.
+
+levenberg_marquardt
+^^^^^^^^^^^^^^^^^^^
+
+``initial_guess_mode`` (str [default = 'linear_step'])
+  See the equivalent option of the ``newton_raphson`` solver.
+
+``n_max_iterations`` (int [default = 30])
+  Maximum number of allowed Levenberg-Marquardt iterations. Each iteration
+  evaluates one Jacobian of the residual, like a Newton-Raphson iteration.
+
+``residual_tol`` (float [default = 1e-5])
+  PDE residual magnitude tolerance for successfully exiting the solver,
+  consistent with the ``newton_raphson`` solver's ``residual_tol``.
+
+``residual_coarse_tol`` (float [default = 1e-2])
+  See the equivalent option of the ``newton_raphson`` solver.
+
+``step_rtol`` (float [default = 1e-8])
+  Relative step-size tolerance for the Levenberg-Marquardt termination
+  criterion: iteration stops once steps are smaller than
+  ``step_atol + step_rtol * |x|``. The residual classification above is then
+  applied to decide success or timestep backtracking.
+
+``step_atol`` (float [default = 1e-10])
+  Absolute step-size tolerance for the Levenberg-Marquardt termination
+  criterion.
 
 time_step_calculator
 --------------------

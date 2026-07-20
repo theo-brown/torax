@@ -153,6 +153,84 @@ class LinearThetaMethod(BaseSolver):
     )
 
 
+class LevenbergMarquardtThetaMethod(BaseSolver):
+  """Model for the optimistix Levenberg-Marquardt solver.
+
+  Solves the nonlinear theta-method equation R(x_new) = 0 by minimizing
+  ||R||^2 with a damped least-squares trust-region method
+  (optimistix.LevenbergMarquardt). Typically more robust than line-searched
+  Newton-Raphson far from the solution, at a similar per-iteration cost.
+
+  Attributes:
+    solver_type: The type of solver to use, hardcoded to
+      'levenberg_marquardt'.
+    initial_guess_mode: The initial guess mode for the solver.
+    n_max_iterations: The maximum number of LM iterations.
+    residual_tol: Mean absolute residual tolerance for successful exit,
+      consistent with the newton_raphson solver's residual_tol.
+    residual_coarse_tol: Coarser acceptable residual tolerance, consistent
+      with the newton_raphson solver's residual_coarse_tol.
+    step_rtol: Relative step-size tolerance for LM termination (the solver
+      stops iterating once steps are smaller than
+      step_atol + step_rtol * |x|).
+    step_atol: Absolute step-size tolerance for LM termination.
+  """
+
+  solver_type: Annotated[
+      Literal['levenberg_marquardt'], torax_pydantic.JAX_STATIC
+  ] = 'levenberg_marquardt'
+  initial_guess_mode: Annotated[
+      enums.InitialGuessMode, torax_pydantic.JAX_STATIC
+  ] = enums.InitialGuessMode.LINEAR
+  n_max_iterations: Annotated[
+      pydantic.NonNegativeInt, torax_pydantic.JAX_STATIC
+  ] = 30
+  residual_tol: float = 1e-5
+  residual_coarse_tol: float = 1e-2
+  step_rtol: Annotated[
+      pydantic.PositiveFloat, torax_pydantic.JAX_STATIC
+  ] = 1e-8
+  step_atol: Annotated[
+      pydantic.PositiveFloat, torax_pydantic.JAX_STATIC
+  ] = 1e-10
+
+  @functools.cached_property
+  def build_runtime_params(
+      self,
+  ) -> nonlinear_theta_method.LevenbergMarquardtRuntimeParams:
+    return nonlinear_theta_method.LevenbergMarquardtRuntimeParams(
+        theta_implicit=self.theta_implicit,
+        convection_dirichlet_mode=self.convection_dirichlet_mode,
+        convection_neumann_mode=self.convection_neumann_mode,
+        use_pereverzev=self.use_pereverzev,
+        use_predictor_corrector=self.use_predictor_corrector,
+        implicit_solver_type=self.implicit_solver_type,
+        chi_pereverzev=self.chi_pereverzev,
+        D_pereverzev=self.D_pereverzev,
+        maxiter=self.n_max_iterations,
+        residual_tol=self.residual_tol,
+        residual_coarse_tol=self.residual_coarse_tol,
+        step_rtol=self.step_rtol,
+        step_atol=self.step_atol,
+        n_corrector_steps=self.n_corrector_steps,
+        initial_guess_mode=self.initial_guess_mode.value,  # pyrefly: ignore[bad-argument-type]
+        fixed_point_atol=self.fixed_point_atol,
+        fixed_point_rtol=self.fixed_point_rtol,
+        fixed_point_termination_criterion=self.fixed_point_termination_criterion,
+        fixed_point_sufficient_decrease=self.fixed_point_sufficient_decrease,
+        fixed_point_use_backtracking=self.fixed_point_use_backtracking,
+        delta_reduction_factor=self.delta_reduction_factor,
+    )
+
+  def build_solver(
+      self,
+      models: models_lib.Models,
+  ) -> nonlinear_theta_method.LevenbergMarquardtThetaMethod:
+    return nonlinear_theta_method.LevenbergMarquardtThetaMethod(
+        models=models,
+    )
+
+
 class NewtonRaphsonThetaMethod(BaseSolver):
   """Model for nonlinear Newton-Raphson solver.
 
@@ -272,5 +350,8 @@ class OptimizerThetaMethod(BaseSolver):
 
 
 SolverConfig = (
-    LinearThetaMethod | NewtonRaphsonThetaMethod | OptimizerThetaMethod
+    LinearThetaMethod
+    | NewtonRaphsonThetaMethod
+    | OptimizerThetaMethod
+    | LevenbergMarquardtThetaMethod
 )
