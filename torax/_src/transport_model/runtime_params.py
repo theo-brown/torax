@@ -62,3 +62,4 @@ class RuntimeParams:
   )
   fast_ion_stabilization_multiplier: float
   merge_mode: enums.MergeMode = dataclasses.field(metadata={'static': True})
+  clip_smoothing_width: float = dataclasses.field(metadata={'static': True})
