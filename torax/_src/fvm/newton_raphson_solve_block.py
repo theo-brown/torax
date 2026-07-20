@@ -155,10 +155,12 @@ def newton_raphson_solve_block(
       fvm.jacobian_scaling): columns are scaled per channel by max|x_old| and
       rows by the reciprocal row maxima of the Jacobian at the initial guess
       (one-step Ruiz equilibration). The root is unchanged, but the Jacobian
-      seen by the solver is much better conditioned (measured 10-50x) and
-      tol / coarse_tol / tau_min become scale-invariant. Note that with
-      scaling enabled, tol applies to the scaled residual. Costs one extra
-      Jacobian evaluation per solve.
+      seen by the solver is much better conditioned (measured 10-50x). The
+      Newton iterations and line search operate on the scaled residual, but
+      the exit error state (including the coarse_tol acceptance) is
+      reclassified on the unscaled residual, so step acceptance and dt
+      backoff behave identically to the unscaled solver. Costs one extra
+      Jacobian evaluation and one extra residual evaluation per solve.
 
 
   Returns:
@@ -279,8 +281,19 @@ def newton_raphson_solve_block(
   )
 
   x_root, metadata = root_finder(x0=init_x_new_vec)
+  error = metadata.error
   if col_scale is not None:
     x_root = x_root * col_scale
+    # Reclassify the exit error on the UNSCALED residual with the standard
+    # tolerances, so acceptance semantics (in particular the coarse_tol
+    # acceptance that suppresses dt backoff) are identical to the unscaled
+    # solver. Without this, coarse_tol measured on the equilibrated
+    # (approximately relative) residual is far laxer than on the raw
+    # residual, and badly unconverged steps were observed to be accepted.
+    # Costs one extra residual evaluation per solve.
+    error = jax_root_finding.classify_residual_error(
+        unscaled_residual_fun(x_root), tol=tol, coarse_tol=coarse_tol
+    )
 
   # Create updated CellVariable instances based on state_plus_dt which has
   # updated boundary conditions and prescribed profiles.
@@ -291,7 +304,7 @@ def newton_raphson_solve_block(
       inner_solver_iterations=jnp.array(
           metadata.iterations, jax_utils.get_int_dtype()
       ),
-      solver_error_state=jnp.array(metadata.error, jax_utils.get_int_dtype()),
+      solver_error_state=jnp.array(error, jax_utils.get_int_dtype()),
       outer_solver_iterations=jnp.array(1, jax_utils.get_int_dtype()),
       sawtooth_crash=False,
   )
