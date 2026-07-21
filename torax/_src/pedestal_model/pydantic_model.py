@@ -156,28 +156,51 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   """Configuration for ProfileValueSaturation model.
 
   This saturation model triggers an increase in pedestal transport when the
-  pedestal temperature and density are above the values requested by the
-  pedestal model. The increase is a smooth linear function of the ratio of the
-  current value to the value requested by the pedestal model.
+  pedestal-top profile values exceed the values requested by the pedestal
+  model. Each transport channel is driven by its own profile: the heat
+  diffusivities chi_e and chi_i respond to the T_e and T_i deviations from
+  their pedestal targets, and the particle diffusivity D_e responds to the n_e
+  deviation from n_e_ped, where n_e is sensed as the (smooth) maximum over the
+  pedestal region so that density pileup anywhere inside the pedestal (e.g.
+  from edge fueling against suppressed transport) activates the response. The
+  particle pinch v_e is deliberately *not*
+  increased by saturation (it is scaled by the formation multiplier only):
+  the steady-state density profile shape is set by the ratio v/D, so raising
+  D alone shifts that ratio and lets the feedback regulate the pedestal
+  density height, whereas scaling D and v together would only change the
+  relaxation timescale.
 
-  The formula is
+  The formula for each channel is
     transport_multiplier = 1 + alpha * base_multiplier,
-  where alpha is a softplus function of the normalized deviation from the target
-  value, with given steepness and offset:
+  where alpha is a softplus function of the normalized deviation from the
+  target value, with given steepness and offset:
     x = (current - target) / target - offset
     alpha = log(1 + exp(steepness * x))
 
+  Note that saturation is one-sided: it can only *increase* transport above
+  the formation-suppressed level, i.e. throttle the pedestal at the target.
+  In particular, the achieved pedestal density cannot exceed what the edge
+  particle fueling (and any inward pinch) can sustain; with insufficient
+  fueling n_e_ped is not reached. Conversely, if the fueling flux exceeds
+  what D_e_max (the clip applied before scaling) can exhaust, the density
+  can settle above the target.
 
   Attributes:
-    steepness: Scaling factor applied to the argument of the softplus function,
-      setting the steepness of the smooth saturation function. Decrease for a
-      smoother saturation, which may be more numerically stable but may lead to
-      starting saturation at a temperature or density below the target values.
-    offset: Bias applied to the argument of the softplus function, setting the
-      dimensionless offset of the saturation window. Increase to start
-      saturation at a higher temperature or density.
-    base_multiplier: The base value of the transport multiplier. Increase for
-      stronger increases in transport once saturation starts.
+    steepness: Scaling factor applied to the argument of the softplus function
+      for the heat channels, setting the steepness of the smooth saturation
+      function. Decrease for a smoother saturation, which may be more
+      numerically stable but may lead to saturating at a temperature below the
+      target values.
+    offset: Bias applied to the argument of the softplus function for the heat
+      channels, setting the dimensionless offset of the saturation window.
+      Increase to start saturation at a higher temperature.
+    base_multiplier: The base value of the heat channel transport multiplier.
+      Increase for stronger increases in transport once saturation starts.
+    density_steepness: As `steepness`, for the particle diffusivity channel
+      driven by the n_e deviation from n_e_ped.
+    density_offset: As `offset`, for the particle diffusivity channel.
+    density_base_multiplier: As `base_multiplier`, for the particle
+      diffusivity channel.
   """
 
   model_name: Annotated[Literal["profile_value"], torax_pydantic.JAX_STATIC] = (
@@ -190,6 +213,13 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
   ] = 0.1
   base_multiplier: Annotated[
+      array_typing.FloatScalar, pydantic.Field(gt=1.0)
+  ] = 1e6
+  density_steepness: pydantic.PositiveFloat = 100.0
+  density_offset: Annotated[
+      array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
+  ] = 0.1
+  density_base_multiplier: Annotated[
       array_typing.FloatScalar, pydantic.Field(gt=1.0)
   ] = 1e6
 
@@ -206,6 +236,9 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
         steepness=self.steepness,
         offset=self.offset,
         base_multiplier=self.base_multiplier,
+        density_steepness=self.density_steepness,
+        density_offset=self.density_offset,
+        density_base_multiplier=self.density_base_multiplier,
     )
 
 
@@ -260,6 +293,13 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
     V_e_min: Minimum effective particle pinch velocity from the core transport
       model in the pedestal region (i.e., before applying ADAPTIVE_TRANSPORT)
       [m/s].
+    D_e_residual: Residual particle diffusivity [m^2/s] added to the scaled
+      turbulent particle diffusivity in the pedestal region when
+      ADAPTIVE_TRANSPORT scaling is active. Represents particle transport that
+      is not suppressed by the edge transport barrier (e.g. neoclassical-scale
+      levels), ensuring particle fueling deposited inside the pedestal region
+      has a finite transport channel even under strong suppression. Set to 0
+      (default) to disable.
   """
 
   set_pedestal: torax_pydantic.TimeVaryingScalar = (
@@ -301,6 +341,9 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
   )
   V_e_min: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
       -1.0
+  )
+  D_e_residual: torax_pydantic.NonNegativeTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
   )
   pedestal_top_smoothing_width: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.02)
@@ -368,6 +411,7 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
         D_e_max=self.D_e_max.get_value(t),
         V_e_max=self.V_e_max.get_value(t),
         V_e_min=self.V_e_min.get_value(t),
+        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
@@ -442,6 +486,7 @@ class SetPpedTpedRatioNped(BasePedestal):
         D_e_max=self.D_e_max.get_value(t),
         V_e_max=self.V_e_max.get_value(t),
         V_e_min=self.V_e_min.get_value(t),
+        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
@@ -511,6 +556,7 @@ class SetTpedNped(BasePedestal):
         D_e_max=self.D_e_max.get_value(t),
         V_e_max=self.V_e_max.get_value(t),
         V_e_min=self.V_e_min.get_value(t),
+        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
@@ -555,6 +601,7 @@ class NoPedestal(BasePedestal):
         D_e_max=self.D_e_max.get_value(t),
         V_e_max=self.V_e_max.get_value(t),
         V_e_min=self.V_e_min.get_value(t),
+        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),

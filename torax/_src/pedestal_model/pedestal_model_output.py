@@ -422,12 +422,22 @@ class PedestalModelOutput:
             ),
         )
       elif name in _D_E_TURBULENT_FIELDS:
-        modified_coeff = blend_clip_scale(
-            coeff,
-            multipliers.D_e_multiplier,
-            soft_clip_max(
-                coeff, pedestal_runtime_params.D_e_max, D_e_clip_width
-            ),
+        # The residual diffusivity represents particle transport that is not
+        # suppressed by the edge transport barrier (e.g. neoclassical-scale),
+        # ensuring fueling deposited in the pedestal region has a finite
+        # transport channel even under strong suppression. It is weighted by
+        # the activation so it vanishes smoothly when the multiplier is 1
+        # (L-mode: coefficients untouched).
+        modified_coeff = (
+            blend_clip_scale(
+                coeff,
+                multipliers.D_e_multiplier,
+                soft_clip_max(
+                    coeff, pedestal_runtime_params.D_e_max, D_e_clip_width
+                ),
+            )
+            + activation_weight(multipliers.D_e_multiplier)
+            * pedestal_runtime_params.D_e_residual
         )
       elif name in _V_E_TURBULENT_FIELDS:
         modified_coeff = blend_clip_scale(

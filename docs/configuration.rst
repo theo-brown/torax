@@ -959,14 +959,33 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   pedestal values scale relative to H-mode target values. The ``model_name``
   key selects the model:
 
-  * ``'profile_value'``: Uses the current profile value at the pedestal top
-    for saturation. Additional parameters:
+  * ``'profile_value'``: Uses the current profile values at the pedestal top
+    for saturation. Each transport channel is driven by its own profile: the
+    heat diffusivities :math:`\chi_e` and :math:`\chi_i` respond to the
+    :math:`T_e` and :math:`T_i` deviations from their pedestal targets, and
+    the particle diffusivity :math:`D_e` responds to the :math:`n_e` deviation
+    from ``n_e_ped``, where :math:`n_e` is sensed as the (smooth) maximum over
+    the pedestal region so that density pileup anywhere inside the pedestal
+    activates the response. The particle pinch :math:`V_e` is not increased by
+    saturation (it is scaled by the formation multiplier only), so that
+    raising :math:`D_e` alone shifts the :math:`V/D` ratio and regulates the
+    pedestal density height. Note that saturation is one-sided: it can only
+    throttle the pedestal at the target, so the achieved pedestal density is
+    limited by the available edge particle fueling (and any inward pinch).
+    Additional parameters:
 
     * ``steepness`` (float [default = 100.0]): Controls the steepness of the
+      saturation function for the heat channels.
+    * ``offset`` (float [default = 0.1]): Offset for the heat channel
       saturation function.
-    * ``offset`` (float [default = 0.0]): Offset for the saturation function.
-    * ``base_multiplier`` (float [default = 0.0]): Base multiplier for the
-      saturation function.
+    * ``base_multiplier`` (float [default = 1e6]): Base multiplier for the
+      heat channel saturation function.
+    * ``density_steepness`` (float [default = 100.0]): As ``steepness``, for
+      the particle diffusivity channel.
+    * ``density_offset`` (float [default = 0.1]): As ``offset``, for the
+      particle diffusivity channel.
+    * ``density_base_multiplier`` (float [default = 1e6]): As
+      ``base_multiplier``, for the particle diffusivity channel.
 
 ``pedestal_top_smoothing_width`` (**time-varying-scalar** [default = 0.02])
   Width of the smoothing region at the pedestal top boundary, in units of
@@ -987,6 +1006,16 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
 ``V_e_min`` (**time-varying-scalar** [default = -1.0])
   Minimum effective particle pinch velocity from the core transport model
   allowed in the pedestal region [m/s].
+
+``D_e_residual`` (**time-varying-scalar** [default = 0.0])
+  Residual particle diffusivity added to the scaled turbulent particle
+  diffusivity in the pedestal region when ``ADAPTIVE_TRANSPORT`` scaling is
+  active [m^2/s]. Represents particle transport that is not suppressed by the
+  edge transport barrier (e.g. neoclassical-scale levels), ensuring that
+  particle fueling deposited inside the pedestal region has a finite transport
+  channel even under strong suppression. Recommended when density evolution is
+  enabled with edge fueling; a value of order 1e-2 is a reasonable starting
+  point.
 
 The following ``model_name`` options are currently supported:
 

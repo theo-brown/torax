@@ -64,11 +64,26 @@ class FormationRuntimeParams:
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class SaturationRuntimeParams:
-  """Runtime params for pedestal saturation models."""
+  """Runtime params for pedestal saturation models.
+
+  Attributes:
+    steepness: Steepness of the saturation response of the heat transport
+      channels (chi_i, chi_e) to the temperature deviation from the pedestal
+      targets.
+    offset: Dimensionless offset of the heat channel saturation window.
+    base_multiplier: Base value of the heat channel transport increase.
+    density_steepness: Steepness of the saturation response of the particle
+      diffusivity channel (D_e) to the density deviation from n_e_ped.
+    density_offset: Dimensionless offset of the density saturation window.
+    density_base_multiplier: Base value of the particle diffusivity increase.
+  """
 
   steepness: array_typing.FloatScalar
   offset: array_typing.FloatScalar
   base_multiplier: array_typing.FloatScalar
+  density_steepness: array_typing.FloatScalar
+  density_offset: array_typing.FloatScalar
+  density_base_multiplier: array_typing.FloatScalar
 
 
 @jax.tree_util.register_dataclass
@@ -121,6 +136,13 @@ class RuntimeParams:
     D_e_max: Maximum effective particle diffusion coefficient [m^2/s].
     V_e_max: Maximum effective particle pinch velocity [m/s].
     V_e_min: Minimum effective particle pinch velocity [m/s].
+    D_e_residual: Residual particle diffusivity [m^2/s] added to the scaled
+      turbulent particle diffusivity in the pedestal region when
+      ADAPTIVE_TRANSPORT scaling is active. Represents particle transport that
+      is not suppressed by the edge transport barrier (e.g. neoclassical-scale
+      levels), ensuring that particle fueling deposited inside the pedestal
+      region has a finite transport channel even under strong suppression.
+      Set to 0 (default) to disable.
     pedestal_top_smoothing_width: Width of the smoothing kernel at the pedestal
       top.
   """
@@ -143,4 +165,5 @@ class RuntimeParams:
   D_e_max: array_typing.FloatScalar
   V_e_max: array_typing.FloatScalar
   V_e_min: array_typing.FloatScalar
+  D_e_residual: array_typing.FloatScalar
   pedestal_top_smoothing_width: array_typing.FloatScalar

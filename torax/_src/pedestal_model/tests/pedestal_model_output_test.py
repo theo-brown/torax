@@ -116,6 +116,7 @@ class PedestalModelOutputTest(absltest.TestCase):
     pedestal_runtime_params.D_e_max = jnp.array(1.0)
     pedestal_runtime_params.V_e_max = jnp.array(1.0)
     pedestal_runtime_params.V_e_min = jnp.array(-1.0)
+    pedestal_runtime_params.D_e_residual = jnp.array(0.0)
     pedestal_runtime_params.pedestal_top_smoothing_width = jnp.array(0.0)
     return pedestal_runtime_params
 
@@ -391,6 +392,46 @@ class PedestalModelOutputTest(absltest.TestCase):
         np.testing.assert_allclose(
             chi_ratio[pedestal_mask], suppression, rtol=1e-12
         )
+
+  def test_D_e_residual_applies_only_under_suppression(self):
+    """D_e_residual adds a particle-transport floor when scaling is active."""
+    core_transport = self._make_uniform_core_transport(value=1.0)
+    pedestal_runtime_params = self._make_pedestal_runtime_params()
+    pedestal_runtime_params.D_e_residual = jnp.array(0.5)
+    pedestal_mask = self.geo.rho_face_norm > 0.5
+
+    def modify(multiplier):
+      output = pedestal_model_output.PedestalModelOutput(
+          rho_norm_ped_top=0.5,
+          T_i_ped=1.0,
+          T_e_ped=1.0,
+          n_e_ped=1e19,
+          transport_multipliers=pedestal_model_output.TransportMultipliers(
+              chi_e_multiplier=jnp.array(multiplier),
+              chi_i_multiplier=jnp.array(multiplier),
+              D_e_multiplier=jnp.array(multiplier),
+              v_e_multiplier=jnp.array(multiplier),
+          ),
+      )
+      return output.modify_core_transport(
+          core_transport, self.geo, pedestal_runtime_params
+      )
+
+    with self.subTest('suppressed_gets_residual_floor'):
+      modified = modify(1e-2)
+      # Suppressed D would be ~soft_clip(1.0)*1e-2 ~ 0.01; the residual lifts
+      # it to ~0.51 in the pedestal region.
+      d_in_region = modified.d_face_el[pedestal_mask]
+      np.testing.assert_array_less(0.5, d_in_region)
+      # Outside the region: untouched.
+      np.testing.assert_allclose(modified.d_face_el[~pedestal_mask], 1.0)
+      # Heat channels do not receive the residual.
+      chi_in_region = modified.chi_face_ion[pedestal_mask]
+      np.testing.assert_array_less(chi_in_region, 0.1)
+
+    with self.subTest('unit_multiplier_unaffected_by_residual'):
+      modified = modify(1.0)
+      np.testing.assert_allclose(modified.d_face_el, 1.0)
 
   def test_to_internal_boundary_conditions_tanh_profiles(self):
     """Tests mtanh-shaped IBC when pedestal_profile_form=MTANH."""
