@@ -28,6 +28,7 @@ from torax._src.torax_pydantic import torax_pydantic
 from torax._src.transport_model import bohm_gyrobohm
 from torax._src.transport_model import combined
 from torax._src.transport_model import constant
+from torax._src.transport_model import ballooning_critical_gradient
 from torax._src.transport_model import critical_gradient
 from torax._src.transport_model import enums
 from torax._src.transport_model import pydantic_model_base
@@ -331,6 +332,91 @@ class CriticalGradientTransportModel(pydantic_model_base.TransportBase):
     )
 
 
+class BallooningCriticalGradientTransportModel(
+    pydantic_model_base.TransportBase
+):
+  """Model for the ballooning critical gradient pedestal transport model.
+
+  Transport is limited by the s-alpha ideal ballooning normalized pressure
+  gradient: below alpha_crit only residual (floor) transport remains, above it
+  transport rises smoothly to a bounded ceiling, clamping the edge pressure
+  gradient near the stability boundary. Intended as a physics-based edge or
+  pedestal component of the combined transport model, from which the pedestal
+  height emerges rather than being prescribed.
+
+  Attributes:
+    model_name: The transport model to use. Hardcoded to 'ballooning_CGM'.
+    alpha_crit_multiplier: Prefactor c_alpha in alpha_crit = c_alpha * max(s,
+      s_min), approximating the s-alpha first-stability boundary.
+    s_min: Magnetic shear floor used in the critical alpha, avoiding a
+      vanishing stability limit near zero shear.
+    chi_ceiling: Saturated heat diffusivity above the stability boundary
+      [m^2/s]. Bounds the transport response (and hence the solver stiffness).
+    alpha_width: Smooth transition width of the response in alpha. Sets the
+      stiffness with which profiles are clamped to the boundary; the pressure
+      gradient settles within ~alpha_width of alpha_crit.
+    chi_e_i_ratio: Ratio of ion to electron heat transport in the MHD-driven
+      term (chi_e = drive / chi_e_i_ratio).
+    chi_D_ratio: Ratio of ion heat to electron particle transport in the
+      MHD-driven term (D_e = drive / chi_D_ratio).
+    chi_floor: Residual heat diffusivity below the boundary [m^2/s],
+      representing barrier transport that is not MHD-driven (e.g.
+      neoclassical-scale levels).
+    D_e_floor: Residual particle diffusivity below the boundary [m^2/s].
+  """
+
+  model_name: Annotated[
+      Literal['ballooning_CGM'], torax_pydantic.JAX_STATIC
+  ] = 'ballooning_CGM'
+  alpha_crit_multiplier: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.6)
+  )
+  s_min: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.5)
+  )
+  chi_ceiling: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(20.0)
+  )
+  alpha_width: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.05)
+  )
+  chi_e_i_ratio: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0)
+  )
+  chi_D_ratio: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(5.0)
+  )
+  chi_floor: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.05)
+  )
+  D_e_floor: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.02)
+  )
+
+  def build_transport_model(
+      self,
+  ) -> ballooning_critical_gradient.BallooningCriticalGradientTransportModel:
+    return (
+        ballooning_critical_gradient.BallooningCriticalGradientTransportModel()
+    )
+
+  def build_runtime_params(
+      self, t: chex.Numeric
+  ) -> ballooning_critical_gradient.RuntimeParams:
+    base_kwargs = dataclasses.asdict(super().build_runtime_params(t))
+    return ballooning_critical_gradient.RuntimeParams(
+        alpha_crit_multiplier=self.alpha_crit_multiplier.get_value(t),
+        s_min=self.s_min.get_value(t),
+        chi_ceiling=self.chi_ceiling.get_value(t),
+        alpha_width=self.alpha_width.get_value(t),
+        chi_e_i_ratio=self.chi_e_i_ratio.get_value(t),
+        chi_D_ratio=self.chi_D_ratio.get_value(t),
+        chi_floor=self.chi_floor.get_value(t),
+        D_e_floor=self.D_e_floor.get_value(t),
+        **base_kwargs,
+    )
+
+
 class BohmGyroBohmTransportModel(pydantic_model_base.TransportBase):
   """Model for the Bohm + Gyro-Bohm transport model.
 
@@ -427,6 +513,7 @@ try:
       | TGLFNNukaeaTransportModel
       | ConstantTransportModel
       | CriticalGradientTransportModel
+      | BallooningCriticalGradientTransportModel
       | BohmGyroBohmTransportModel
       | tglf_transport_model.TGLFTransportModelConfig
       | qualikiz_transport_model.QualikizTransportModelConfig
@@ -438,6 +525,7 @@ except ImportError:
       | TGLFNNukaeaTransportModel
       | ConstantTransportModel
       | CriticalGradientTransportModel
+      | BallooningCriticalGradientTransportModel
       | BohmGyroBohmTransportModel
       | tglf_transport_model.TGLFTransportModelConfig
   )

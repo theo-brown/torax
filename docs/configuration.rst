@@ -1439,6 +1439,12 @@ transport model.
   Constant transport coefficients.
 * ``'CGM'``
   Critical Gradient Model.
+* ``'ballooning_CGM'``
+  Ballooning critical gradient model for the pedestal/edge region: transport
+  is limited by the s-:math:`\alpha` ideal ballooning normalized pressure
+  gradient, clamping the edge gradient near the stability boundary so that a
+  gradient-limited pedestal emerges from transport physics rather than being
+  prescribed.
 * ``'bohm-gyrobohm'``
   Bohm-GyroBohm model.
 * ``'qlknn'``
@@ -1615,6 +1621,47 @@ Runtime parameters for the Critical Gradient Model (CGM).
   particle diffusion. Sets the electron particle convection in the model.
   Negative values will set a peaked electron density profile in the absence of
   sources.
+
+ballooning_CGM
+^^^^^^^^^^^^^^
+
+Runtime parameters for the ballooning critical gradient pedestal/edge model.
+The normalized pressure gradient is
+:math:`\alpha = -2 \mu_0 q^2 R_0 (dp/dr) / B_0^2` and the transport response
+is a bounded smooth sigmoid between a residual floor (below the stability
+boundary) and a saturated ceiling (above it):
+:math:`\chi_i = \chi_{floor} + \chi_{ceiling}\,\sigma((\alpha -
+\alpha_{crit})/w_\alpha)` with
+:math:`\alpha_{crit} = c_\alpha \max(s, s_{min})`. Typically used as an edge
+component (e.g. ``rho_min = 0.8``) of the ``combined`` transport model, with
+the pedestal model disabled.
+
+``alpha_crit_multiplier`` (**time-varying-scalar** [default = 0.6])
+  Prefactor :math:`c_\alpha` of the s-:math:`\alpha` critical gradient.
+
+``s_min`` (**time-varying-scalar** [default = 0.5])
+  Magnetic shear floor in the critical alpha, avoiding a vanishing stability
+  limit near zero shear.
+
+``chi_ceiling`` (**time-varying-scalar** [default = 20.0])
+  Saturated heat diffusivity above the stability boundary [m^2/s]. Bounds the
+  transport response and hence the solver stiffness.
+
+``alpha_width`` (**time-varying-scalar** [default = 0.05])
+  Smooth transition width of the response in :math:`\alpha`. The edge pressure
+  gradient settles within roughly this distance of :math:`\alpha_{crit}`.
+
+``chi_e_i_ratio`` (**time-varying-scalar** [default = 1.0])
+  Ratio of ion to electron heat transport in the MHD-driven term.
+
+``chi_D_ratio`` (**time-varying-scalar** [default = 5.0])
+  Ratio of ion heat to electron particle transport in the MHD-driven term.
+
+``chi_floor`` (**time-varying-scalar** [default = 0.05])
+  Residual heat diffusivity below the boundary [m^2/s].
+
+``D_e_floor`` (**time-varying-scalar** [default = 0.02])
+  Residual particle diffusivity below the boundary [m^2/s].
 
 Bohm-GyroBohm
 ^^^^^^^^^^^^^
