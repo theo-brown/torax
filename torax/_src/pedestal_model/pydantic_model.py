@@ -26,6 +26,7 @@ from torax._src.pedestal_model import runtime_params
 from torax._src.pedestal_model import set_pped_tpedratio_nped
 from torax._src.pedestal_model import set_tped_nped
 from torax._src.pedestal_model.formation import power_scaling_formation_model
+from torax._src.pedestal_model.saturation import alpha_critical_saturation_model
 from torax._src.pedestal_model.saturation import profile_value_saturation_model
 from torax._src.physics import scaling_laws
 from torax._src.torax_pydantic import torax_pydantic
@@ -242,9 +243,83 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
     )
 
 
+class AlphaCriticalSaturation(torax_pydantic.BaseModelFrozen):
+  """Configuration for the alpha-critical saturation model.
+
+  This saturation model triggers an increase in pedestal transport when the
+  s-alpha normalized pressure gradient alpha approaches its critical value
+  alpha_crit = alpha_crit_multiplier * max(s, s_min), an approximation of the
+  ideal ballooning first-stability boundary. The sensed signal is the smooth
+  maximum of alpha/alpha_crit over the pedestal region.
+
+  Combined with a power-scaling formation model, the L-H transition timing
+  remains empirical (P_SOL vs P_LH scaling law) while the pedestal height
+  emerges from MHD stability physics: any T_ped/n_e_ped targets carried by
+  the pedestal model are ignored by this saturation model (only
+  rho_norm_ped_top is used, defining the pedestal region).
+
+  The formula is
+    transport_multiplier = 1 + alpha_sat * base_multiplier,
+  where alpha_sat is a softplus function of the deviation of the sensed
+  ratio from unity:
+    x = max(alpha / alpha_crit) - 1 - offset
+    alpha_sat = log(1 + exp(steepness * x))
+  applied to both heat channels and the particle diffusivity (alpha involves
+  the total pressure gradient, so all channels relieve it); the pinch is
+  scaled by the formation multiplier only.
+
+  Attributes:
+    steepness: Scaling factor applied to the argument of the softplus
+      function. The pedestal pressure gradient settles within roughly
+      1/steepness (relative) of the stability boundary.
+    offset: Dimensionless offset of the saturation window in alpha /
+      alpha_crit.
+    base_multiplier: The base value of the transport multiplier.
+    alpha_crit_multiplier: Prefactor c_alpha of the s-alpha critical gradient
+      alpha_crit = c_alpha * max(s, s_min).
+    s_min: Magnetic shear floor in the critical alpha, avoiding a vanishing
+      stability limit near zero shear.
+  """
+
+  model_name: Annotated[
+      Literal["alpha_critical"], torax_pydantic.JAX_STATIC
+  ] = "alpha_critical"
+  steepness: pydantic.PositiveFloat = 100.0
+  offset: Annotated[
+      array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
+  ] = 0.1
+  base_multiplier: Annotated[
+      array_typing.FloatScalar, pydantic.Field(gt=1.0)
+  ] = 1e6
+  alpha_crit_multiplier: pydantic.PositiveFloat = 0.6
+  s_min: pydantic.PositiveFloat = 0.5
+
+  def build_saturation_model(
+      self,
+  ) -> alpha_critical_saturation_model.AlphaCriticalSaturationModel:
+    return alpha_critical_saturation_model.AlphaCriticalSaturationModel()
+
+  def build_runtime_params(
+      self, t: chex.Numeric
+  ) -> alpha_critical_saturation_model.AlphaCriticalSaturationRuntimeParams:
+    del t
+    return alpha_critical_saturation_model.AlphaCriticalSaturationRuntimeParams(
+        steepness=self.steepness,
+        offset=self.offset,
+        base_multiplier=self.base_multiplier,
+        # The density channel shares the alpha-based multiplier in this model;
+        # the density_* params are unused but required by the base dataclass.
+        density_steepness=self.steepness,
+        density_offset=self.offset,
+        density_base_multiplier=self.base_multiplier,
+        alpha_crit_multiplier=self.alpha_crit_multiplier,
+        s_min=self.s_min,
+    )
+
+
 # For new formation and saturation models, add to these TypeAliases via Union.
 FormationConfig: TypeAlias = DelabieScalingFormation | MartinScalingFormation
-SaturationConfig: TypeAlias = ProfileValueSaturation
+SaturationConfig: TypeAlias = ProfileValueSaturation | AlphaCriticalSaturation
 
 
 class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):

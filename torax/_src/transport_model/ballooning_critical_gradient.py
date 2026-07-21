@@ -26,11 +26,11 @@ import dataclasses
 import jax
 from jax import numpy as jnp
 from torax._src import array_typing
-from torax._src import constants as constants_module
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_model_output as pedestal_model_output_lib
+from torax._src.physics import formulas
 from torax._src.transport_model import runtime_params as transport_runtime_params_lib
 from torax._src.transport_model import transport_model
 
@@ -101,31 +101,12 @@ class BallooningCriticalGradientTransportModel(transport_model.TransportModel):
       coeffs: The transport coefficients.
     """
     del pedestal_model_output  # Unused: the limit is stability-based.
-    constants = constants_module.CONSTANTS
 
     # Required for pytype
     assert isinstance(transport_runtime_params, RuntimeParams)
 
     s = core_profiles.s_face
-    q = core_profiles.q_face
-
-    # Define radial coordinate as midplane average r, consistent with the
-    # circular-geometry assumption underlying the s-alpha model.
-    rmid = (geo.R_out - geo.R_in) * 0.5
-    p_face = core_profiles.pressure_thermal_total.face_value()
-    dp_dr = core_profiles.pressure_thermal_total.face_grad(
-        x=rmid, x_left=geo.r_mid_face[0], x_right=geo.r_mid_face[-1]
-    )
-    del p_face  # Only the gradient enters alpha.
-
-    alpha = (
-        -2.0
-        * constants.mu_0
-        * q**2
-        * geo.R_major
-        / geo.B_0**2
-        * dp_dr
-    )
+    alpha = formulas.calc_ballooning_alpha_face(geo, core_profiles)
 
     alpha_crit = transport_runtime_params.alpha_crit_multiplier * jnp.maximum(
         s, transport_runtime_params.s_min

@@ -987,6 +987,32 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
     * ``density_base_multiplier`` (float [default = 1e6]): As
       ``base_multiplier``, for the particle diffusivity channel.
 
+  * ``'alpha_critical'``: Saturation driven by proximity to the s-:math:`\alpha`
+    ideal ballooning stability boundary instead of prescribed pedestal targets.
+    The sensed signal is the smooth maximum of :math:`\alpha/\alpha_{crit}`
+    over the pedestal region, with
+    :math:`\alpha = -2\mu_0 q^2 R_0 (dp/dr)/B_0^2` and
+    :math:`\alpha_{crit} = c_\alpha \max(s, s_{min})`. Combined with a
+    power-scaling formation model, the L-H transition timing remains empirical
+    (:math:`P_{SOL}` vs :math:`P_{LH}`) while the pedestal height emerges from
+    MHD stability physics; any T_ped/n_e_ped values from the pedestal model
+    are ignored (only ``rho_norm_ped_top`` is used, defining the pedestal
+    region). The multiplier applies to both heat channels and the particle
+    diffusivity; the pinch is scaled by the formation multiplier only.
+    Additional parameters:
+
+    * ``steepness`` (float [default = 100.0]): Steepness of the softplus
+      response; the pedestal pressure gradient settles within roughly
+      1/steepness (relative) of the boundary.
+    * ``offset`` (float [default = 0.1]): Dimensionless offset of the
+      saturation window in :math:`\alpha/\alpha_{crit}`.
+    * ``base_multiplier`` (float [default = 1e6]): Base value of the transport
+      multiplier.
+    * ``alpha_crit_multiplier`` (float [default = 0.6]): Prefactor
+      :math:`c_\alpha` of the critical gradient.
+    * ``s_min`` (float [default = 0.5]): Magnetic shear floor in the critical
+      alpha.
+
 ``pedestal_top_smoothing_width`` (**time-varying-scalar** [default = 0.02])
   Width of the smoothing region at the pedestal top boundary, in units of
   :math:`\hat{\rho}`.
