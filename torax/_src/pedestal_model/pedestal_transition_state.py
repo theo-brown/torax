@@ -60,10 +60,6 @@ class PedestalTransitionState:
     previous_pedestal_model_output: The pedestal model output from the previous
       completed timestep. Used by some pedestal models (e.g. EPED-NN) to
       determine pedestal width for input calculations.
-    transport_multipliers_prev: The ADAPTIVE_TRANSPORT multipliers that were
-      applied at the end of the previous completed timestep. Used as the anchor
-      of the multiplier relaxation (exponential moving average) when
-      transport_multiplier_relaxation_time > 0.
   """
 
   confinement_mode: array_typing.IntScalar
@@ -75,11 +71,6 @@ class PedestalTransitionState:
   n_e_ped_L_mode: array_typing.FloatScalar
   pedestal_model_output: pedestal_model_output_lib.PedestalModelOutput
   previous_pedestal_model_output: pedestal_model_output_lib.PedestalModelOutput
-  transport_multipliers_prev: pedestal_model_output_lib.TransportMultipliers = (
-      dataclasses.field(
-          default_factory=pedestal_model_output_lib.TransportMultipliers.default
-      )
-  )
 
   @classmethod
   def empty_L_mode(cls):

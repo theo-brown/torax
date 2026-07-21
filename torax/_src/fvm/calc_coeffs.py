@@ -141,7 +141,6 @@ class CoeffsCallback:
         use_pereverzev=use_pereverzev,
         explicit_call=explicit_call,
         pedestal_transition_state=pedestal_transition_state,
-        dt=dt,
     )
 
 
@@ -157,7 +156,6 @@ def calc_coeffs(
     ),
     use_pereverzev: bool = False,
     explicit_call: bool = False,
-    dt: array_typing.FloatScalar | None = None,
 ) -> block_1d_coeffs.Block1DCoeffs:
   """Calculates Block1DCoeffs for the time step described by `core_profiles`.
 
@@ -185,9 +183,6 @@ def calc_coeffs(
       explicit component of the PDE. Then calculates a reduced Block1DCoeffs if
       theta_implicit=1. This saves computation for the default fully implicit
       implementation.
-    dt: Current timestep duration [s], if known. Used for relaxation of the
-      ADAPTIVE_TRANSPORT pedestal transport multipliers. If None, the
-      instantaneous multipliers are applied.
 
   Returns:
     coeffs: Block1DCoeffs containing the coefficients at this time step.
@@ -211,7 +206,6 @@ def calc_coeffs(
         evolving_names=evolving_names,
         use_pereverzev=use_pereverzev,
         pedestal_transition_state=pedestal_transition_state,
-        dt=dt,
     )
 
 
@@ -232,7 +226,6 @@ def _calc_coeffs_full(
         pedestal_transition_state_lib.PedestalTransitionState
     ),
     use_pereverzev: bool = False,
-    dt: array_typing.FloatScalar | None = None,
 ) -> block_1d_coeffs.Block1DCoeffs:
   """See `calc_coeffs` for details."""
 
@@ -295,7 +288,6 @@ def _calc_coeffs_full(
         core_profiles,
         merged_source_profiles,
         pedestal_transition_state,
-        dt,
     )
     pedestal_transition_state = dataclasses.replace(
         pedestal_transition_state,
@@ -316,7 +308,6 @@ def _calc_coeffs_full(
         merged_source_profiles,
         pedestal_transition_state,
         frozen_pedestal_output,
-        dt,
     )
     pedestal_transition_state = dataclasses.replace(
         pedestal_transition_state,

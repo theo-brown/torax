@@ -94,8 +94,7 @@ class PowerScalingFormationModelTest(parameterized.TestCase):
           testcase_name='martin_above_threshold',
           scaling_law='martin',
           power=1e6,
-          # Default formation base_multiplier.
-          expected_multiplier=1e-2,
+          expected_multiplier=1e-6,
       ),
       dict(
           testcase_name='martin_below_threshold',
@@ -107,8 +106,7 @@ class PowerScalingFormationModelTest(parameterized.TestCase):
           testcase_name='delabie_above_threshold',
           scaling_law='delabie',
           power=1e6,
-          # Default formation base_multiplier.
-          expected_multiplier=1e-2,
+          expected_multiplier=1e-6,
       ),
       dict(
           testcase_name='delabie_below_threshold',

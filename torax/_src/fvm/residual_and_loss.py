@@ -385,7 +385,6 @@ def theta_method_block_residual(
       evolving_names=evolving_names,
       use_pereverzev=False,
       pedestal_transition_state=pedestal_transition_state,
-      dt=dt,
   )
 
   solver_params = runtime_params_t_plus_dt.solver

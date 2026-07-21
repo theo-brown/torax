@@ -903,19 +903,6 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   :math:`P_{SOL} = P_{heat} - dW/dt`. When ``False``, avoids spurious dithering
   during L-mode to H-mode transitions.
 
-``transport_multiplier_relaxation_time`` (**time-varying-scalar** [default = 0.0])
-  Relaxation time :math:`\tau` in seconds for the ``ADAPTIVE_TRANSPORT``
-  transport multipliers. When positive, the applied multiplier is relaxed
-  towards the instantaneous formation :math:`\times` saturation value from the
-  multiplier applied at the end of the previous timestep, via a log-space
-  exponential moving average with per-step weight
-  :math:`w = 1 - e^{-dt/\tau}`. This bounds the effective feedback gain seen by
-  the nonlinear solver within a single timestep (improving Newton-Raphson
-  convergence) and low-pass filters the multiplier dynamics across timesteps,
-  damping dithering near the L-H threshold. Set to 0 (default) to apply the
-  instantaneous multipliers directly. Values of a few typical solver timesteps
-  are a reasonable starting point.
-
 ``explicit_pedestal`` (**bool** [default = True])
   Controls whether the pedestal model is evaluated explicitly (once per
   timestep) or implicitly (every internal iteration). When ``True`` (default),
@@ -958,26 +945,14 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   * ``'martin_scaling'``: Uses the Martin scaling law to determine the L-H
     power threshold. Additional parameters:
 
-    * ``sharpness`` (float [default = 20.0]): Controls the sharpness of the
-      transition sigmoid function. Larger values increase the sensitivity of
-      the (implicitly evaluated) transport coefficients to the state and can
-      degrade nonlinear solver convergence.
-    * ``offset`` (float [default = 0.0]): Dimensionless offset of the
-      formation window.
-    * ``base_multiplier`` (float [default = 1e-2]): The transport multiplier
-      applied deep in H-mode. Smaller values suppress pedestal transport more
-      strongly, but inflate the dynamic range of the multiplier and degrade
-      solver conditioning.
+    * ``sharpness`` (float [default = 10.0]): Controls the sharpness of the
+      transition sigmoid function.
 
   * ``'delabie_scaling'``: Uses the Delabie scaling law for the L-H power
     threshold. Additional parameters:
 
-    * ``sharpness`` (float [default = 20.0]): Controls the sharpness of the
+    * ``sharpness`` (float [default = 10.0]): Controls the sharpness of the
       transition sigmoid function.
-    * ``offset`` (float [default = 0.0]): Dimensionless offset of the
-      formation window.
-    * ``base_multiplier`` (float [default = 1e-2]): The transport multiplier
-      applied deep in H-mode.
 
 ``saturation_model`` (dict)
   Configuration for the pedestal saturation model, which determines how the
@@ -987,18 +962,11 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   * ``'profile_value'``: Uses the current profile value at the pedestal top
     for saturation. Additional parameters:
 
-    * ``steepness`` (float [default = 30.0]): Controls the steepness of the
-      saturation function. This sets the feedback gain of the transport
-      coefficients with respect to the pedestal-top state: the achieved
-      pedestal height varies by a factor of e per 1/steepness relative
-      deviation. Larger values hold the pedestal closer to the target but
-      degrade nonlinear solver convergence.
-    * ``offset`` (float [default = 0.1]): Dimensionless offset of the
-      saturation window.
-    * ``base_multiplier`` (float [default = 1e3]): Base multiplier for the
-      saturation function. In steady state the product of the formation and
-      saturation multipliers is O(1), so this should be of order
-      1 / (formation ``base_multiplier``).
+    * ``steepness`` (float [default = 100.0]): Controls the steepness of the
+      saturation function.
+    * ``offset`` (float [default = 0.0]): Offset for the saturation function.
+    * ``base_multiplier`` (float [default = 0.0]): Base multiplier for the
+      saturation function.
 
 ``pedestal_top_smoothing_width`` (**time-varying-scalar** [default = 0.02])
   Width of the smoothing region at the pedestal top boundary, in units of
