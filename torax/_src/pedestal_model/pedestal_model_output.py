@@ -48,6 +48,113 @@ class TransportMultipliers:
     )
 
 
+# Explicit classification of CoreTransport fields for ADAPTIVE_TRANSPORT
+# scaling. Fields not listed here (e.g. neoclassical transport) are left
+# unmodified.
+_CHI_I_TURBULENT_FIELDS = frozenset({
+    'chi_face_ion',
+    'chi_face_ion_bohm',
+    'chi_face_ion_gyrobohm',
+    'chi_face_ion_itg',
+    'chi_face_ion_tem',
+})
+_CHI_E_TURBULENT_FIELDS = frozenset({
+    'chi_face_el',
+    'chi_face_el_bohm',
+    'chi_face_el_gyrobohm',
+    'chi_face_el_itg',
+    'chi_face_el_tem',
+    'chi_face_el_etg',
+})
+_D_E_TURBULENT_FIELDS = frozenset({
+    'd_face_el',
+    'd_face_el_itg',
+    'd_face_el_tem',
+})
+_V_E_TURBULENT_FIELDS = frozenset({
+    'v_face_el',
+    'v_face_el_itg',
+    'v_face_el_tem',
+})
+# Pereverzev-Corrigan terms come in diffusion/convection pairs whose fluxes
+# cancel exactly at the current profile. Each pair must be scaled by a single
+# shared factor, with no clipping, so the cancellation is preserved.
+_PEREVERZEV_HEAT_ION_FIELDS = frozenset({
+    'chi_face_ion_pereverzev',
+    'full_v_heat_face_ion_pereverzev',
+})
+_PEREVERZEV_HEAT_EL_FIELDS = frozenset({
+    'chi_face_el_pereverzev',
+    'full_v_heat_face_el_pereverzev',
+})
+_PEREVERZEV_PARTICLE_FIELDS = frozenset({
+    'd_face_el_pereverzev',
+    'v_face_el_pereverzev',
+})
+
+# Log-space width of the smooth activation switch: the clip-and-scale
+# modification turns on as the multiplier departs from 1.0 by roughly this
+# relative amount.
+_ACTIVATION_LOG_WIDTH = 0.1
+# Width of the soft clipping transition region, as a fraction of the clip
+# range.
+_SOFT_CLIP_WIDTH_FRACTION = 0.05
+
+
+def activation_weight(
+    multiplier: array_typing.FloatScalar,
+    log_width: float = _ACTIVATION_LOG_WIDTH,
+) -> jax.Array:
+  """Smooth weight in [0, 1) measuring how far a multiplier is from 1.0.
+
+  Returns 0 when the multiplier is exactly 1 (pedestal modification inactive,
+  e.g. deep L-mode) and approaches 1 as the multiplier departs from 1 in either
+  direction. The weight is C^inf in the multiplier with zero slope at
+  multiplier=1, so the transport modification switches on smoothly. This
+  replaces a previous hard `jnp.isclose(multiplier, 1.0)` branch which
+  introduced a jump discontinuity in the solver residual mid-transition.
+
+  Args:
+    multiplier: The (positive) transport multiplier.
+    log_width: Log-space scale over which the weight activates.
+
+  Returns:
+    Smooth activation weight in [0, 1).
+  """
+  z = jnp.log(multiplier) / log_width
+  return -jnp.expm1(-0.5 * z**2)
+
+
+def soft_clip_max(
+    x: jax.Array,
+    cap: array_typing.FloatScalar,
+    width: array_typing.FloatScalar,
+) -> jax.Array:
+  """Smooth version of jnp.clip(x, max=cap).
+
+  Approaches x for x << cap and cap for x >> cap, with a C^inf transition of
+  scale `width` (instead of the derivative discontinuity of a hard clip).
+
+  Args:
+    x: Values to clip.
+    cap: Upper bound.
+    width: Transition width; must be > 0.
+
+  Returns:
+    Smoothly clipped values.
+  """
+  return cap - width * jax.nn.softplus((cap - x) / width)
+
+
+def soft_clip_min(
+    x: jax.Array,
+    floor: array_typing.FloatScalar,
+    width: array_typing.FloatScalar,
+) -> jax.Array:
+  """Smooth version of jnp.clip(x, min=floor). See `soft_clip_max`."""
+  return floor + width * jax.nn.softplus((x - floor) / width)
+
+
 def _build_smoothing_matrix(
     rho_face_norm: array_typing.FloatVectorFace,
     rho_norm_ped_top: array_typing.FloatScalar,
@@ -236,6 +343,16 @@ class PedestalModelOutput:
     coefficients from neoclassical and pedestal transport models are not
     affected.
 
+    The modified coefficients are smooth (C^1 or better) functions of both the
+    multipliers and the input coefficients, which is required for the
+    Newton-Raphson solver: the multipliers are re-evaluated inside the solver
+    residual, so any discontinuity here becomes a discontinuity of the residual.
+    Turbulent coefficients blend smoothly between the unmodified value (when
+    the multiplier is near 1, e.g. L-mode) and a softly-clipped, scaled value
+    (when the multiplier departs from 1). Pereverzev-Corrigan
+    diffusion/convection pairs are scaled by a single shared factor with no
+    clipping so their mutual flux cancellation is preserved exactly.
+
     Args:
       core_transport: The core transport coefficients to modify.
       geo: The geometry of the torus.
@@ -259,57 +376,82 @@ class PedestalModelOutput:
         pedestal_runtime_params.pedestal_top_smoothing_width,
     )
 
+    multipliers = self.transport_multipliers
+
+    def blend_clip_scale(coeff, multiplier, clipped_coeff):
+      """Smoothly blend between the raw and clipped-and-scaled coefficient."""
+      s = activation_weight(multiplier)
+      return (1.0 - s) * coeff + s * clipped_coeff * multiplier
+
+    chi_clip_width = (
+        _SOFT_CLIP_WIDTH_FRACTION * pedestal_runtime_params.chi_max
+        + constants.CONSTANTS.eps
+    )
+    D_e_clip_width = (
+        _SOFT_CLIP_WIDTH_FRACTION * pedestal_runtime_params.D_e_max
+        + constants.CONSTANTS.eps
+    )
+    V_e_clip_width = (
+        _SOFT_CLIP_WIDTH_FRACTION
+        * (pedestal_runtime_params.V_e_max - pedestal_runtime_params.V_e_min)
+        + constants.CONSTANTS.eps
+    )
+
     def multiply_coeff(
         path: jax.tree_util.KeyPath, coeff: array_typing.FloatVectorFace
     ) -> array_typing.FloatVectorFace:
       """Scale turbulent+Pereverzev transport coefficients in the pedestal."""
-      # Get the variable name of the leaf
-      key = str(path[-1])
+      # Get the variable name of the leaf.
+      key = path[-1]
+      name = key.name if hasattr(key, "name") else str(key).lstrip(".")
 
-      # Apply the correct multiplier based on the variable name
-      # TODO(b/488314338): Improve robustness of applying multipliers to
-      # transport coefficients, ideally avoiding string matching.
-      if "neo" in key:
-        # Neoclassical transport should not be affected by scaling from an
-        # ADAPTIVE_TRANSPORT pedestal model.
-        return coeff
-      elif "chi_face_ion" in key:
-        # If transport suppression is not in effect, perform no scaling
-        # (L-mode). If transport suppression is in effect (i.e. H-mode,
-        # chi_i_multiplier != 1.0), then we clip the chi before scaling, to
-        # avoid unrealistic values.
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.chi_i_multiplier, 1.0),
+      if name in _CHI_I_TURBULENT_FIELDS:
+        modified_coeff = blend_clip_scale(
             coeff,
-            jnp.clip(coeff, max=pedestal_runtime_params.chi_max)
-            * self.transport_multipliers.chi_i_multiplier,
+            multipliers.chi_i_multiplier,
+            soft_clip_max(
+                coeff, pedestal_runtime_params.chi_max, chi_clip_width
+            ),
         )
-      elif "chi_face_el" in key:
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.chi_e_multiplier, 1.0),
+      elif name in _CHI_E_TURBULENT_FIELDS:
+        modified_coeff = blend_clip_scale(
             coeff,
-            jnp.clip(coeff, max=pedestal_runtime_params.chi_max)
-            * self.transport_multipliers.chi_e_multiplier,
+            multipliers.chi_e_multiplier,
+            soft_clip_max(
+                coeff, pedestal_runtime_params.chi_max, chi_clip_width
+            ),
         )
-      elif "d_face_el" in key:
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.D_e_multiplier, 1.0),
+      elif name in _D_E_TURBULENT_FIELDS:
+        modified_coeff = blend_clip_scale(
             coeff,
-            jnp.clip(coeff, max=pedestal_runtime_params.D_e_max)
-            * self.transport_multipliers.D_e_multiplier,
+            multipliers.D_e_multiplier,
+            soft_clip_max(
+                coeff, pedestal_runtime_params.D_e_max, D_e_clip_width
+            ),
         )
-      elif "v_face_el" in key:
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.v_e_multiplier, 1.0),
+      elif name in _V_E_TURBULENT_FIELDS:
+        modified_coeff = blend_clip_scale(
             coeff,
-            jnp.clip(
-                coeff,
-                min=pedestal_runtime_params.V_e_min,
-                max=pedestal_runtime_params.V_e_max,
-            )
-            * self.transport_multipliers.v_e_multiplier,
+            multipliers.v_e_multiplier,
+            soft_clip_min(
+                soft_clip_max(
+                    coeff, pedestal_runtime_params.V_e_max, V_e_clip_width
+                ),
+                pedestal_runtime_params.V_e_min,
+                V_e_clip_width,
+            ),
         )
+      elif name in _PEREVERZEV_HEAT_ION_FIELDS:
+        modified_coeff = coeff * multipliers.chi_i_multiplier
+      elif name in _PEREVERZEV_HEAT_EL_FIELDS:
+        modified_coeff = coeff * multipliers.chi_e_multiplier
+      elif name in _PEREVERZEV_PARTICLE_FIELDS:
+        # Both members of the particle pair share D_e_multiplier so the
+        # v/D ratio (and hence the Pereverzev flux cancellation) is unchanged.
+        modified_coeff = coeff * multipliers.D_e_multiplier
       else:
+        # Neoclassical transport and any unclassified coefficients are not
+        # affected by scaling from an ADAPTIVE_TRANSPORT pedestal model.
         return coeff
 
       # Only modify the coefficients in the pedestal region.

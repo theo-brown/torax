@@ -22,6 +22,7 @@ import dataclasses
 
 import jax
 import jax.numpy as jnp
+from torax._src import array_typing
 from torax._src import jax_utils
 from torax._src import state
 from torax._src import static_dataclass
@@ -53,8 +54,35 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
       source_profiles: source_profiles_lib.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
+      dt: array_typing.FloatScalar | None = None,
   ) -> pedestal_model_output.TransportMultipliers:
-    """Computes transport multipliers from formation and saturation models."""
+    """Computes transport multipliers from formation and saturation models.
+
+    The instantaneous multiplier is the product of the formation (transport
+    decrease) and saturation (transport increase) multipliers. When
+    transport_multiplier_relaxation_time (tau) > 0 and dt is provided, the
+    applied multiplier is relaxed towards the instantaneous value from the
+    multiplier applied at the end of the previous timestep, via a log-space
+    exponential moving average with weight w = 1 - exp(-dt/tau). This bounds
+    the effective feedback gain seen by the nonlinear solver within a single
+    timestep (the gain is scaled by w) and low-pass filters the multiplier
+    dynamics across timesteps, damping dithering.
+
+    Args:
+      runtime_params: Runtime parameters.
+      geo: Geometry.
+      core_profiles: Core profiles (current solver iterate when called from
+        within the solver residual).
+      source_profiles: Source profiles.
+      pedestal_transition_state: Current pedestal transition state, carrying
+        the previously applied multipliers.
+      pedestal_output: Output of the pedestal model implementation.
+      dt: Current timestep duration [s]. If None (e.g. pre-step calls where dt
+        is not yet known), the instantaneous multipliers are returned.
+
+    Returns:
+      The transport multipliers to apply.
+    """
 
     transport_decrease = self.formation_model(
         runtime_params,
@@ -69,10 +97,27 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
 
     # Combine via exp(log) for numerical stability, as multipliers can
     # be very small or large.
-    return jax.tree.map(
+    instantaneous_multipliers = jax.tree.map(
         lambda x, y: jnp.exp(jnp.log(x) + jnp.log(y)),
         transport_decrease,
         transport_increase,
+    )
+
+    if dt is None:
+      return instantaneous_multipliers
+
+    tau = runtime_params.pedestal.transport_multiplier_relaxation_time
+    # Double-where to keep the computation NaN-free for tau = 0, in which case
+    # w = 1 and the instantaneous multipliers are applied directly.
+    safe_tau = jnp.where(tau > 0.0, tau, 1.0)
+    w = jnp.where(tau > 0.0, -jnp.expm1(-dt / safe_tau), 1.0)
+
+    return jax.tree.map(
+        lambda prev, inst: jnp.exp(
+            (1.0 - w) * jnp.log(prev) + w * jnp.log(inst)
+        ),
+        pedestal_transition_state.transport_multipliers_prev,
+        instantaneous_multipliers,
     )
 
   def _evaluate_pedestal(
@@ -82,6 +127,7 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles: state.CoreProfiles,
       source_profiles: source_profiles_lib.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      dt: array_typing.FloatScalar | None = None,
   ) -> pedestal_model_output.PedestalModelOutput:
     pedestal_output = self._call_implementation(
         runtime_params, geo, core_profiles, pedestal_transition_state,
@@ -100,6 +146,7 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
           source_profiles,
           pedestal_transition_state,
           pedestal_output,
+          dt,
       )
       pedestal_output = dataclasses.replace(
           pedestal_output, transport_multipliers=transport_multipliers
@@ -114,11 +161,12 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles: state.CoreProfiles,
       source_profiles: source_profiles_lib.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      dt: array_typing.FloatScalar | None = None,
   ) -> pedestal_model_output.PedestalModelOutput:
     return jax.lax.cond(
         runtime_params.pedestal.set_pedestal,
         self._evaluate_pedestal,
-        lambda runtime_params, geo, core_profiles, source_profiles, pedestal_transition_state: pedestal_model_output.PedestalModelOutput(
+        lambda runtime_params, geo, core_profiles, source_profiles, pedestal_transition_state, dt: pedestal_model_output.PedestalModelOutput(
             rho_norm_ped_top=jnp.array(
                 jnp.inf, dtype=jax_utils.get_dtype()
             ),
@@ -131,6 +179,7 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
         core_profiles,
         source_profiles,
         pedestal_transition_state,
+        dt,
     )
 
   @abc.abstractmethod

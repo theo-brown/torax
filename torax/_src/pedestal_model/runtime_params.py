@@ -115,6 +115,14 @@ class RuntimeParams:
       modified-tanh profile between the pedestal top and the separatrix, with
       the mtanh width Δ derived from rho_norm_ped_top via the ψ_N(ρ) mapping in
       core_profiles.
+    transport_multiplier_relaxation_time: Relaxation time [s] for the
+      ADAPTIVE_TRANSPORT multipliers. When > 0, the applied multipliers are an
+      exponential moving average (in log space) between the multipliers applied
+      at the end of the previous timestep and the instantaneous
+      formation*saturation value, with per-step weight w = 1 - exp(-dt/tau).
+      This bounds the effective feedback gain seen by the nonlinear solver
+      within a timestep and damps inter-step dithering. Set to 0 (default) to
+      apply the instantaneous multipliers directly.
     formation: Runtime params for the formation model.
     saturation: Runtime params for the saturation model.
     chi_max: Maximum effective thermal diffusion coefficient [m^2/s].
@@ -137,6 +145,7 @@ class RuntimeParams:
   pedestal_profile_form: PedestalProfileForm = dataclasses.field(
       metadata={"static": True}
   )
+  transport_multiplier_relaxation_time: array_typing.FloatScalar
   formation: FormationRuntimeParams
   saturation: SaturationRuntimeParams
   chi_max: array_typing.FloatScalar

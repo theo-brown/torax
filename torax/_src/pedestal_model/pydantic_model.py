@@ -54,22 +54,29 @@ class PowerScalingFormation(torax_pydantic.BaseModelFrozen, abc.ABC):
       setting the sharpness of the smooth formation window. Decrease for a
       smoother formation, which may be more numerically stable but may lead to
       starting formation at a temperature or density below the target values.
+      Note that this sets the sensitivity of the (implicitly evaluated)
+      transport coefficients to the state, so large values degrade nonlinear
+      solver convergence.
     offset: Bias applied to the argument of the sigmoid function, setting the
       dimensionless offset of the formation window. Increase to start formation
       at a higher P_SOL.
-    base_multiplier: The base value of the transport multiplier. Increase for
-      stronger decreases in transport once formation starts.
+    base_multiplier: The base value of the transport multiplier. Decrease for
+      stronger decreases in transport once formation starts. The default
+      suppresses pedestal transport by two orders of magnitude, which is
+      sufficient for pedestal formation; much smaller values inflate the
+      dynamic range of the multiplier and degrade solver conditioning without
+      changing the physics (transport far below neoclassical levels).
     P_LH_prefactor: Dimensionless multiplier for P_LH. Increase to scale up
       P_LH, and therefore start the L-H transition at a higher P_SOL.
   """
 
-  sharpness: pydantic.PositiveFloat = 100.0
+  sharpness: pydantic.PositiveFloat = 20.0
   offset: Annotated[
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
   ] = 0.0
   base_multiplier: Annotated[
       array_typing.FloatScalar, pydantic.Field(gt=0.0, le=1.0)
-  ] = 1e-6
+  ] = 1e-2
   P_LH_prefactor: pydantic.PositiveFloat = 1.0
 
   @abc.abstractmethod
@@ -173,17 +180,25 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
       setting the steepness of the smooth saturation function. Decrease for a
       smoother saturation, which may be more numerically stable but may lead to
       starting saturation at a temperature or density below the target values.
+      Note that this sets the feedback gain of the (implicitly evaluated)
+      transport coefficients with respect to the pedestal-top state, so large
+      values degrade nonlinear solver convergence: the achieved pedestal
+      height changes by a factor of e per 1/steepness relative deviation.
     offset: Bias applied to the argument of the softplus function, setting the
       dimensionless offset of the saturation window. Increase to start
       saturation at a higher temperature or density.
     base_multiplier: The base value of the transport multiplier. Increase for
-      stronger increases in transport once saturation starts.
+      stronger increases in transport once saturation starts. In steady state
+      the product of the formation and saturation multipliers is O(1), so this
+      should be of order 1 / formation base_multiplier; much larger values
+      inflate the dynamic range of the multiplier and degrade solver
+      conditioning.
   """
 
   model_name: Annotated[Literal["profile_value"], torax_pydantic.JAX_STATIC] = (
       "profile_value"
   )
-  steepness: pydantic.PositiveFloat = 100.0
+  steepness: pydantic.PositiveFloat = 30.0
   # Default offset is > 0 as otherwise saturation starts too early. This is
   # because the softplus function is nonzero before the argument is zero.
   offset: Annotated[
@@ -191,7 +206,7 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   ] = 0.1
   base_multiplier: Annotated[
       array_typing.FloatScalar, pydantic.Field(gt=1.0)
-  ] = 1e6
+  ] = 1e3
 
   def build_saturation_model(
       self,
@@ -246,6 +261,16 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
       calculation used for comparing against P_LH. When False (default), uses
       P_heat (total auxiliary + Ohmic power - sinks) instead of P_SOL = P_heat -
       dW/dt. Excluding dW/dt avoids unphysical dithering during transients.
+    transport_multiplier_relaxation_time: Relaxation time [s] for the
+      ADAPTIVE_TRANSPORT multipliers. When > 0, the applied multipliers are
+      relaxed towards the instantaneous formation*saturation value from the
+      multipliers applied at the end of the previous timestep, with per-step
+      weight w = 1 - exp(-dt/tau). This bounds the effective feedback gain seen
+      by the nonlinear solver within a timestep (improving Newton-Raphson
+      convergence) and low-pass filters the multiplier dynamics across
+      timesteps, damping dithering. Set to 0 (default) to apply the
+      instantaneous multipliers directly. Values of a few solver timesteps are
+      a reasonable starting point.
     formation_model: Configuration for the pedestal formation model.
     saturation_model: Configuration for the pedestal saturation model.
     chi_max: Maximum effective thermal diffusion coefficient from the core
@@ -278,6 +303,9 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
       torax_pydantic.ValidatedDefault(0.8)
   )
   include_dW_dt_in_P_SOL: Annotated[bool, torax_pydantic.JAX_STATIC] = False
+  transport_multiplier_relaxation_time: (
+      torax_pydantic.NonNegativeTimeVaryingScalar
+  ) = torax_pydantic.ValidatedDefault(0.0)
   explicit_pedestal: Annotated[bool, torax_pydantic.JAX_STATIC] = True
   pedestal_profile_form: Annotated[
       runtime_params.PedestalProfileForm, torax_pydantic.JAX_STATIC
@@ -360,6 +388,9 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
         transition_time_width=self.transition_time_width.get_value(t),
         P_LH_hysteresis_factor=self.P_LH_hysteresis_factor.get_value(t),
         include_dW_dt_in_P_SOL=self.include_dW_dt_in_P_SOL,
+        transport_multiplier_relaxation_time=self.transport_multiplier_relaxation_time.get_value(
+            t
+        ),
         explicit_pedestal=self.explicit_pedestal,
         pedestal_profile_form=self.pedestal_profile_form,
         formation=self.formation_model.build_runtime_params(t),
@@ -428,6 +459,7 @@ class SetPpedTpedRatioNped(BasePedestal):
         transition_time_width=base_runtime_params.transition_time_width,
         P_LH_hysteresis_factor=base_runtime_params.P_LH_hysteresis_factor,
         include_dW_dt_in_P_SOL=base_runtime_params.include_dW_dt_in_P_SOL,
+        transport_multiplier_relaxation_time=base_runtime_params.transport_multiplier_relaxation_time,
         explicit_pedestal=base_runtime_params.explicit_pedestal,
         pedestal_profile_form=base_runtime_params.pedestal_profile_form,
         P_ped=self.P_ped.get_value(t),
@@ -498,6 +530,7 @@ class SetTpedNped(BasePedestal):
         transition_time_width=base_runtime_params.transition_time_width,
         P_LH_hysteresis_factor=base_runtime_params.P_LH_hysteresis_factor,
         include_dW_dt_in_P_SOL=base_runtime_params.include_dW_dt_in_P_SOL,
+        transport_multiplier_relaxation_time=base_runtime_params.transport_multiplier_relaxation_time,
         explicit_pedestal=base_runtime_params.explicit_pedestal,
         pedestal_profile_form=base_runtime_params.pedestal_profile_form,
         n_e_ped=self.n_e_ped.get_value(t),
@@ -547,6 +580,7 @@ class NoPedestal(BasePedestal):
         transition_time_width=base_runtime_params.transition_time_width,
         P_LH_hysteresis_factor=base_runtime_params.P_LH_hysteresis_factor,
         include_dW_dt_in_P_SOL=base_runtime_params.include_dW_dt_in_P_SOL,
+        transport_multiplier_relaxation_time=base_runtime_params.transport_multiplier_relaxation_time,
         explicit_pedestal=base_runtime_params.explicit_pedestal,
         pedestal_profile_form=base_runtime_params.pedestal_profile_form,
         formation=base_runtime_params.formation,

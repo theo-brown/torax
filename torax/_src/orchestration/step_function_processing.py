@@ -169,6 +169,7 @@ def _update_adaptive_transport(
       n_e_ped_L_mode=pedestal_transition_state.n_e_ped_L_mode,
       pedestal_model_output=pedestal_transition_state.pedestal_model_output,
       previous_pedestal_model_output=pedestal_transition_state.previous_pedestal_model_output,
+      transport_multipliers_prev=pedestal_transition_state.transport_multipliers_prev,
   )
 
 
@@ -344,6 +345,7 @@ def _update_internal_boundary_condition(
       n_e_ped_L_mode=new_n_e_ped_L_mode,
       pedestal_model_output=pedestal_transition_state.pedestal_model_output,
       previous_pedestal_model_output=pedestal_transition_state.previous_pedestal_model_output,
+      transport_multipliers_prev=pedestal_transition_state.transport_multipliers_prev,
   )
 
 
@@ -515,11 +517,15 @@ def finalize_outputs(
       final_core_profiles,
       final_source_profiles,
       pedestal_transition_state,
+      dt,
   )
+  # The multipliers applied at the end of this step become the anchor for the
+  # ADAPTIVE_TRANSPORT multiplier relaxation in the next step.
   pedestal_transition_state = dataclasses.replace(
       pedestal_transition_state,
       pedestal_model_output=final_pedestal_model_output,
       previous_pedestal_model_output=final_pedestal_model_output,
+      transport_multipliers_prev=final_pedestal_model_output.transport_multipliers,
   )
 
   final_total_transport = (
