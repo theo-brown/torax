@@ -40,11 +40,11 @@ class PedestalModelOutputTest(absltest.TestCase):
         T_i_ped=1.0,
         T_e_ped=1.1,
         n_e_ped=1.2e19,
-        transport_multipliers=pedestal_model_output.TransportMultipliers(
-            chi_e_multiplier=jnp.array(2.0),
-            chi_i_multiplier=jnp.array(3.0),
-            D_e_multiplier=jnp.array(4.0),
-            v_e_multiplier=jnp.array(5.0),
+        barrier_state=pedestal_model_output.BarrierState(
+            barrier_fraction=jnp.array(1.0),
+            chi_i_openness=jnp.array(0.25),
+            chi_e_openness=jnp.array(0.5),
+            D_e_openness=jnp.array(0.75),
         ),
     )
 
@@ -114,45 +114,27 @@ class PedestalModelOutputTest(absltest.TestCase):
     )
     pedestal_runtime_params.chi_max = jnp.array(1.0)
     pedestal_runtime_params.D_e_max = jnp.array(1.0)
-    pedestal_runtime_params.V_e_max = jnp.array(1.0)
-    pedestal_runtime_params.V_e_min = jnp.array(-1.0)
-    pedestal_runtime_params.D_e_residual = jnp.array(0.0)
+    pedestal_runtime_params.chi_residual = jnp.array(0.05)
+    pedestal_runtime_params.D_e_residual = jnp.array(0.02)
     pedestal_runtime_params.pedestal_top_smoothing_width = jnp.array(0.0)
     return pedestal_runtime_params
 
-  def test_modify_core_transport_applies_multipliers(self):
-    n_face = self.geo.rho_face_norm.shape[0]
-    core_transport = state.CoreTransport(
-        chi_face_ion=jnp.ones(n_face),
-        chi_face_el=jnp.ones(n_face),
-        d_face_el=jnp.ones(n_face),
-        v_face_el=jnp.ones(n_face),
-        chi_face_el_bohm=jnp.ones(n_face),
-        chi_face_el_gyrobohm=jnp.ones(n_face),
-        chi_face_ion_bohm=jnp.ones(n_face),
-        chi_face_ion_gyrobohm=jnp.ones(n_face),
-        chi_face_el_itg=jnp.ones(n_face),
-        chi_face_el_tem=jnp.ones(n_face),
-        chi_face_el_etg=jnp.ones(n_face),
-        chi_face_ion_itg=jnp.ones(n_face),
-        chi_face_ion_tem=jnp.ones(n_face),
-        d_face_el_itg=jnp.ones(n_face),
-        d_face_el_tem=jnp.ones(n_face),
-        v_face_el_itg=jnp.ones(n_face),
-        v_face_el_tem=jnp.ones(n_face),
-        chi_neo_i=jnp.ones(n_face),
-        chi_neo_e=jnp.ones(n_face),
-        D_neo_e=jnp.ones(n_face),
-        V_neo_e=jnp.ones(n_face),
-        V_neo_ware_e=jnp.ones(n_face),
-        chi_face_ion_pereverzev=jnp.ones(n_face),
-        chi_face_el_pereverzev=jnp.ones(n_face),
-        full_v_heat_face_ion_pereverzev=jnp.ones(n_face),
-        full_v_heat_face_el_pereverzev=jnp.ones(n_face),
-        d_face_el_pereverzev=jnp.ones(n_face),
-        v_face_el_pereverzev=jnp.ones(n_face),
+  def _make_output(self, barrier_fraction, openness, rho_norm_ped_top=0.5):
+    return pedestal_model_output.PedestalModelOutput(
+        rho_norm_ped_top=rho_norm_ped_top,
+        T_i_ped=1.0,
+        T_e_ped=1.0,
+        n_e_ped=1e19,
+        barrier_state=pedestal_model_output.BarrierState(
+            barrier_fraction=jnp.array(barrier_fraction),
+            chi_i_openness=jnp.array(openness),
+            chi_e_openness=jnp.array(openness),
+            D_e_openness=jnp.array(openness),
+        ),
     )
 
+  def test_modify_core_transport_applies_barrier_blend(self):
+    core_transport = self._make_uniform_core_transport(value=1.0)
     pedestal_runtime_params = self._make_pedestal_runtime_params()
 
     modified_core_transport = self.pedestal_model_output.modify_core_transport(
@@ -162,114 +144,103 @@ class PedestalModelOutputTest(absltest.TestCase):
         self.geo.rho_face_norm > self.pedestal_model_output.rho_norm_ped_top
     )
 
-    # All multipliers are far from 1, so the activation weight is ~1 and the
-    # turbulent coefficients are softly clipped and scaled. The input value
-    # (1.0) equals the caps, so the soft clip evaluates to cap - width*log(2).
-    eps = 1e-7  # constants.CONSTANTS.eps used to regularize the clip width.
-    chi_clip_width = 0.05 * 1.0 + eps
-    expected_clipped_chi = pedestal_model_output.soft_clip_max(
-        jnp.array(1.0), 1.0, chi_clip_width
-    )
-    D_e_clip_width = 0.05 * 1.0 + eps
-    expected_clipped_D_e = pedestal_model_output.soft_clip_max(
-        jnp.array(1.0), 1.0, D_e_clip_width
-    )
-    V_e_clip_width = 0.05 * 2.0 + eps
-    expected_clipped_v = pedestal_model_output.soft_clip_min(
-        pedestal_model_output.soft_clip_max(
-            jnp.array(1.0), 1.0, V_e_clip_width
-        ),
-        -1.0,
-        V_e_clip_width,
-    )
+    # The barrier fraction is 1, so in the pedestal region the total
+    # coefficients equal the barrier branch residual + r * (cap - residual)
+    # with per-channel openness r (chi_i: 0.25, chi_e: 0.5, D_e: 0.75).
+    def expected_barrier(openness, cap, residual):
+      return residual + openness * (cap - residual)
 
-    # Check turbulent transport is (softly) clipped and scaled.
-    for field_name in [
-        'chi_face_el',
-        'chi_face_el_bohm',
-        'chi_face_el_gyrobohm',
-    ]:
-      field = getattr(modified_core_transport, field_name)
+    with self.subTest('total_fields_get_barrier_branch'):
       np.testing.assert_allclose(
-          field,
-          jnp.where(pedestal_mask, expected_clipped_chi * 2.0, 1.0),
+          modified_core_transport.chi_face_ion,
+          jnp.where(pedestal_mask, expected_barrier(0.25, 1.0, 0.05), 1.0),
           rtol=1e-6,
       )
-    for field_name in [
-        'chi_face_ion',
-        'chi_face_ion_bohm',
-        'chi_face_ion_gyrobohm',
-    ]:
-      field = getattr(modified_core_transport, field_name)
       np.testing.assert_allclose(
-          field,
-          jnp.where(pedestal_mask, expected_clipped_chi * 3.0, 1.0),
+          modified_core_transport.chi_face_el,
+          jnp.where(pedestal_mask, expected_barrier(0.5, 1.0, 0.05), 1.0),
           rtol=1e-6,
       )
-    for field_name in ['d_face_el']:
-      field = getattr(modified_core_transport, field_name)
       np.testing.assert_allclose(
-          field,
-          jnp.where(pedestal_mask, expected_clipped_D_e * 4.0, 1.0),
-          rtol=1e-6,
-      )
-    for field_name in ['v_face_el']:
-      field = getattr(modified_core_transport, field_name)
-      np.testing.assert_allclose(
-          field,
-          jnp.where(pedestal_mask, expected_clipped_v * 5.0, 1.0),
+          modified_core_transport.d_face_el,
+          jnp.where(pedestal_mask, expected_barrier(0.75, 1.0, 0.02), 1.0),
           rtol=1e-6,
       )
 
-    # Pereverzev-Corrigan terms are scaled by the corresponding channel
-    # multiplier with no clipping. Both members of each diffusion/convection
-    # pair share the same factor.
-    for field_name in [
-        'chi_face_el_pereverzev',
-        'full_v_heat_face_el_pereverzev',
-    ]:
-      field = getattr(modified_core_transport, field_name)
+    with self.subTest('pinch_suppressed_to_zero_in_barrier'):
       np.testing.assert_allclose(
-          field, jnp.where(pedestal_mask, 2.0, 1.0), rtol=1e-6
-      )
-    for field_name in [
-        'chi_face_ion_pereverzev',
-        'full_v_heat_face_ion_pereverzev',
-    ]:
-      field = getattr(modified_core_transport, field_name)
-      np.testing.assert_allclose(
-          field, jnp.where(pedestal_mask, 3.0, 1.0), rtol=1e-6
-      )
-    for field_name in ['d_face_el_pereverzev', 'v_face_el_pereverzev']:
-      field = getattr(modified_core_transport, field_name)
-      np.testing.assert_allclose(
-          field, jnp.where(pedestal_mask, 4.0, 1.0), rtol=1e-6
+          modified_core_transport.v_face_el,
+          jnp.where(pedestal_mask, 0.0, 1.0),
+          atol=1e-12,
       )
 
-    # Check neoclassical transport is not affected.
-    np.testing.assert_allclose(  # pyrefly: ignore[no-matching-overload]
-        modified_core_transport.chi_neo_i,
-        core_transport.chi_neo_i,
-    )
-    np.testing.assert_allclose(  # pyrefly: ignore[no-matching-overload]
-        modified_core_transport.chi_neo_e,
-        core_transport.chi_neo_e,
-    )
-    np.testing.assert_allclose(  # pyrefly: ignore[no-matching-overload]
-        modified_core_transport.D_neo_e,
-        core_transport.D_neo_e,
-    )
-    np.testing.assert_allclose(  # pyrefly: ignore[no-matching-overload]
-        modified_core_transport.V_neo_e,
-        core_transport.V_neo_e,
-    )
-    np.testing.assert_allclose(  # pyrefly: ignore[no-matching-overload]
-        modified_core_transport.V_neo_ware_e,
-        core_transport.V_neo_ware_e,
-    )
+    with self.subTest('components_get_relative_suppression'):
+      # Diagnostic components scale by (1 - g) + g * r = r at g = 1, without
+      # the residual floor.
+      for field_name in ['chi_face_ion_bohm', 'chi_face_ion_gyrobohm']:
+        np.testing.assert_allclose(
+            getattr(modified_core_transport, field_name),
+            jnp.where(pedestal_mask, 0.25, 1.0),
+            rtol=1e-6,
+        )
+      for field_name in ['chi_face_el_bohm', 'chi_face_el_etg']:
+        np.testing.assert_allclose(
+            getattr(modified_core_transport, field_name),
+            jnp.where(pedestal_mask, 0.5, 1.0),
+            rtol=1e-6,
+        )
+      np.testing.assert_allclose(
+          modified_core_transport.d_face_el_itg,
+          jnp.where(pedestal_mask, 0.75, 1.0),
+          rtol=1e-6,
+      )
+      np.testing.assert_allclose(
+          modified_core_transport.v_face_el_itg,
+          jnp.where(pedestal_mask, 0.0, 1.0),
+          atol=1e-12,
+      )
 
-  def test_modify_core_transport_identity_at_unit_multiplier(self):
-    """With all multipliers exactly 1, coefficients are unmodified."""
+    with self.subTest('pereverzev_pairs_share_channel_factor'):
+      for field_name in [
+          'chi_face_ion_pereverzev',
+          'full_v_heat_face_ion_pereverzev',
+      ]:
+        np.testing.assert_allclose(
+            getattr(modified_core_transport, field_name),
+            jnp.where(pedestal_mask, 0.25, 1.0),
+            rtol=1e-6,
+        )
+      for field_name in [
+          'chi_face_el_pereverzev',
+          'full_v_heat_face_el_pereverzev',
+      ]:
+        np.testing.assert_allclose(
+            getattr(modified_core_transport, field_name),
+            jnp.where(pedestal_mask, 0.5, 1.0),
+            rtol=1e-6,
+        )
+      for field_name in ['d_face_el_pereverzev', 'v_face_el_pereverzev']:
+        np.testing.assert_allclose(
+            getattr(modified_core_transport, field_name),
+            jnp.where(pedestal_mask, 0.75, 1.0),
+            rtol=1e-6,
+        )
+
+    with self.subTest('neoclassical_untouched'):
+      for field_name in [
+          'chi_neo_i',
+          'chi_neo_e',
+          'D_neo_e',
+          'V_neo_e',
+          'V_neo_ware_e',
+      ]:
+        np.testing.assert_allclose(  # pyrefly: ignore[no-matching-overload]
+            getattr(modified_core_transport, field_name),
+            getattr(core_transport, field_name),
+        )
+
+  def test_modify_core_transport_identity_at_zero_barrier_fraction(self):
+    """With barrier fraction 0 (L-mode), coefficients are unmodified."""
     core_transport = self._make_uniform_core_transport(value=3.0)
     pedestal_runtime_params = self._make_pedestal_runtime_params()
     output = pedestal_model_output.PedestalModelOutput(
@@ -277,62 +248,52 @@ class PedestalModelOutputTest(absltest.TestCase):
         T_i_ped=1.0,
         T_e_ped=1.0,
         n_e_ped=1e19,
-        transport_multipliers=pedestal_model_output.TransportMultipliers.default(),
+        barrier_state=pedestal_model_output.BarrierState.default(),
     )
     modified = output.modify_core_transport(
         core_transport, self.geo, pedestal_runtime_params
     )
-    # Even though the coefficient (3.0) exceeds chi_max (1.0), no clipping is
-    # applied when the multiplier is 1 (L-mode).
+    # Even though the coefficient (3.0) exceeds chi_max (1.0), no cap is
+    # applied when the barrier fraction is 0 (L-mode branch is unclipped).
     np.testing.assert_allclose(modified.chi_face_ion, 3.0)
     np.testing.assert_allclose(modified.chi_face_el, 3.0)
     np.testing.assert_allclose(modified.d_face_el, 3.0)
     np.testing.assert_allclose(modified.v_face_el, 3.0)
 
-  def test_modify_core_transport_is_continuous_in_multiplier(self):
-    """chi is a continuous function of the multiplier, even with clipping.
+  def test_modify_core_transport_is_continuous_in_barrier_fraction(self):
+    """chi is a continuous function of the barrier fraction.
 
-    The previous implementation used jnp.isclose(multiplier, 1.0) to switch
-    between the raw and clipped coefficient, which produced a jump
-    discontinuity in the solver residual when the raw coefficient exceeded
-    chi_max. Here we sweep the multiplier through 1.0 with a raw coefficient
-    well above chi_max and check that chi changes continuously.
+    The blend is linear in g, so sweeping g from 0 (L-mode) to 1 (barrier)
+    with a raw coefficient well above the barrier cap must change chi
+    continuously, with no jumps.
     """
     core_transport = self._make_uniform_core_transport(value=5.0)
     pedestal_runtime_params = self._make_pedestal_runtime_params()
 
-    multipliers = np.linspace(0.9, 1.1, 401)
+    fractions = np.linspace(0.0, 1.0, 401)
     ped_top_idx = -1  # Last face is inside the pedestal (rho > 0.5).
     chi_values = []
-    for m in multipliers:
-      output = pedestal_model_output.PedestalModelOutput(
-          rho_norm_ped_top=0.5,
-          T_i_ped=1.0,
-          T_e_ped=1.0,
-          n_e_ped=1e19,
-          transport_multipliers=pedestal_model_output.TransportMultipliers(
-              chi_e_multiplier=jnp.array(m),
-              chi_i_multiplier=jnp.array(m),
-              D_e_multiplier=jnp.array(m),
-              v_e_multiplier=jnp.array(m),
-          ),
-      )
+    for g in fractions:
+      output = self._make_output(barrier_fraction=g, openness=0.5)
       modified = output.modify_core_transport(
           core_transport, self.geo, pedestal_runtime_params
       )
       chi_values.append(float(modified.chi_face_ion[ped_top_idx]))
     chi_values = np.array(chi_values)
 
-    # The full swing over the sweep is large (raw ~5 vs clipped ~1), but each
-    # step must be a small fraction of the swing: no jumps.
+    # The full swing over the sweep is large (raw 5 vs barrier ~0.5), but
+    # each step must be a small fraction of the swing: no jumps.
     total_swing = np.max(chi_values) - np.min(chi_values)
     max_step = np.max(np.abs(np.diff(chi_values)))
     self.assertGreater(total_swing, 1.0)
     self.assertLess(max_step, 0.05 * total_swing)
 
-    # At multiplier exactly 1, the coefficient is untouched.
-    idx_unity = np.argmin(np.abs(multipliers - 1.0))
-    np.testing.assert_allclose(chi_values[idx_unity], 5.0, rtol=1e-3)
+    # At g = 0 the coefficient is untouched; at g = 1 it is the barrier
+    # branch value, independent of the raw coefficient.
+    np.testing.assert_allclose(chi_values[0], 5.0, rtol=1e-6)
+    np.testing.assert_allclose(
+        chi_values[-1], 0.05 + 0.5 * (1.0 - 0.05), rtol=1e-6
+    )
 
   def test_modify_core_transport_preserves_pereverzev_cancellation(self):
     """Pereverzev diffusion/convection pairs must scale by the same factor.
@@ -340,11 +301,11 @@ class PedestalModelOutputTest(absltest.TestCase):
     The Pereverzev-Corrigan scheme relies on exact cancellation between its
     diffusion and compensating convection terms at the current profile. Both
     members of each pair must therefore be scaled identically, with no
-    clipping, even when their magnitudes exceed the clip bounds.
+    clipping, even when their magnitudes exceed the barrier caps.
     """
     n_face = self.geo.rho_face_norm.shape[0]
     core_transport = self._make_uniform_core_transport(value=1.0)
-    # Pereverzev terms are typically much larger than the physical clip caps.
+    # Pereverzev terms are typically much larger than the barrier caps.
     core_transport = dataclasses.replace(
         core_transport,
         chi_face_ion_pereverzev=30.0 * jnp.ones(n_face),
@@ -355,24 +316,15 @@ class PedestalModelOutputTest(absltest.TestCase):
         v_face_el_pereverzev=-20.0 * jnp.ones(n_face),
     )
     pedestal_runtime_params = self._make_pedestal_runtime_params()
-    # Strong H-mode suppression.
-    suppression = 1e-2
-    output = pedestal_model_output.PedestalModelOutput(
-        rho_norm_ped_top=0.5,
-        T_i_ped=1.0,
-        T_e_ped=1.0,
-        n_e_ped=1e19,
-        transport_multipliers=pedestal_model_output.TransportMultipliers(
-            chi_e_multiplier=jnp.array(suppression),
-            chi_i_multiplier=jnp.array(suppression),
-            D_e_multiplier=jnp.array(suppression),
-            v_e_multiplier=jnp.array(suppression),
-        ),
-    )
+    # Fully formed barrier, slightly open.
+    barrier_fraction = 0.99
+    openness = 0.1
+    output = self._make_output(barrier_fraction, openness)
     modified = output.modify_core_transport(
         core_transport, self.geo, pedestal_runtime_params
     )
     pedestal_mask = self.geo.rho_face_norm > 0.5
+    expected_factor = (1.0 - barrier_fraction) + barrier_fraction * openness
 
     for chi_name, v_heat_name in [
         ('chi_face_ion_pereverzev', 'full_v_heat_face_ion_pereverzev'),
@@ -388,49 +340,56 @@ class PedestalModelOutputTest(absltest.TestCase):
       with self.subTest(pair=chi_name):
         # Same scaling factor for both pair members everywhere.
         np.testing.assert_allclose(chi_ratio, v_ratio, rtol=1e-12)
-        # In the pedestal region, the factor is the multiplier, unclipped.
+        # In the pedestal region, the factor is (1-g) + g*r, unclipped.
         np.testing.assert_allclose(
-            chi_ratio[pedestal_mask], suppression, rtol=1e-12
+            chi_ratio[pedestal_mask], expected_factor, rtol=1e-12
         )
 
-  def test_D_e_residual_applies_only_under_suppression(self):
-    """D_e_residual adds a particle-transport floor when scaling is active."""
+  def test_residual_floors_apply_under_full_suppression(self):
+    """At g=1, r=0 the barrier transport equals the residual floors."""
     core_transport = self._make_uniform_core_transport(value=1.0)
     pedestal_runtime_params = self._make_pedestal_runtime_params()
+    pedestal_runtime_params.chi_residual = jnp.array(0.07)
     pedestal_runtime_params.D_e_residual = jnp.array(0.5)
     pedestal_mask = self.geo.rho_face_norm > 0.5
 
-    def modify(multiplier):
-      output = pedestal_model_output.PedestalModelOutput(
-          rho_norm_ped_top=0.5,
-          T_i_ped=1.0,
-          T_e_ped=1.0,
-          n_e_ped=1e19,
-          transport_multipliers=pedestal_model_output.TransportMultipliers(
-              chi_e_multiplier=jnp.array(multiplier),
-              chi_i_multiplier=jnp.array(multiplier),
-              D_e_multiplier=jnp.array(multiplier),
-              v_e_multiplier=jnp.array(multiplier),
-          ),
+    with self.subTest('closed_barrier_sits_at_residuals'):
+      modified = self._make_output(
+          barrier_fraction=1.0, openness=0.0
+      ).modify_core_transport(core_transport, self.geo, pedestal_runtime_params)
+      np.testing.assert_allclose(
+          modified.d_face_el[pedestal_mask], 0.5, rtol=1e-6
       )
-      return output.modify_core_transport(
-          core_transport, self.geo, pedestal_runtime_params
+      np.testing.assert_allclose(
+          modified.chi_face_ion[pedestal_mask], 0.07, rtol=1e-6
       )
-
-    with self.subTest('suppressed_gets_residual_floor'):
-      modified = modify(1e-2)
-      # Suppressed D would be ~soft_clip(1.0)*1e-2 ~ 0.01; the residual lifts
-      # it to ~0.51 in the pedestal region.
-      d_in_region = modified.d_face_el[pedestal_mask]
-      np.testing.assert_array_less(0.5, d_in_region)
+      np.testing.assert_allclose(
+          modified.v_face_el[pedestal_mask], 0.0, atol=1e-12
+      )
       # Outside the region: untouched.
       np.testing.assert_allclose(modified.d_face_el[~pedestal_mask], 1.0)
-      # Heat channels do not receive the residual.
-      chi_in_region = modified.chi_face_ion[pedestal_mask]
-      np.testing.assert_array_less(chi_in_region, 0.1)
 
-    with self.subTest('unit_multiplier_unaffected_by_residual'):
-      modified = modify(1.0)
+    with self.subTest('open_barrier_reaches_caps'):
+      # At r=1 the barrier transport equals the caps, independent of the raw
+      # coefficient: the saturation authority is bounded by chi_max/D_e_max.
+      modified = self._make_output(
+          barrier_fraction=1.0, openness=1.0
+      ).modify_core_transport(core_transport, self.geo, pedestal_runtime_params)
+      np.testing.assert_allclose(
+          modified.chi_face_ion[pedestal_mask],
+          pedestal_runtime_params.chi_max,
+          rtol=1e-6,
+      )
+      np.testing.assert_allclose(
+          modified.d_face_el[pedestal_mask],
+          pedestal_runtime_params.D_e_max,
+          rtol=1e-6,
+      )
+
+    with self.subTest('zero_barrier_fraction_ignores_residuals'):
+      modified = self._make_output(
+          barrier_fraction=0.0, openness=0.0
+      ).modify_core_transport(core_transport, self.geo, pedestal_runtime_params)
       np.testing.assert_allclose(modified.d_face_el, 1.0)
 
   def test_to_internal_boundary_conditions_tanh_profiles(self):

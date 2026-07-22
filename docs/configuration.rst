@@ -867,8 +867,21 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
     ``set_pedestal`` is True.
   * ``'ADAPTIVE_TRANSPORT'``: Sets the pedestal by modifying the transport
     coefficients in the pedestal region, allowing the pedestal to
-    self-consistently evolve. Transport coefficients are scaled to allow the
-    temperature and density to evolve towards the prescribed pedestal values.
+    self-consistently evolve. The pedestal-region transport is a convex blend
+    between the unmodified (L-mode) transport and a bounded barrier transport
+    branch:
+
+    .. math::
+
+       \chi_{ped} = (1 - g)\,\chi_{raw} + g\,[\chi_{residual} + r\,(\chi_{max} - \chi_{residual})]
+
+    where the barrier fraction :math:`g \in [0, 1]` is set by the formation
+    model (which transport branch is active) and the per-channel barrier
+    openness :math:`r \in (0, 1)` is set by the saturation model's
+    proximity-to-limit signal through a shared sigmoid response (position
+    within the barrier branch). The particle channel uses ``D_e_residual``
+    and ``D_e_max`` analogously; the turbulent pinch is suppressed to zero
+    within the barrier branch.
 
 ``use_formation_model_with_internal_boundary_condition`` (bool [default = False])
   Only applicable when ``mode`` is ``'INTERNAL_BOUNDARY_CONDITION'``. When True, enables
@@ -910,9 +923,10 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   frozen during the solver loop. When ``False``, the pedestal model is
   re-evaluated every Newton iteration, coupling pedestal physics to the
   implicit solve, but increasing the non-linearity of the system. Note: for
-  ``ADAPTIVE_TRANSPORT`` mode, transport multipliers are always re-evaluated
-  implicitly with current profiles regardless of this setting, since the
-  saturation model's profile-based feedback loop requires implicit coupling.
+  ``ADAPTIVE_TRANSPORT`` mode, the barrier state (formation and saturation
+  response) is always re-evaluated implicitly with current profiles regardless
+  of this setting, since the saturation feedback loop requires implicit
+  coupling.
 
 ``pedestal_profile_form`` (**str** [default = ``"SET_AT_PED_TOP"``])
    Controls the shape of internal boundary conditions in the pedestal region.
@@ -940,74 +954,89 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
 
 ``formation_model`` (dict)
   Configuration for the pedestal formation model, which determines when L-H
-  and H-L transitions occur. The ``model_name`` key selects the model:
+  and H-L transitions occur. In ``ADAPTIVE_TRANSPORT`` mode the formation
+  model returns the barrier fraction
+  :math:`g = \sigma(\text{sharpness} \cdot [(P_{SOL} - P_{LH})/P_{LH} -
+  \text{offset}])`, the blend weight between L-mode transport and the barrier
+  transport branch. The ``model_name`` key selects the model:
 
   * ``'martin_scaling'``: Uses the Martin scaling law to determine the L-H
     power threshold. Additional parameters:
 
-    * ``sharpness`` (float [default = 10.0]): Controls the sharpness of the
+    * ``sharpness`` (float [default = 100.0]): Controls the sharpness of the
       transition sigmoid function.
+    * ``offset`` (float [default = 0.0]): Dimensionless offset of the
+      formation window.
 
   * ``'delabie_scaling'``: Uses the Delabie scaling law for the L-H power
     threshold. Additional parameters:
 
-    * ``sharpness`` (float [default = 10.0]): Controls the sharpness of the
+    * ``sharpness`` (float [default = 100.0]): Controls the sharpness of the
       transition sigmoid function.
+    * ``offset`` (float [default = 0.0]): Dimensionless offset of the
+      formation window.
 
 ``saturation_model`` (dict)
-  Configuration for the pedestal saturation model, which determines how the
-  pedestal values scale relative to H-mode target values. The ``model_name``
-  key selects the model:
+  Configuration for the pedestal saturation model, which senses how close the
+  pedestal is to the limit it regulates towards and provides one
+  dimensionless proximity-to-limit signal :math:`x` per transport channel
+  (zero at the limit, negative below it). The signals are mapped to the
+  barrier openness of each channel by the shared bounded response
+  :math:`r = \sigma((x - \text{offset}) / \text{response\_width})`; saturation
+  models choose the signal, not the response shape. The ``model_name`` key
+  selects the model:
 
-  * ``'profile_value'``: Uses the current profile values at the pedestal top
-    for saturation. Each transport channel is driven by its own profile: the
-    heat diffusivities :math:`\chi_e` and :math:`\chi_i` respond to the
-    :math:`T_e` and :math:`T_i` deviations from their pedestal targets, and
-    the particle diffusivity :math:`D_e` responds to the :math:`n_e` deviation
+  * ``'profile_value'``: Target-based signal from the current profile values
+    at the pedestal top: :math:`x = \text{current}/\text{target} - 1` per
+    channel. The heat diffusivities :math:`\chi_e` and :math:`\chi_i` sense
+    the :math:`T_e` and :math:`T_i` deviations from their pedestal targets,
+    and the particle diffusivity :math:`D_e` senses the :math:`n_e` deviation
     from ``n_e_ped``, where :math:`n_e` is sensed as the (smooth) maximum over
     the pedestal region so that density pileup anywhere inside the pedestal
-    activates the response. The particle pinch :math:`V_e` is not increased by
-    saturation (it is scaled by the formation multiplier only), so that
-    raising :math:`D_e` alone shifts the :math:`V/D` ratio and regulates the
-    pedestal density height. Note that saturation is one-sided: it can only
-    throttle the pedestal at the target, so the achieved pedestal density is
-    limited by the available edge particle fueling (and any inward pinch).
+    activates the response. This supports pedestal models that ask for
+    specific pedestal-top values (e.g. EPED-style :math:`T_e` predictions);
+    the regulated value settles within a band of roughly
+    ``response_width`` (relative) around the target. The particle pinch
+    :math:`V_e` has no saturation signal (it is suppressed to zero within the
+    barrier branch), so that raising :math:`D_e` alone shifts the
+    :math:`V/D` ratio and regulates the pedestal density height. Note that
+    saturation is one-sided: it can only throttle the pedestal at the target,
+    so the achieved pedestal density is limited by the available edge
+    particle fueling (and any inward pinch), and the throttling authority is
+    bounded by ``chi_max`` / ``D_e_max``.
     Additional parameters:
 
-    * ``steepness`` (float [default = 100.0]): Controls the steepness of the
-      saturation function for the heat channels.
-    * ``offset`` (float [default = 0.1]): Offset for the heat channel
-      saturation function.
-    * ``base_multiplier`` (float [default = 1e6]): Base multiplier for the
-      heat channel saturation function.
-    * ``density_steepness`` (float [default = 100.0]): As ``steepness``, for
-      the particle diffusivity channel.
-    * ``density_offset`` (float [default = 0.1]): As ``offset``, for the
+    * ``offset`` (float [default = 0.0]): Relative deviation from target at
+      which the heat channel barrier is half open.
+    * ``response_width`` (float [default = 0.05]): Width of the heat channel
+      response in relative deviation from target. Decrease for tighter
+      regulation at the cost of a stiffer transport response for the solver.
+    * ``density_offset`` (float [default = 0.0]): As ``offset``, for the
       particle diffusivity channel.
-    * ``density_base_multiplier`` (float [default = 1e6]): As
-      ``base_multiplier``, for the particle diffusivity channel.
+    * ``density_response_width`` (float [default = 0.05]): As
+      ``response_width``, for the particle diffusivity channel.
 
-  * ``'alpha_critical'``: Saturation driven by proximity to the s-:math:`\alpha`
-    ideal ballooning stability boundary instead of prescribed pedestal targets.
-    The sensed signal is the smooth maximum of :math:`\alpha/\alpha_{crit}`
-    over the pedestal region, with
-    :math:`\alpha = -2\mu_0 q^2 R_0 (dp/dr)/B_0^2` and
-    :math:`\alpha_{crit} = c_\alpha \max(s, s_{min})`. Combined with a
-    power-scaling formation model, the L-H transition timing remains empirical
+  * ``'alpha_critical'``: Stability-based signal from proximity to the
+    s-:math:`\alpha` ideal ballooning stability boundary instead of
+    prescribed pedestal targets: :math:`x = \max(\alpha/\alpha_{crit}) - 1`,
+    with :math:`\alpha = -2\mu_0 q^2 R_0 (dp/dr)/B_0^2`,
+    :math:`\alpha_{crit} = c_\alpha \max(s, s_{min})`, and the maximum the
+    smooth maximum over the pedestal region. Combined with a power-scaling
+    formation model, the L-H transition timing remains empirical
     (:math:`P_{SOL}` vs :math:`P_{LH}`) while the pedestal height emerges from
     MHD stability physics; any T_ped/n_e_ped values from the pedestal model
     are ignored (only ``rho_norm_ped_top`` is used, defining the pedestal
-    region). The multiplier applies to both heat channels and the particle
-    diffusivity; the pinch is scaled by the formation multiplier only.
+    region). The signal is shared by both heat channels and the particle
+    diffusivity; the pinch has no saturation signal.
     Additional parameters:
 
-    * ``steepness`` (float [default = 100.0]): Steepness of the softplus
-      response; the pedestal pressure gradient settles within roughly
-      1/steepness (relative) of the boundary.
-    * ``offset`` (float [default = 0.1]): Dimensionless offset of the
-      saturation window in :math:`\alpha/\alpha_{crit}`.
-    * ``base_multiplier`` (float [default = 1e6]): Base value of the transport
-      multiplier.
+    * ``offset`` (float [default = 0.0]): Relative excess of
+      :math:`\alpha/\alpha_{crit}` over unity at which the barrier is half
+      open.
+    * ``response_width`` (float [default = 0.05]): Width of the response in
+      relative deviation of :math:`\alpha/\alpha_{crit}` from unity; the
+      pedestal pressure gradient settles within roughly this relative band
+      around the boundary.
     * ``alpha_crit_multiplier`` (float [default = 0.6]): Prefactor
       :math:`c_\alpha` of the critical gradient.
     * ``s_min`` (float [default = 0.5]): Magnetic shear floor in the critical
@@ -1018,30 +1047,31 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   :math:`\hat{\rho}`.
 
 ``chi_max`` (**time-varying-scalar** [default = 1.0])
-  Maximum effective thermal diffusion coefficient from the core transport model
-  allowed in the pedestal region [m^2/s].
+  Heat diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch at
+  full saturation openness [m^2/s]. Bounds the transport increase the
+  saturation feedback can apply, and hence the throttling authority of the
+  pedestal regulation.
 
 ``D_e_max`` (**time-varying-scalar** [default = 1.0])
-  Maximum effective particle diffusion coefficient from the core transport model
-  allowed in the pedestal region [m^2/s].
+  Particle diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch
+  at full saturation openness [m^2/s].
 
-``V_e_max`` (**time-varying-scalar** [default = 1.0])
-  Maximum effective particle pinch velocity from the core transport model
-  allowed in the pedestal region [m/s].
+``chi_residual`` (**time-varying-scalar** [default = 0.05])
+  Heat diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch at
+  zero saturation openness [m^2/s]. Represents heat transport that is not
+  suppressed by the edge transport barrier (e.g. ion neoclassical levels);
+  keeping this positive avoids a vanishing diffusivity in the solved equations
+  under full suppression.
 
-``V_e_min`` (**time-varying-scalar** [default = -1.0])
-  Minimum effective particle pinch velocity from the core transport model
-  allowed in the pedestal region [m/s].
-
-``D_e_residual`` (**time-varying-scalar** [default = 0.0])
-  Residual particle diffusivity added to the scaled turbulent particle
-  diffusivity in the pedestal region when ``ADAPTIVE_TRANSPORT`` scaling is
-  active [m^2/s]. Represents particle transport that is not suppressed by the
-  edge transport barrier (e.g. neoclassical-scale levels), ensuring that
-  particle fueling deposited inside the pedestal region has a finite transport
-  channel even under strong suppression. Recommended when density evolution is
-  enabled with edge fueling; a value of order 1e-2 is a reasonable starting
-  point.
+``D_e_residual`` (**time-varying-scalar** [default = 0.02])
+  Particle diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch
+  at zero saturation openness [m^2/s]. Represents particle transport that is
+  not suppressed by the edge transport barrier (e.g. neoclassical-scale
+  levels), ensuring that particle fueling deposited inside the pedestal region
+  has a finite transport channel even under full suppression. Important when
+  density evolution is enabled with edge fueling: with a value of 0, fueling
+  deposited inside a fully suppressed pedestal has no transport channel and
+  accumulates without bound.
 
 The following ``model_name`` options are currently supported:
 

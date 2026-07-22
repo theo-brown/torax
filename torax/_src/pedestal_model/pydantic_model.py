@@ -38,28 +38,23 @@ import typing_extensions
 class PowerScalingFormation(torax_pydantic.BaseModelFrozen, abc.ABC):
   """Configuration for power scaling formation model.
 
-  This formation model triggers a reduction in pedestal transport when P_SOL >
+  This formation model raises the barrier fraction g (the blend weight
+  between L-mode transport and the barrier transport branch) when P_SOL >
   P_LH, where P_LH is calculated from an appropriate scaling law.
-  The reduction is a multiplicative factor between 1.0 and base_multiplier.
 
   The formula is
-    transport_multiplier = (1.0 - alpha) * 1.0 + alpha * base_multiplier,
-  where alpha is a smooth sigmoid function of
-    (P_SOL - P_LH * P_LH_prefactor) / (P_LH * P_LH_prefactor)
-  with given sharpness and offset, namely:
-     sigmoid(x) = 1 / (1 + exp(-sharpness * [x - offset])).
-
+    g = sigmoid(sharpness * [x - offset]),
+  where x is the normalized power excess
+    (P_SOL - P_LH * P_LH_prefactor) / (P_LH * P_LH_prefactor).
 
   Attributes:
     sharpness: Scaling factor applied to the argument of the sigmoid function,
       setting the sharpness of the smooth formation window. Decrease for a
-      smoother formation, which may be more numerically stable but may lead to
-      starting formation at a temperature or density below the target values.
+      smoother formation, which may be more numerically stable but forms the
+      barrier more gradually around the threshold.
     offset: Bias applied to the argument of the sigmoid function, setting the
       dimensionless offset of the formation window. Increase to start formation
       at a higher P_SOL.
-    base_multiplier: The base value of the transport multiplier. Increase for
-      stronger decreases in transport once formation starts.
     P_LH_prefactor: Dimensionless multiplier for P_LH. Increase to scale up
       P_LH, and therefore start the L-H transition at a higher P_SOL.
   """
@@ -68,9 +63,6 @@ class PowerScalingFormation(torax_pydantic.BaseModelFrozen, abc.ABC):
   offset: Annotated[
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
   ] = 0.0
-  base_multiplier: Annotated[
-      array_typing.FloatScalar, pydantic.Field(gt=0.0, le=1.0)
-  ] = 1e-6
   P_LH_prefactor: pydantic.PositiveFloat = 1.0
 
   @abc.abstractmethod
@@ -112,7 +104,6 @@ class MartinScalingFormation(PowerScalingFormation):
     return power_scaling_formation_model.PowerScalingFormationRuntimeParams(
         sharpness=self.sharpness,
         offset=self.offset,
-        base_multiplier=self.base_multiplier,
         P_LH_prefactor=self.P_LH_prefactor,
     )
 
@@ -148,7 +139,6 @@ class DelabieScalingFormation(PowerScalingFormation):
     return power_scaling_formation_model.PowerScalingFormationRuntimeParams(
         sharpness=self.sharpness,
         offset=self.offset,
-        base_multiplier=self.base_multiplier,
         P_LH_prefactor=self.P_LH_prefactor,
     )
 
@@ -156,73 +146,61 @@ class DelabieScalingFormation(PowerScalingFormation):
 class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   """Configuration for ProfileValueSaturation model.
 
-  This saturation model triggers an increase in pedestal transport when the
-  pedestal-top profile values exceed the values requested by the pedestal
-  model. Each transport channel is driven by its own profile: the heat
-  diffusivities chi_e and chi_i respond to the T_e and T_i deviations from
-  their pedestal targets, and the particle diffusivity D_e responds to the n_e
-  deviation from n_e_ped, where n_e is sensed as the (smooth) maximum over the
-  pedestal region so that density pileup anywhere inside the pedestal (e.g.
-  from edge fueling against suppressed transport) activates the response. The
-  particle pinch v_e is deliberately *not*
-  increased by saturation (it is scaled by the formation multiplier only):
-  the steady-state density profile shape is set by the ratio v/D, so raising
-  D alone shifts that ratio and lets the feedback regulate the pedestal
-  density height, whereas scaling D and v together would only change the
-  relaxation timescale.
+  This is the target-based saturation signal: each transport channel's
+  proximity-to-limit signal is the relative deviation of the sensed profile
+  value from the target requested by the pedestal model implementation,
+    x = current / target - 1.
+  The heat channels chi_e and chi_i sense T_e and T_i at the pedestal-top
+  face against T_e_ped and T_i_ped; the particle diffusivity channel D_e
+  senses the (smooth) maximum of n_e over the pedestal region against
+  n_e_ped, so that density pileup anywhere inside the pedestal (e.g. from
+  edge fueling against suppressed transport) activates the response. This
+  supports pedestal models that ask for specific pedestal-top values, e.g.
+  EPED-style predictions of T_e_ped.
 
-  The formula for each channel is
-    transport_multiplier = 1 + alpha * base_multiplier,
-  where alpha is a softplus function of the normalized deviation from the
-  target value, with given steepness and offset:
-    x = (current - target) / target - offset
-    alpha = log(1 + exp(steepness * x))
+  The signals are mapped to barrier openness by the shared bounded response
+    r = sigmoid((x - offset) / response_width),
+  so the regulated profile value settles within a band of roughly
+  +/- response_width (relative) around target * (1 + offset), at the point
+  where the barrier transport carries the incoming flux. The particle pinch
+  v_e has no saturation signal (within the barrier branch it is suppressed
+  to zero): the steady-state density profile shape is set by the ratio v/D,
+  so raising D alone shifts that ratio and lets the feedback regulate the
+  pedestal density height, whereas raising D and v together would only
+  change the relaxation timescale.
 
-  Note that saturation is one-sided: it can only *increase* transport above
-  the formation-suppressed level, i.e. throttle the pedestal at the target.
-  In particular, the achieved pedestal density cannot exceed what the edge
-  particle fueling (and any inward pinch) can sustain; with insufficient
-  fueling n_e_ped is not reached. Conversely, if the fueling flux exceeds
-  what D_e_max (the clip applied before scaling) can exhaust, the density
-  can settle above the target.
+  Note that saturation is one-sided within the barrier branch: it can raise
+  transport at most to the chi_max / D_e_max caps, i.e. throttle the pedestal
+  at the target. In particular, the achieved pedestal density cannot exceed
+  what the edge particle fueling (and any inward pinch) can sustain; with
+  insufficient fueling n_e_ped is not reached. Conversely, if the incoming
+  flux exceeds what the caps can exhaust, the profile settles above the
+  target with the barrier fully open.
 
   Attributes:
-    steepness: Scaling factor applied to the argument of the softplus function
-      for the heat channels, setting the steepness of the smooth saturation
-      function. Decrease for a smoother saturation, which may be more
-      numerically stable but may lead to saturating at a temperature below the
-      target values.
-    offset: Bias applied to the argument of the softplus function for the heat
-      channels, setting the dimensionless offset of the saturation window.
-      Increase to start saturation at a higher temperature.
-    base_multiplier: The base value of the heat channel transport multiplier.
-      Increase for stronger increases in transport once saturation starts.
-    density_steepness: As `steepness`, for the particle diffusivity channel
-      driven by the n_e deviation from n_e_ped.
-    density_offset: As `offset`, for the particle diffusivity channel.
-    density_base_multiplier: As `base_multiplier`, for the particle
-      diffusivity channel.
+    offset: Dimensionless offset of the heat channel saturation response: the
+      relative deviation from target at which the barrier is half open.
+    response_width: Width of the heat channel saturation response, in units of
+      relative deviation from target. Decrease for tighter regulation of the
+      pedestal-top values, at the cost of a steeper (stiffer) transport
+      response for the solver.
+    density_offset: As `offset`, for the particle diffusivity channel driven
+      by the n_e deviation from n_e_ped.
+    density_response_width: As `response_width`, for the particle diffusivity
+      channel.
   """
 
   model_name: Annotated[Literal["profile_value"], torax_pydantic.JAX_STATIC] = (
       "profile_value"
   )
-  steepness: pydantic.PositiveFloat = 100.0
-  # Default offset is > 0 as otherwise saturation starts too early. This is
-  # because the softplus function is nonzero before the argument is zero.
   offset: Annotated[
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
-  ] = 0.1
-  base_multiplier: Annotated[
-      array_typing.FloatScalar, pydantic.Field(gt=1.0)
-  ] = 1e6
-  density_steepness: pydantic.PositiveFloat = 100.0
+  ] = 0.0
+  response_width: pydantic.PositiveFloat = 0.05
   density_offset: Annotated[
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
-  ] = 0.1
-  density_base_multiplier: Annotated[
-      array_typing.FloatScalar, pydantic.Field(gt=1.0)
-  ] = 1e6
+  ] = 0.0
+  density_response_width: pydantic.PositiveFloat = 0.05
 
   def build_saturation_model(
       self,
@@ -234,23 +212,25 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   ) -> runtime_params.SaturationRuntimeParams:
     del t
     return runtime_params.SaturationRuntimeParams(
-        steepness=self.steepness,
         offset=self.offset,
-        base_multiplier=self.base_multiplier,
-        density_steepness=self.density_steepness,
+        response_width=self.response_width,
         density_offset=self.density_offset,
-        density_base_multiplier=self.density_base_multiplier,
+        density_response_width=self.density_response_width,
     )
 
 
 class AlphaCriticalSaturation(torax_pydantic.BaseModelFrozen):
   """Configuration for the alpha-critical saturation model.
 
-  This saturation model triggers an increase in pedestal transport when the
-  s-alpha normalized pressure gradient alpha approaches its critical value
+  This is the stability-based saturation signal: it senses proximity of the
+  s-alpha normalized pressure gradient alpha to its critical value
   alpha_crit = alpha_crit_multiplier * max(s, s_min), an approximation of the
-  ideal ballooning first-stability boundary. The sensed signal is the smooth
-  maximum of alpha/alpha_crit over the pedestal region.
+  ideal ballooning first-stability boundary. The signal is
+    x = max(alpha / alpha_crit) - 1,
+  where the maximum is the smooth maximum over the pedestal region, and is
+  shared by both heat channels and the particle diffusivity (alpha involves
+  the total pressure gradient, so all channels relieve it); the pinch has no
+  saturation signal.
 
   Combined with a power-scaling formation model, the L-H transition timing
   remains empirical (P_SOL vs P_LH scaling law) while the pedestal height
@@ -258,23 +238,19 @@ class AlphaCriticalSaturation(torax_pydantic.BaseModelFrozen):
   the pedestal model are ignored by this saturation model (only
   rho_norm_ped_top is used, defining the pedestal region).
 
-  The formula is
-    transport_multiplier = 1 + alpha_sat * base_multiplier,
-  where alpha_sat is a softplus function of the deviation of the sensed
-  ratio from unity:
-    x = max(alpha / alpha_crit) - 1 - offset
-    alpha_sat = log(1 + exp(steepness * x))
-  applied to both heat channels and the particle diffusivity (alpha involves
-  the total pressure gradient, so all channels relieve it); the pinch is
-  scaled by the formation multiplier only.
+  The signal is mapped to barrier openness by the shared bounded response
+    r = sigmoid((x - offset) / response_width),
+  so the pedestal pressure gradient settles within roughly a
+  +/- response_width (relative) band around the stability boundary.
 
   Attributes:
-    steepness: Scaling factor applied to the argument of the softplus
-      function. The pedestal pressure gradient settles within roughly
-      1/steepness (relative) of the stability boundary.
-    offset: Dimensionless offset of the saturation window in alpha /
-      alpha_crit.
-    base_multiplier: The base value of the transport multiplier.
+    offset: Dimensionless offset of the saturation response in
+      alpha / alpha_crit: the relative excess over the boundary at which the
+      barrier is half open.
+    response_width: Width of the saturation response, in units of relative
+      deviation of alpha / alpha_crit from unity. Decrease to hold the
+      gradient closer to the boundary, at the cost of a steeper (stiffer)
+      transport response for the solver.
     alpha_crit_multiplier: Prefactor c_alpha of the s-alpha critical gradient
       alpha_crit = c_alpha * max(s, s_min).
     s_min: Magnetic shear floor in the critical alpha, avoiding a vanishing
@@ -284,13 +260,10 @@ class AlphaCriticalSaturation(torax_pydantic.BaseModelFrozen):
   model_name: Annotated[
       Literal["alpha_critical"], torax_pydantic.JAX_STATIC
   ] = "alpha_critical"
-  steepness: pydantic.PositiveFloat = 100.0
   offset: Annotated[
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
-  ] = 0.1
-  base_multiplier: Annotated[
-      array_typing.FloatScalar, pydantic.Field(gt=1.0)
-  ] = 1e6
+  ] = 0.0
+  response_width: pydantic.PositiveFloat = 0.05
   alpha_crit_multiplier: pydantic.PositiveFloat = 0.6
   s_min: pydantic.PositiveFloat = 0.5
 
@@ -304,14 +277,12 @@ class AlphaCriticalSaturation(torax_pydantic.BaseModelFrozen):
   ) -> alpha_critical_saturation_model.AlphaCriticalSaturationRuntimeParams:
     del t
     return alpha_critical_saturation_model.AlphaCriticalSaturationRuntimeParams(
-        steepness=self.steepness,
         offset=self.offset,
-        base_multiplier=self.base_multiplier,
-        # The density channel shares the alpha-based multiplier in this model;
-        # the density_* params are unused but required by the base dataclass.
-        density_steepness=self.steepness,
+        response_width=self.response_width,
+        # The particle diffusivity channel shares the alpha-based signal and
+        # response in this model.
         density_offset=self.offset,
-        density_base_multiplier=self.base_multiplier,
+        density_response_width=self.response_width,
         alpha_crit_multiplier=self.alpha_crit_multiplier,
         s_min=self.s_min,
     )
@@ -356,25 +327,23 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
       dW/dt. Excluding dW/dt avoids unphysical dithering during transients.
     formation_model: Configuration for the pedestal formation model.
     saturation_model: Configuration for the pedestal saturation model.
-    chi_max: Maximum effective thermal diffusion coefficient from the core
-      transport model in the pedestal region (i.e., before applying
-      ADAPTIVE_TRANSPORT) [m^2/s].
-    D_e_max: Maximum effective particle diffusion coefficient from the core
-      transport model in the pedestal region (i.e., before applying
-      ADAPTIVE_TRANSPORT) [m^2/s].
-    V_e_max: Maximum effective particle pinch velocity from the core transport
-      model in the pedestal region (i.e., before applying ADAPTIVE_TRANSPORT)
-      [m/s].
-    V_e_min: Minimum effective particle pinch velocity from the core transport
-      model in the pedestal region (i.e., before applying ADAPTIVE_TRANSPORT)
-      [m/s].
-    D_e_residual: Residual particle diffusivity [m^2/s] added to the scaled
-      turbulent particle diffusivity in the pedestal region when
-      ADAPTIVE_TRANSPORT scaling is active. Represents particle transport that
-      is not suppressed by the edge transport barrier (e.g. neoclassical-scale
-      levels), ensuring particle fueling deposited inside the pedestal region
-      has a finite transport channel even under strong suppression. Set to 0
-      (default) to disable.
+    chi_max: Heat diffusivity of the ADAPTIVE_TRANSPORT barrier branch at full
+      saturation openness [m^2/s]. Bounds the transport increase the
+      saturation feedback can apply, and hence the throttling authority of
+      the pedestal regulation.
+    D_e_max: Particle diffusivity of the ADAPTIVE_TRANSPORT barrier branch at
+      full saturation openness [m^2/s].
+    chi_residual: Heat diffusivity of the ADAPTIVE_TRANSPORT barrier branch at
+      zero saturation openness [m^2/s]. Represents heat transport that is not
+      suppressed by the edge transport barrier (e.g. ion neoclassical
+      levels); keeping this positive avoids a vanishing diffusivity in the
+      solved equations under full suppression.
+    D_e_residual: Particle diffusivity of the ADAPTIVE_TRANSPORT barrier
+      branch at zero saturation openness [m^2/s]. Represents particle
+      transport that is not suppressed by the edge transport barrier (e.g.
+      neoclassical-scale levels), ensuring particle fueling deposited inside
+      the pedestal region has a finite transport channel even under full
+      suppression.
   """
 
   set_pedestal: torax_pydantic.TimeVaryingScalar = (
@@ -411,14 +380,11 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
   D_e_max: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
       1.0
   )
-  V_e_max: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
-      1.0
-  )
-  V_e_min: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
-      -1.0
+  chi_residual: torax_pydantic.NonNegativeTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.05)
   )
   D_e_residual: torax_pydantic.NonNegativeTimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(0.0)
+      torax_pydantic.ValidatedDefault(0.02)
   )
   pedestal_top_smoothing_width: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.02)
@@ -484,8 +450,7 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
         saturation=self.saturation_model.build_runtime_params(t),
         chi_max=self.chi_max.get_value(t),
         D_e_max=self.D_e_max.get_value(t),
-        V_e_max=self.V_e_max.get_value(t),
-        V_e_min=self.V_e_min.get_value(t),
+        chi_residual=self.chi_residual.get_value(t),
         D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
@@ -559,8 +524,7 @@ class SetPpedTpedRatioNped(BasePedestal):
         saturation=base_runtime_params.saturation,
         chi_max=self.chi_max.get_value(t),
         D_e_max=self.D_e_max.get_value(t),
-        V_e_max=self.V_e_max.get_value(t),
-        V_e_min=self.V_e_min.get_value(t),
+        chi_residual=self.chi_residual.get_value(t),
         D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
@@ -629,8 +593,7 @@ class SetTpedNped(BasePedestal):
         saturation=base_runtime_params.saturation,
         chi_max=self.chi_max.get_value(t),
         D_e_max=self.D_e_max.get_value(t),
-        V_e_max=self.V_e_max.get_value(t),
-        V_e_min=self.V_e_min.get_value(t),
+        chi_residual=self.chi_residual.get_value(t),
         D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
@@ -674,8 +637,7 @@ class NoPedestal(BasePedestal):
         saturation=base_runtime_params.saturation,
         chi_max=self.chi_max.get_value(t),
         D_e_max=self.D_e_max.get_value(t),
-        V_e_max=self.V_e_max.get_value(t),
-        V_e_min=self.V_e_min.get_value(t),
+        chi_residual=self.chi_residual.get_value(t),
         D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t

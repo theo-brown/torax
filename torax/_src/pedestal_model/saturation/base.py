@@ -25,7 +25,15 @@ from torax._src.pedestal_model import pedestal_model_output
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class SaturationModel(static_dataclass.StaticDataclass, abc.ABC):
-  """Base class for pedestal saturation models."""
+  """Base class for pedestal saturation models.
+
+  A saturation model senses how close the pedestal is to the limit it
+  regulates towards (a prescribed pedestal-top target, a stability
+  boundary, ...) and returns one dimensionless proximity signal per transport
+  channel. The signals are mapped to barrier openness by the shared bounded
+  response in `PedestalModel.compute_barrier_state`; saturation models choose
+  the signal, not the response shape.
+  """
 
   @abc.abstractmethod
   def __call__(
@@ -34,8 +42,8 @@ class SaturationModel(static_dataclass.StaticDataclass, abc.ABC):
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
-  ) -> pedestal_model_output.TransportMultipliers:
-    """Calculates the transport increase multipliers.
+  ) -> pedestal_model_output.BarrierSignals:
+    """Calculates the per-channel proximity-to-limit signals.
 
     Args:
       runtime_params: Runtime parameters.
@@ -44,6 +52,6 @@ class SaturationModel(static_dataclass.StaticDataclass, abc.ABC):
       pedestal_output: Output from the pedestal model implementation.
 
     Returns:
-      transport_increase_multipliers: Factors to multiply transport coefficients
-        by (>= 1.0).
+      Per-channel dimensionless signals, normalized so that a signal is 0 at
+      the limit, negative below it and positive beyond it.
     """

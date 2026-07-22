@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Saturation model based on the ballooning critical pressure gradient.
+"""Saturation signal based on the ballooning critical pressure gradient.
 
 Instead of regulating the pedestal towards user-prescribed T_ped/n_ped
-targets, this saturation model raises pedestal transport when the s-alpha
-normalized pressure gradient alpha approaches its critical value
+targets, this saturation model senses proximity of the s-alpha normalized
+pressure gradient alpha to its critical value
 alpha_crit = c_alpha * max(s, s_min), an approximation of the ideal
 ballooning first-stability boundary. Combined with a power-scaling formation
 model (P_SOL vs P_LH trigger), this yields an adaptive-transport pedestal
@@ -30,7 +30,6 @@ import jax
 import jax.numpy as jnp
 from torax._src import array_typing
 from torax._src import constants
-from torax._src import jax_utils
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
@@ -59,7 +58,7 @@ class AlphaCriticalSaturationRuntimeParams(
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class AlphaCriticalSaturationModel(base.SaturationModel):
-  """Saturation driven by proximity to the ballooning stability boundary."""
+  """Saturation signal from proximity to the ballooning stability boundary."""
 
   def __call__(
       self,
@@ -67,21 +66,18 @@ class AlphaCriticalSaturationModel(base.SaturationModel):
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
-  ) -> array_typing.FloatScalar:
-    """Calculates transport increase multipliers from alpha / alpha_crit.
+  ) -> pedestal_model_output.BarrierSignals:
+    """Calculates the proximity-to-stability-boundary signal.
 
     The sensed signal is the smooth (logsumexp) maximum of alpha/alpha_crit
     over the pedestal region, so that the boundary being approached anywhere
-    inside the pedestal activates the response. The multiplier follows the
-    same softplus form as the profile-value saturation model:
+    inside the pedestal activates the response. The proximity signal is
 
-      m = 1 + base_multiplier * softplus(steepness * (max(alpha/alpha_crit)
-          - 1 - offset))
+      x = max(alpha / alpha_crit) - 1
 
-    and is applied to both heat channels and the particle diffusivity (alpha
-    involves the total pressure gradient, so all channels relieve it). The
-    pinch is not increased by saturation (formation-only scaling), consistent
-    with the profile-value model.
+    (zero at the boundary, negative inside it), and is shared by both heat
+    channels and the particle diffusivity: alpha involves the total pressure
+    gradient, so all channels relieve it.
 
     Args:
       runtime_params: Runtime parameters.
@@ -93,7 +89,7 @@ class AlphaCriticalSaturationModel(base.SaturationModel):
         T_ped/n_e_ped targets it carries are ignored by this model.
 
     Returns:
-      The transport increase multipliers.
+      The per-channel proximity-to-limit signals.
     """
     saturation = runtime_params.pedestal.saturation
     # Required for pytype.
@@ -107,7 +103,7 @@ class AlphaCriticalSaturationModel(base.SaturationModel):
 
     # Smooth maximum of the ratio over the pedestal region. An empty mask
     # (e.g. the rho_norm_ped_top=inf fallback output) yields a fully stable
-    # signal (ratio 0 -> multiplier ~1).
+    # signal (ratio 0 -> signal -1).
     pedestal_region_mask = (
         geo.rho_face_norm >= pedestal_output.rho_norm_ped_top
     )
@@ -120,17 +116,9 @@ class AlphaCriticalSaturationModel(base.SaturationModel):
         0.0,
     )
 
-    normalized_deviation = max_ratio - 1.0 - saturation.offset
-    multiplier = 1.0 + saturation.base_multiplier * jax.nn.softplus(
-        normalized_deviation * saturation.steepness
-    )
-
-    return pedestal_model_output.TransportMultipliers(  # pyrefly: ignore[bad-return]
-        chi_e_multiplier=multiplier,
-        chi_i_multiplier=multiplier,
-        D_e_multiplier=multiplier,
-        # The pinch is not increased by saturation; it is scaled by the
-        # formation multiplier only (see ProfileValueSaturationModel for the
-        # v/D ratio rationale).
-        v_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
+    signal = max_ratio - 1.0
+    return pedestal_model_output.BarrierSignals(
+        chi_i_signal=signal,
+        chi_e_signal=signal,
+        D_e_signal=signal,
     )

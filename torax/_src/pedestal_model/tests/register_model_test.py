@@ -99,8 +99,7 @@ class FixedPedestalConfig(pedestal_pydantic_model.BasePedestal):
         saturation=self.saturation_model.build_runtime_params(t),
         chi_max=self.chi_max,  # pyrefly: ignore[bad-argument-type]
         D_e_max=self.D_e_max,  # pyrefly: ignore[bad-argument-type]
-        V_e_max=self.V_e_max,  # pyrefly: ignore[bad-argument-type]
-        V_e_min=self.V_e_min,  # pyrefly: ignore[bad-argument-type]
+        chi_residual=self.chi_residual,  # pyrefly: ignore[bad-argument-type]
         D_e_residual=self.D_e_residual,  # pyrefly: ignore[bad-argument-type]
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width,  # pyrefly: ignore[bad-argument-type]
     )

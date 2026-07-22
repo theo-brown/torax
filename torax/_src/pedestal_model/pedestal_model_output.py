@@ -30,55 +30,112 @@ from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, eq=False)
-class TransportMultipliers:
-  """Transport multipliers for the pedestal."""
+class BarrierSignals:
+  """Per-channel proximity-to-limit signals from a saturation model.
 
-  chi_e_multiplier: array_typing.FloatScalar
-  chi_i_multiplier: array_typing.FloatScalar
-  D_e_multiplier: array_typing.FloatScalar
-  v_e_multiplier: array_typing.FloatScalar
+  Each signal x is dimensionless and normalized so that x = 0 at the limit
+  the saturation model regulates towards (a prescribed pedestal-top target,
+  a stability boundary, ...), x < 0 below the limit and x > 0 beyond it.
+  The signals are mapped to barrier openness by the shared bounded response
+  r = sigmoid((x - offset) / response_width) in
+  `PedestalModel.compute_barrier_state`; saturation models only choose the
+  signal, not the response shape.
+
+  Attributes:
+    chi_i_signal: Signal driving the ion heat channel.
+    chi_e_signal: Signal driving the electron heat channel.
+    D_e_signal: Signal driving the particle diffusivity channel. There is
+      deliberately no pinch signal: the steady-state density profile shape is
+      set by the ratio v/D, so raising D alone shifts that ratio and regulates
+      the pedestal density height, whereas raising D and v together would
+      preserve the shape and provide no height control.
+  """
+
+  chi_i_signal: array_typing.FloatScalar
+  chi_e_signal: array_typing.FloatScalar
+  D_e_signal: array_typing.FloatScalar
+
+
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True, eq=False)
+class BarrierState:
+  """State of the edge transport barrier for ADAPTIVE_TRANSPORT mode.
+
+  The pedestal-region transport is a convex blend between the unmodified
+  (L-mode) transport and a bounded barrier transport branch:
+
+    coeff_ped = (1 - g) * coeff_raw + g * (residual + r * (cap - residual))
+
+  where g is the barrier fraction set by the formation model and r is the
+  per-channel barrier openness set by the saturation response. The formation
+  and saturation signals act on different axes (branch selection vs position
+  within the barrier branch), so neither ever needs to undo the other, and
+  both are bounded in [0, 1]: the solver residual has no large-gain product
+  terms.
+
+  Attributes:
+    barrier_fraction: Blend weight g in [0, 1] between the unmodified
+      transport (g=0, L-mode) and the barrier transport branch (g=1, fully
+      formed edge barrier).
+    chi_i_openness: Barrier openness r in (0, 1) for the ion heat channel:
+      0 = suppressed to the residual level, 1 = opened up to the cap.
+    chi_e_openness: As above, for the electron heat channel.
+    D_e_openness: As above, for the particle diffusivity channel. The pinch
+      has no openness; within the barrier branch it is suppressed to zero
+      (see `BarrierSignals.D_e_signal` for the v/D rationale).
+  """
+
+  barrier_fraction: array_typing.FloatScalar
+  chi_i_openness: array_typing.FloatScalar
+  chi_e_openness: array_typing.FloatScalar
+  D_e_openness: array_typing.FloatScalar
 
   @classmethod
   def default(cls):
+    """No barrier: transport coefficients are unmodified."""
     return cls(
-        chi_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-        chi_i_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-        D_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-        v_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
+        barrier_fraction=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        chi_i_openness=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        chi_e_openness=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        D_e_openness=jnp.array(0.0, dtype=jax_utils.get_dtype()),
     )
 
 
-# Explicit classification of CoreTransport fields for ADAPTIVE_TRANSPORT
-# scaling. Fields not listed here (e.g. neoclassical transport) are left
-# unmodified.
-_CHI_I_TURBULENT_FIELDS = frozenset({
-    'chi_face_ion',
+# Explicit classification of CoreTransport fields for the ADAPTIVE_TRANSPORT
+# barrier blend. Fields not listed here (e.g. neoclassical transport) are left
+# unmodified. The total fields are the coefficients used in the state
+# equations and receive the full barrier blend (with the residual floor and
+# cap); the component fields are diagnostic breakdowns from the turbulent
+# transport models and are scaled by the channel's relative suppression
+# factor only (no floor: the residual barrier transport is not turbulence).
+_CHI_I_TOTAL_FIELD = 'chi_face_ion'
+_CHI_E_TOTAL_FIELD = 'chi_face_el'
+_D_E_TOTAL_FIELD = 'd_face_el'
+_V_E_TOTAL_FIELD = 'v_face_el'
+_CHI_I_COMPONENT_FIELDS = frozenset({
     'chi_face_ion_bohm',
     'chi_face_ion_gyrobohm',
     'chi_face_ion_itg',
     'chi_face_ion_tem',
 })
-_CHI_E_TURBULENT_FIELDS = frozenset({
-    'chi_face_el',
+_CHI_E_COMPONENT_FIELDS = frozenset({
     'chi_face_el_bohm',
     'chi_face_el_gyrobohm',
     'chi_face_el_itg',
     'chi_face_el_tem',
     'chi_face_el_etg',
 })
-_D_E_TURBULENT_FIELDS = frozenset({
-    'd_face_el',
+_D_E_COMPONENT_FIELDS = frozenset({
     'd_face_el_itg',
     'd_face_el_tem',
 })
-_V_E_TURBULENT_FIELDS = frozenset({
-    'v_face_el',
+_V_E_COMPONENT_FIELDS = frozenset({
     'v_face_el_itg',
     'v_face_el_tem',
 })
 # Pereverzev-Corrigan terms come in diffusion/convection pairs whose fluxes
 # cancel exactly at the current profile. Each pair must be scaled by a single
-# shared factor, with no clipping, so the cancellation is preserved.
+# shared factor so the cancellation is preserved.
 _PEREVERZEV_HEAT_ION_FIELDS = frozenset({
     'chi_face_ion_pereverzev',
     'full_v_heat_face_ion_pereverzev',
@@ -91,68 +148,6 @@ _PEREVERZEV_PARTICLE_FIELDS = frozenset({
     'd_face_el_pereverzev',
     'v_face_el_pereverzev',
 })
-
-# Log-space width of the smooth activation switch: the clip-and-scale
-# modification turns on as the multiplier departs from 1.0 by roughly this
-# relative amount.
-_ACTIVATION_LOG_WIDTH = 0.1
-# Width of the soft clipping transition region, as a fraction of the clip
-# range.
-_SOFT_CLIP_WIDTH_FRACTION = 0.05
-
-
-def activation_weight(
-    multiplier: array_typing.FloatScalar,
-    log_width: float = _ACTIVATION_LOG_WIDTH,
-) -> jax.Array:
-  """Smooth weight in [0, 1) measuring how far a multiplier is from 1.0.
-
-  Returns 0 when the multiplier is exactly 1 (pedestal modification inactive,
-  e.g. deep L-mode) and approaches 1 as the multiplier departs from 1 in either
-  direction. The weight is C^inf in the multiplier with zero slope at
-  multiplier=1, so the transport modification switches on smoothly. This
-  replaces a previous hard `jnp.isclose(multiplier, 1.0)` branch which
-  introduced a jump discontinuity in the solver residual mid-transition.
-
-  Args:
-    multiplier: The (positive) transport multiplier.
-    log_width: Log-space scale over which the weight activates.
-
-  Returns:
-    Smooth activation weight in [0, 1).
-  """
-  z = jnp.log(multiplier) / log_width
-  return -jnp.expm1(-0.5 * z**2)
-
-
-def soft_clip_max(
-    x: jax.Array,
-    cap: array_typing.FloatScalar,
-    width: array_typing.FloatScalar,
-) -> jax.Array:
-  """Smooth version of jnp.clip(x, max=cap).
-
-  Approaches x for x << cap and cap for x >> cap, with a C^inf transition of
-  scale `width` (instead of the derivative discontinuity of a hard clip).
-
-  Args:
-    x: Values to clip.
-    cap: Upper bound.
-    width: Transition width; must be > 0.
-
-  Returns:
-    Smoothly clipped values.
-  """
-  return cap - width * jax.nn.softplus((cap - x) / width)
-
-
-def soft_clip_min(
-    x: jax.Array,
-    floor: array_typing.FloatScalar,
-    width: array_typing.FloatScalar,
-) -> jax.Array:
-  """Smooth version of jnp.clip(x, min=floor). See `soft_clip_max`."""
-  return floor + width * jax.nn.softplus((x - floor) / width)
 
 
 def _build_smoothing_matrix(
@@ -196,16 +191,17 @@ class PedestalModelOutput:
     T_i_ped: The ion temperature at the pedestal top in keV.
     T_e_ped: The electron temperature at the pedestal top in keV.
     n_e_ped: The electron density at the pedestal top in m^-3.
-    transport_multipliers: Multipliers for the transport coefficients in the
-      pedestal region. Only used if the pedestal is in ADAPTIVE_TRANSPORT mode.
+    barrier_state: State of the edge transport barrier (blend weight and
+      per-channel openness). Only used if the pedestal is in
+      ADAPTIVE_TRANSPORT mode.
   """
 
   rho_norm_ped_top: array_typing.FloatScalar
   T_i_ped: array_typing.FloatScalar
   T_e_ped: array_typing.FloatScalar
   n_e_ped: array_typing.FloatScalar
-  transport_multipliers: TransportMultipliers = dataclasses.field(
-      default_factory=TransportMultipliers.default
+  barrier_state: BarrierState = dataclasses.field(
+      default_factory=BarrierState.default
   )
 
   def to_internal_boundary_conditions(
@@ -336,22 +332,30 @@ class PedestalModelOutput:
   ) -> state.CoreTransport:
     """Modify transport coefficients in the entire pedestal region.
 
-    Scales the turbulent and Pereverzev transport coefficients in the pedestal
-    region by the multipliers in the pedestal model output. This will also scale
-    any components of the transport coefficients that are inherited from the
-    turbulent model, such as ITG, ETG, TEM, Bohm, GyroBohm, etc. Transport
+    Blends the turbulent transport coefficients in the pedestal region between
+    the unmodified (L-mode) value and a bounded barrier transport branch,
+    according to the barrier state:
+
+      coeff_ped = (1 - g) * coeff_raw + g * (residual + r * (cap - residual))
+
+    where g is the barrier fraction (formation), r is the per-channel barrier
+    openness (saturation response), residual is the transport not suppressed
+    by the barrier (chi_residual / D_e_residual; zero for the pinch) and cap
+    is the barrier transport at full openness (chi_max / D_e_max). Transport
     coefficients from neoclassical and pedestal transport models are not
     affected.
 
-    The modified coefficients are smooth (C^1 or better) functions of both the
-    multipliers and the input coefficients, which is required for the
-    Newton-Raphson solver: the multipliers are re-evaluated inside the solver
-    residual, so any discontinuity here becomes a discontinuity of the residual.
-    Turbulent coefficients blend smoothly between the unmodified value (when
-    the multiplier is near 1, e.g. L-mode) and a softly-clipped, scaled value
-    (when the multiplier departs from 1). Pereverzev-Corrigan
-    diffusion/convection pairs are scaled by a single shared factor with no
-    clipping so their mutual flux cancellation is preserved exactly.
+    Both g and r are bounded in [0, 1] and the blend is linear in each, so the
+    modified coefficients are smooth functions of the profiles (through the
+    formation and saturation sigmoids) with bounded sensitivity: the maximum
+    transport change per unit signal is (cap - residual) / (4 * width). This
+    is required for the Newton-Raphson solver, which re-evaluates the barrier
+    state inside the solver residual. Diagnostic turbulence components (Bohm,
+    ITG, ...) are scaled by the channel's relative suppression factor
+    (1 - g) + g * r, without the residual floor (the residual barrier
+    transport is not turbulence). Pereverzev-Corrigan diffusion/convection
+    pairs are scaled by the same shared per-channel factor so their mutual
+    flux cancellation is preserved exactly.
 
     Args:
       core_transport: The core transport coefficients to modify.
@@ -376,92 +380,75 @@ class PedestalModelOutput:
         pedestal_runtime_params.pedestal_top_smoothing_width,
     )
 
-    multipliers = self.transport_multipliers
+    barrier = self.barrier_state
+    g = barrier.barrier_fraction
 
-    def blend_clip_scale(coeff, multiplier, clipped_coeff):
-      """Smoothly blend between the raw and clipped-and-scaled coefficient."""
-      s = activation_weight(multiplier)
-      return (1.0 - s) * coeff + s * clipped_coeff * multiplier
+    def barrier_blend(coeff, openness, cap, residual):
+      """Blend between the raw coefficient and the barrier branch."""
+      barrier_coeff = residual + openness * (cap - residual)
+      return (1.0 - g) * coeff + g * barrier_coeff
 
-    chi_clip_width = (
-        _SOFT_CLIP_WIDTH_FRACTION * pedestal_runtime_params.chi_max
-        + constants.CONSTANTS.eps
-    )
-    D_e_clip_width = (
-        _SOFT_CLIP_WIDTH_FRACTION * pedestal_runtime_params.D_e_max
-        + constants.CONSTANTS.eps
-    )
-    V_e_clip_width = (
-        _SOFT_CLIP_WIDTH_FRACTION
-        * (pedestal_runtime_params.V_e_max - pedestal_runtime_params.V_e_min)
-        + constants.CONSTANTS.eps
-    )
+    def suppression_factor(openness):
+      """Relative factor for diagnostic components and Pereverzev pairs."""
+      return (1.0 - g) + g * openness
 
-    def multiply_coeff(
+    def modify_coeff(
         path: jax.tree_util.KeyPath, coeff: array_typing.FloatVectorFace
     ) -> array_typing.FloatVectorFace:
-      """Scale turbulent+Pereverzev transport coefficients in the pedestal."""
+      """Apply the barrier blend to transport coefficients in the pedestal."""
       # Get the variable name of the leaf.
       key = path[-1]
       name = key.name if hasattr(key, "name") else str(key).lstrip(".")
 
-      if name in _CHI_I_TURBULENT_FIELDS:
-        modified_coeff = blend_clip_scale(
+      if name == _CHI_I_TOTAL_FIELD:
+        modified_coeff = barrier_blend(
             coeff,
-            multipliers.chi_i_multiplier,
-            soft_clip_max(
-                coeff, pedestal_runtime_params.chi_max, chi_clip_width
-            ),
+            barrier.chi_i_openness,
+            pedestal_runtime_params.chi_max,
+            pedestal_runtime_params.chi_residual,
         )
-      elif name in _CHI_E_TURBULENT_FIELDS:
-        modified_coeff = blend_clip_scale(
+      elif name == _CHI_E_TOTAL_FIELD:
+        modified_coeff = barrier_blend(
             coeff,
-            multipliers.chi_e_multiplier,
-            soft_clip_max(
-                coeff, pedestal_runtime_params.chi_max, chi_clip_width
-            ),
+            barrier.chi_e_openness,
+            pedestal_runtime_params.chi_max,
+            pedestal_runtime_params.chi_residual,
         )
-      elif name in _D_E_TURBULENT_FIELDS:
-        # The residual diffusivity represents particle transport that is not
-        # suppressed by the edge transport barrier (e.g. neoclassical-scale),
-        # ensuring fueling deposited in the pedestal region has a finite
-        # transport channel even under strong suppression. It is weighted by
-        # the activation so it vanishes smoothly when the multiplier is 1
-        # (L-mode: coefficients untouched).
-        modified_coeff = (
-            blend_clip_scale(
-                coeff,
-                multipliers.D_e_multiplier,
-                soft_clip_max(
-                    coeff, pedestal_runtime_params.D_e_max, D_e_clip_width
-                ),
-            )
-            + activation_weight(multipliers.D_e_multiplier)
-            * pedestal_runtime_params.D_e_residual
-        )
-      elif name in _V_E_TURBULENT_FIELDS:
-        modified_coeff = blend_clip_scale(
+      elif name == _D_E_TOTAL_FIELD:
+        # D_e_residual represents particle transport that is not suppressed
+        # by the edge transport barrier (e.g. neoclassical-scale), ensuring
+        # fueling deposited in the pedestal region has a finite transport
+        # channel even under full suppression.
+        modified_coeff = barrier_blend(
             coeff,
-            multipliers.v_e_multiplier,
-            soft_clip_min(
-                soft_clip_max(
-                    coeff, pedestal_runtime_params.V_e_max, V_e_clip_width
-                ),
-                pedestal_runtime_params.V_e_min,
-                V_e_clip_width,
-            ),
+            barrier.D_e_openness,
+            pedestal_runtime_params.D_e_max,
+            pedestal_runtime_params.D_e_residual,
         )
+      elif name == _V_E_TOTAL_FIELD:
+        # The turbulent pinch is suppressed to zero within the barrier branch
+        # and has no saturation openness (see BarrierSignals.D_e_signal for
+        # the v/D height-control rationale).
+        modified_coeff = (1.0 - g) * coeff
+      elif name in _CHI_I_COMPONENT_FIELDS:
+        modified_coeff = coeff * suppression_factor(barrier.chi_i_openness)
+      elif name in _CHI_E_COMPONENT_FIELDS:
+        modified_coeff = coeff * suppression_factor(barrier.chi_e_openness)
+      elif name in _D_E_COMPONENT_FIELDS:
+        modified_coeff = coeff * suppression_factor(barrier.D_e_openness)
+      elif name in _V_E_COMPONENT_FIELDS:
+        modified_coeff = (1.0 - g) * coeff
       elif name in _PEREVERZEV_HEAT_ION_FIELDS:
-        modified_coeff = coeff * multipliers.chi_i_multiplier
+        modified_coeff = coeff * suppression_factor(barrier.chi_i_openness)
       elif name in _PEREVERZEV_HEAT_EL_FIELDS:
-        modified_coeff = coeff * multipliers.chi_e_multiplier
+        modified_coeff = coeff * suppression_factor(barrier.chi_e_openness)
       elif name in _PEREVERZEV_PARTICLE_FIELDS:
-        # Both members of the particle pair share D_e_multiplier so the
+        # Both members of the particle pair share the same factor so the
         # v/D ratio (and hence the Pereverzev flux cancellation) is unchanged.
-        modified_coeff = coeff * multipliers.D_e_multiplier
+        modified_coeff = coeff * suppression_factor(barrier.D_e_openness)
       else:
         # Neoclassical transport and any unclassified coefficients are not
-        # affected by scaling from an ADAPTIVE_TRANSPORT pedestal model.
+        # affected by an ADAPTIVE_TRANSPORT pedestal model.
         return coeff
 
       # Only modify the coefficients in the pedestal region.
@@ -474,4 +461,4 @@ class PedestalModelOutput:
 
       return modified_coeff
 
-    return jax.tree_util.tree_map_with_path(multiply_coeff, core_transport)
+    return jax.tree_util.tree_map_with_path(modify_coeff, core_transport)

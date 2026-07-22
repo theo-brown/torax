@@ -48,17 +48,17 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       dict(
-          testcase_name='active',
-          # T_current >> T_target -> saturation is active.
-          T_target_over_T_current=1e-3,
+          testcase_name='above_target',
+          # T_current >> T_target -> positive signal (barrier opens).
+          T_target_over_T_current=1e-1,
       ),
       dict(
-          testcase_name='inactive',
-          # T_current << T_target -> no saturation.
-          T_target_over_T_current=1e3,
+          testcase_name='below_target',
+          # T_current << T_target -> negative signal (barrier closed).
+          T_target_over_T_current=1e1,
       ),
   )
-  def test_saturation_multiplier(
+  def test_temperature_signal_sign(
       self,
       T_target_over_T_current,
   ):
@@ -73,7 +73,7 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
 
     # Construct a pedestal output that is asking for a pedestal with
     # target temperature. The density target is set far above the current
-    # density so the density channel stays inactive in this test.
+    # density so the density signal stays negative in this test.
     pedestal_output = pedestal_model_output.PedestalModelOutput(
         rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
         T_i_ped=1.0,
@@ -81,7 +81,7 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         n_e_ped=current_n_e_ped * 1e3,
     )
 
-    transport_multipliers = saturation_model(
+    signals = saturation_model(
         self.runtime_params,
         self.geo,
         self.core_profiles,
@@ -89,27 +89,31 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
     )
 
     if T_target_over_T_current > 1.0:
-      # If the target temperature is above the current temperature, we expect
-      # the multiplier to be equal to 1.0 - the pedestal is not saturated.
-      np.testing.assert_allclose(transport_multipliers.chi_e_multiplier, 1.0)
+      # Below target: the signal is negative (transport stays suppressed).
+      self.assertLess(float(signals.chi_e_signal), 0.0)
     else:
-      # If the target temperature is below the current temperature, we expect
-      # the multiplier to be greater than 1.0 - the pedestal is saturated.
-      self.assertGreater(transport_multipliers.chi_e_multiplier, 1.0)
+      # Above target: the signal is positive (transport opens up).
+      self.assertGreater(float(signals.chi_e_signal), 0.0)
+    # The signal is the relative deviation from target.
+    np.testing.assert_allclose(
+        signals.chi_e_signal,
+        1.0 / T_target_over_T_current - 1.0,
+        rtol=1e-6,
+    )
 
   @parameterized.named_parameters(
       dict(
-          testcase_name='active',
-          # n_current >> n_target -> density saturation is active.
-          n_target_over_n_current=1e-3,
+          testcase_name='above_target',
+          # n_current >> n_target -> positive density signal.
+          n_target_over_n_current=1e-1,
       ),
       dict(
-          testcase_name='inactive',
-          # n_current << n_target -> no density saturation.
-          n_target_over_n_current=1e3,
+          testcase_name='below_target',
+          # n_current << n_target -> negative density signal.
+          n_target_over_n_current=1e1,
       ),
   )
-  def test_density_saturation_multiplier(self, n_target_over_n_current):
+  def test_density_signal_sign(self, n_target_over_n_current):
     """The particle diffusivity channel is driven by the n_e deviation."""
     saturation_model = (
         profile_value_saturation_model.ProfileValueSaturationModel()
@@ -119,7 +123,7 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
     current_T_i_ped = self.core_profiles.T_i.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
     current_n_e_ped = self.core_profiles.n_e.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
 
-    # Temperature targets far above current values: heat channels inactive.
+    # Temperature targets far above current values: heat signals negative.
     pedestal_output = pedestal_model_output.PedestalModelOutput(
         rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
         T_i_ped=current_T_i_ped * 1e3,
@@ -127,7 +131,7 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         n_e_ped=current_n_e_ped * n_target_over_n_current,
     )
 
-    transport_multipliers = saturation_model(
+    signals = saturation_model(
         self.runtime_params,
         self.geo,
         self.core_profiles,
@@ -135,23 +139,21 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
     )
 
     with self.subTest('heat_channels_unaffected'):
-      np.testing.assert_allclose(transport_multipliers.chi_e_multiplier, 1.0)
-      np.testing.assert_allclose(transport_multipliers.chi_i_multiplier, 1.0)
-    with self.subTest('pinch_never_increased_by_saturation'):
-      np.testing.assert_allclose(transport_multipliers.v_e_multiplier, 1.0)
+      self.assertLess(float(signals.chi_e_signal), 0.0)
+      self.assertLess(float(signals.chi_i_signal), 0.0)
     if n_target_over_n_current > 1.0:
-      np.testing.assert_allclose(transport_multipliers.D_e_multiplier, 1.0)
+      self.assertLess(float(signals.D_e_signal), 0.0)
     else:
-      self.assertGreater(transport_multipliers.D_e_multiplier, 1.0)
+      self.assertGreater(float(signals.D_e_signal), 0.0)
 
-  def test_density_saturation_senses_pedestal_region_maximum(self):
+  def test_density_signal_senses_pedestal_region_maximum(self):
     """Density pileup inside the pedestal region activates the feedback.
 
     With edge fueling and strongly suppressed D, density can pile up at
     interior pedestal cells while the ped-top value is still below target.
     The density channel senses the (smooth) maximum over the pedestal region,
-    so such pileup raises D_e_multiplier even when the ped-top point value
-    alone would not.
+    so such pileup raises the density signal even when the ped-top point
+    value alone would not.
     """
     saturation_model = (
         profile_value_saturation_model.ProfileValueSaturationModel()
@@ -170,11 +172,11 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         n_e_ped=current_n_e_ped * 2.0,
     )
 
-    with self.subTest('no_pileup_is_inactive'):
-      multipliers = saturation_model(
+    with self.subTest('no_pileup_is_below_target'):
+      signals = saturation_model(
           self.runtime_params, self.geo, self.core_profiles, pedestal_output
       )
-      np.testing.assert_allclose(multipliers.D_e_multiplier, 1.0)
+      self.assertLess(float(signals.D_e_signal), 0.0)
 
     with self.subTest('interior_pileup_activates'):
       # Create a density spike at the second-to-last cell, well above target.
@@ -183,20 +185,19 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
           self.core_profiles,
           n_e=dataclasses.replace(self.core_profiles.n_e, value=spiked_value),
       )
-      multipliers = saturation_model(
+      signals = saturation_model(
           self.runtime_params, self.geo, spiked_core_profiles, pedestal_output
       )
-      self.assertGreater(multipliers.D_e_multiplier, 1.0)
+      self.assertGreater(float(signals.D_e_signal), 0.0)
       # Heat channels remain unaffected by the density spike.
-      np.testing.assert_allclose(multipliers.chi_e_multiplier, 1.0)
-      np.testing.assert_allclose(multipliers.chi_i_multiplier, 1.0)
+      self.assertLess(float(signals.chi_e_signal), 0.0)
+      self.assertLess(float(signals.chi_i_signal), 0.0)
 
   def test_channels_are_decoupled(self):
-    """Regression test for the old aliasing of D_e/v_e to chi_e.
+    """Regression test for the old aliasing of D_e to chi_e.
 
-    A temperature overshoot must not raise the particle diffusivity (that was
-    the mechanism that flushed the density pedestal), and the pinch must not
-    be raised by saturation at all.
+    A temperature overshoot must not raise the particle diffusivity signal
+    (that was the mechanism that flushed the density pedestal).
     """
     saturation_model = (
         profile_value_saturation_model.ProfileValueSaturationModel()
@@ -206,8 +207,8 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
     current_T_i_ped = self.core_profiles.T_i.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
     current_n_e_ped = self.core_profiles.n_e.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
 
-    # Temperatures far above target (heat saturation active), density far
-    # below target (density saturation inactive).
+    # Temperatures far above target (heat signals positive), density far
+    # below target (density signal negative).
     pedestal_output = pedestal_model_output.PedestalModelOutput(
         rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
         T_i_ped=current_T_i_ped * 1e-3,
@@ -215,17 +216,16 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         n_e_ped=current_n_e_ped * 1e3,
     )
 
-    transport_multipliers = saturation_model(
+    signals = saturation_model(
         self.runtime_params,
         self.geo,
         self.core_profiles,
         pedestal_output,
     )
 
-    self.assertGreater(transport_multipliers.chi_e_multiplier, 1.0)
-    self.assertGreater(transport_multipliers.chi_i_multiplier, 1.0)
-    np.testing.assert_allclose(transport_multipliers.D_e_multiplier, 1.0)
-    np.testing.assert_allclose(transport_multipliers.v_e_multiplier, 1.0)
+    self.assertGreater(float(signals.chi_e_signal), 0.0)
+    self.assertGreater(float(signals.chi_i_signal), 0.0)
+    self.assertLess(float(signals.D_e_signal), 0.0)
 
 
 if __name__ == '__main__':

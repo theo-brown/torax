@@ -86,51 +86,43 @@ class AlphaCriticalSaturationModelTest(absltest.TestCase):
         T_e=scaled(self.core_profiles.T_e),
     )
 
-  def test_stable_gradients_give_unit_multipliers(self):
-    """Far below the ballooning boundary, no saturation."""
-    multipliers = self._call(self._scaled_profiles(1e-3))
-    np.testing.assert_allclose(multipliers.chi_e_multiplier, 1.0)
-    np.testing.assert_allclose(multipliers.chi_i_multiplier, 1.0)
-    np.testing.assert_allclose(multipliers.D_e_multiplier, 1.0)
-    np.testing.assert_allclose(multipliers.v_e_multiplier, 1.0)
+  def test_stable_gradients_give_negative_signal(self):
+    """Far below the ballooning boundary, the signal is deeply negative."""
+    signals = self._call(self._scaled_profiles(1e-3))
+    self.assertLess(float(signals.chi_e_signal), -0.9)
+    self.assertLess(float(signals.chi_i_signal), -0.9)
+    self.assertLess(float(signals.D_e_signal), -0.9)
 
-  def test_supercritical_alpha_activates_all_channels_except_pinch(self):
-    """Above the boundary, chi_i, chi_e and D_e rise together; v does not."""
-    multipliers = self._call(self._scaled_profiles(100.0))
-    self.assertGreater(float(multipliers.chi_e_multiplier), 1.0)
-    np.testing.assert_allclose(
-        multipliers.chi_i_multiplier, multipliers.chi_e_multiplier
-    )
-    np.testing.assert_allclose(
-        multipliers.D_e_multiplier, multipliers.chi_e_multiplier
-    )
-    np.testing.assert_allclose(multipliers.v_e_multiplier, 1.0)
+  def test_supercritical_alpha_gives_shared_positive_signal(self):
+    """Above the boundary, all channels share the same positive signal."""
+    signals = self._call(self._scaled_profiles(100.0))
+    self.assertGreater(float(signals.chi_e_signal), 0.0)
+    np.testing.assert_allclose(signals.chi_i_signal, signals.chi_e_signal)
+    np.testing.assert_allclose(signals.D_e_signal, signals.chi_e_signal)
 
   def test_pedestal_targets_are_ignored(self):
-    """T_ped/n_ped targets do not affect the alpha-critical response."""
+    """T_ped/n_ped targets do not affect the alpha-critical signal."""
     hot = self._scaled_profiles(100.0)
-    multipliers_a = self._call(hot)
+    signals_a = self._call(hot)
     other_targets = dataclasses.replace(
         self.pedestal_output,
         T_i_ped=jnp.array(0.1),
         T_e_ped=jnp.array(0.1),
         n_e_ped=jnp.array(1e18),
     )
-    multipliers_b = self._call(hot, pedestal_output=other_targets)
-    np.testing.assert_allclose(
-        multipliers_a.chi_e_multiplier, multipliers_b.chi_e_multiplier
-    )
+    signals_b = self._call(hot, pedestal_output=other_targets)
+    np.testing.assert_allclose(signals_a.chi_e_signal, signals_b.chi_e_signal)
 
   def test_empty_pedestal_region_is_inert(self):
-    """The rho_norm_ped_top=inf fallback output yields unit multipliers."""
+    """The rho_norm_ped_top=inf fallback output yields a fully stable signal."""
     fallback_output = dataclasses.replace(
         self.pedestal_output, rho_norm_ped_top=jnp.array(jnp.inf)
     )
-    multipliers = self._call(
+    signals = self._call(
         self._scaled_profiles(100.0), pedestal_output=fallback_output
     )
-    np.testing.assert_allclose(multipliers.chi_e_multiplier, 1.0)
-    np.testing.assert_allclose(multipliers.v_e_multiplier, 1.0)
+    np.testing.assert_allclose(signals.chi_e_signal, -1.0)
+    np.testing.assert_allclose(signals.D_e_signal, -1.0)
 
 
 if __name__ == '__main__':

@@ -54,11 +54,16 @@ class PedestalProfileForm(enum.StrEnum):
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class FormationRuntimeParams:
-  """Runtime params for pedestal formation models."""
+  """Runtime params for pedestal formation models.
+
+  Attributes:
+    sharpness: Sharpness of the sigmoid mapping the formation trigger signal
+      to the barrier fraction g in [0, 1].
+    offset: Dimensionless offset of the formation window.
+  """
 
   sharpness: array_typing.FloatScalar
   offset: array_typing.FloatScalar
-  base_multiplier: array_typing.FloatScalar
 
 
 @jax.tree_util.register_dataclass
@@ -66,24 +71,30 @@ class FormationRuntimeParams:
 class SaturationRuntimeParams:
   """Runtime params for pedestal saturation models.
 
+  The saturation model provides per-channel dimensionless proximity-to-limit
+  signals x (zero at the limit being regulated towards); the shared response
+  maps each signal to a barrier openness r = sigmoid((x - offset) / width),
+  where the heat channels (chi_i, chi_e) use (offset, response_width) and the
+  particle diffusivity channel (D_e) uses (density_offset,
+  density_response_width).
+
   Attributes:
-    steepness: Steepness of the saturation response of the heat transport
-      channels (chi_i, chi_e) to the temperature deviation from the pedestal
-      targets.
-    offset: Dimensionless offset of the heat channel saturation window.
-    base_multiplier: Base value of the heat channel transport increase.
-    density_steepness: Steepness of the saturation response of the particle
-      diffusivity channel (D_e) to the density deviation from n_e_ped.
-    density_offset: Dimensionless offset of the density saturation window.
-    density_base_multiplier: Base value of the particle diffusivity increase.
+    offset: Dimensionless offset of the heat channel saturation response: the
+      signal value at which the barrier is half open (r = 0.5).
+    response_width: Width of the heat channel saturation response in signal
+      units. The regulated quantity settles within a band of roughly this
+      relative width around the limit; smaller values regulate more tightly
+      but increase the transport sensitivity (and hence solver stiffness) as
+      (cap - residual) / (4 * response_width).
+    density_offset: As `offset`, for the particle diffusivity channel.
+    density_response_width: As `response_width`, for the particle diffusivity
+      channel.
   """
 
-  steepness: array_typing.FloatScalar
   offset: array_typing.FloatScalar
-  base_multiplier: array_typing.FloatScalar
-  density_steepness: array_typing.FloatScalar
+  response_width: array_typing.FloatScalar
   density_offset: array_typing.FloatScalar
-  density_base_multiplier: array_typing.FloatScalar
+  density_response_width: array_typing.FloatScalar
 
 
 @jax.tree_util.register_dataclass
@@ -120,10 +131,10 @@ class RuntimeParams:
       per timestep before the solver loop and its output (T_ped, n_ped,
       rho_ped_top) is frozen during Newton iterations. When False, the pedestal
       model is re-evaluated every Newton iteration, coupling pedestal physics to
-      the implicit solve. Note: for ADAPTIVE_TRANSPORT mode, transport
-      multipliers are always re-evaluated implicitly with current profiles
-      regardless of this setting, since the saturation model feedback loop
-      requires implicit coupling.
+      the implicit solve. Note: for ADAPTIVE_TRANSPORT mode, the barrier state
+      is always re-evaluated implicitly with current profiles regardless of
+      this setting, since the saturation feedback loop requires implicit
+      coupling.
     pedestal_profile_form: Controls the shape of internal boundary conditions in
       the pedestal region. SET_AT_PED_TOP (default) pins pedestal values at a
       single grid cell nearest to rho_norm_ped_top. MTANH applies a smooth
@@ -132,17 +143,22 @@ class RuntimeParams:
       core_profiles.
     formation: Runtime params for the formation model.
     saturation: Runtime params for the saturation model.
-    chi_max: Maximum effective thermal diffusion coefficient [m^2/s].
-    D_e_max: Maximum effective particle diffusion coefficient [m^2/s].
-    V_e_max: Maximum effective particle pinch velocity [m/s].
-    V_e_min: Minimum effective particle pinch velocity [m/s].
-    D_e_residual: Residual particle diffusivity [m^2/s] added to the scaled
-      turbulent particle diffusivity in the pedestal region when
-      ADAPTIVE_TRANSPORT scaling is active. Represents particle transport that
+    chi_max: Heat diffusivity of the barrier transport branch at full
+      saturation openness (r = 1) [m^2/s]. Bounds the transport increase the
+      saturation feedback can apply, and hence the throttling authority of the
+      pedestal regulation.
+    D_e_max: Particle diffusivity of the barrier transport branch at full
+      saturation openness (r = 1) [m^2/s].
+    chi_residual: Heat diffusivity of the barrier transport branch at zero
+      saturation openness (r = 0) [m^2/s]. Represents heat transport that is
+      not suppressed by the edge transport barrier (e.g. ion neoclassical
+      levels); keeping this positive avoids a vanishing diffusivity in the
+      solved equations under full suppression.
+    D_e_residual: Particle diffusivity of the barrier transport branch at zero
+      saturation openness (r = 0) [m^2/s]. Represents particle transport that
       is not suppressed by the edge transport barrier (e.g. neoclassical-scale
       levels), ensuring that particle fueling deposited inside the pedestal
-      region has a finite transport channel even under strong suppression.
-      Set to 0 (default) to disable.
+      region has a finite transport channel even under full suppression.
     pedestal_top_smoothing_width: Width of the smoothing kernel at the pedestal
       top.
   """
@@ -163,7 +179,6 @@ class RuntimeParams:
   saturation: SaturationRuntimeParams
   chi_max: array_typing.FloatScalar
   D_e_max: array_typing.FloatScalar
-  V_e_max: array_typing.FloatScalar
-  V_e_min: array_typing.FloatScalar
+  chi_residual: array_typing.FloatScalar
   D_e_residual: array_typing.FloatScalar
   pedestal_top_smoothing_width: array_typing.FloatScalar

@@ -19,7 +19,6 @@ import jax
 import jax.numpy as jnp
 from torax._src import array_typing
 from torax._src import constants
-from torax._src import jax_utils
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
@@ -37,7 +36,17 @@ _SOFTMAX_SHARPNESS: float = 100.0
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class ProfileValueSaturationModel(base.SaturationModel):
-  """Saturation model based on values of the profiles at the pedestal top."""
+  """Saturation signals from profile deviations at the pedestal top.
+
+  This is the target-based saturation signal: each channel's
+  proximity-to-limit signal is the relative deviation of the sensed profile
+  value from the target requested by the pedestal model implementation
+  (current / target - 1). The heat channels sense T_e and T_i at the
+  pedestal-top face against T_e_ped and T_i_ped; the particle channel senses
+  the (smooth) maximum of n_e over the pedestal region against n_e_ped.
+  Suitable for pedestal models that prescribe specific pedestal-top values,
+  e.g. EPED-style predictions of T_e_ped.
+  """
 
   def __call__(
       self,
@@ -45,8 +54,8 @@ class ProfileValueSaturationModel(base.SaturationModel):
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
-  ) -> array_typing.FloatScalar:
-    """Calculates transport increase multipliers."""
+  ) -> pedestal_model_output.BarrierSignals:
+    """Calculates proximity-to-target signals for each channel."""
     # Get the current profile values at the pedestal top.
     # Interpolating to get the values at exactly rho_norm_ped_top is difficult,
     # as the gradients in the pedestal and the core are very different and are
@@ -91,75 +100,39 @@ class ProfileValueSaturationModel(base.SaturationModel):
         n_e_face[rho_norm_face_ped_top_idx],  # pyrefly: ignore[bad-index]
     )
 
-    saturation = runtime_params.pedestal.saturation
-
-    # Compute the multipliers based on the deviation from the pedestal model.
-    # Each channel is driven by its own profile deviation.
-    chi_e_multiplier = self._calculate_multiplier(
-        current_T_e_ped_top,
-        pedestal_output.T_e_ped,
-        saturation.steepness,
-        saturation.offset,
-        saturation.base_multiplier,
-    )
-    chi_i_multiplier = self._calculate_multiplier(
-        current_T_i_ped_top,
-        pedestal_output.T_i_ped,
-        saturation.steepness,
-        saturation.offset,
-        saturation.base_multiplier,
-    )
-    D_e_multiplier = self._calculate_multiplier(
-        current_n_e_ped_top,
-        pedestal_output.n_e_ped,
-        saturation.density_steepness,
-        saturation.density_offset,
-        saturation.density_base_multiplier,
+    # Each channel is driven by its own profile deviation from target. The
+    # signal is the relative deviation (current / target - 1): zero at the
+    # target, negative below it and positive above it.
+    return pedestal_model_output.BarrierSignals(
+        chi_i_signal=_relative_deviation(
+            current_T_i_ped_top, pedestal_output.T_i_ped
+        ),
+        chi_e_signal=_relative_deviation(
+            current_T_e_ped_top, pedestal_output.T_e_ped
+        ),
+        D_e_signal=_relative_deviation(
+            current_n_e_ped_top, pedestal_output.n_e_ped
+        ),
     )
 
-    return pedestal_model_output.TransportMultipliers(  # pyrefly: ignore[bad-return]
-        chi_e_multiplier=chi_e_multiplier,
-        chi_i_multiplier=chi_i_multiplier,
-        D_e_multiplier=D_e_multiplier,
-        # The pinch is deliberately not increased by saturation (it is scaled
-        # by the formation multiplier only). The steady-state density profile
-        # shape is set by the ratio v/D, so raising D alone shifts that ratio
-        # and regulates the pedestal density height; scaling D and v together
-        # would preserve the shape and only change the relaxation timescale,
-        # providing no height control.
-        v_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-    )
 
-  def _calculate_multiplier(
-      self,
-      current: array_typing.FloatScalar,
-      target: array_typing.FloatScalar,
-      steepness: array_typing.FloatScalar,
-      offset: array_typing.FloatScalar,
-      base_multiplier: array_typing.FloatScalar,
-  ) -> array_typing.FloatScalar:
-    """Calculates the transport increase multiplier.
+def _relative_deviation(
+    current: array_typing.FloatScalar,
+    target: array_typing.FloatScalar,
+) -> array_typing.FloatScalar:
+  """Relative deviation of the current value from the target.
 
-    If current >> target, multiplier -> infinity.
-    If current << target, multiplier -> 1.
+  Guards against zero targets (e.g. the fallback pedestal output used when
+  set_pedestal is False has all-zero targets); without this the deviation is
+  inf and can poison downstream jnp.where branches with NaNs under
+  differentiation, even though the resulting openness is masked out.
 
-    Args:
-      current: The current value of the profile at the pedestal top.
-      target: The target value of the profile at the pedestal top.
-      steepness: Steepness of the softplus saturation response.
-      offset: Dimensionless offset of the saturation window.
-      base_multiplier: Base value of the transport increase.
+  Args:
+    current: The current sensed value of the profile.
+    target: The target value of the profile at the pedestal top.
 
-    Returns:
-      The transport increase multiplier.
-    """
-    # Guard against zero targets (e.g. the fallback pedestal output used when
-    # set_pedestal is False has all-zero targets); without this the deviation
-    # is inf and can poison downstream jnp.where branches with NaNs under
-    # differentiation, even though the multiplier itself is masked out.
-    safe_target = jnp.maximum(target, constants.CONSTANTS.eps)
-    normalized_deviation = (current - safe_target) / safe_target - offset
-    transport_multiplier = 1 + base_multiplier * jax.nn.softplus(
-        normalized_deviation * steepness
-    )
-    return transport_multiplier
+  Returns:
+    The dimensionless proximity-to-target signal (current / target - 1).
+  """
+  safe_target = jnp.maximum(target, constants.CONSTANTS.eps)
+  return (current - safe_target) / safe_target
