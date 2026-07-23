@@ -54,7 +54,14 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
   ) -> pedestal_model_output.TransportMultipliers:
-    """Computes transport multipliers from formation and saturation models."""
+    """Computes transport multipliers from formation and saturation models.
+
+    Both the formation model's H-mode fraction and the saturation model's
+    per-channel saturation fractions are bounded in (0, 1). Each is mapped to
+    a multiplier by the same affine remap between 1 (channel unaffected) and
+    that model's base_multiplier (channel fully affected); the two
+    multipliers are then combined multiplicatively.
+    """
 
     H_mode_fraction = self.formation_model(
         runtime_params,
@@ -63,28 +70,46 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
         source_profiles,
         pedestal_transition_state,
     )
-    # Map the H-mode fraction g in [0, 1] to the transport decrease
-    # multiplier: 1 in L-mode (g=0), base_multiplier in H-mode (g=1).
-    base_multiplier = runtime_params.pedestal.formation.base_multiplier
-    decrease_multiplier = (
-        1.0 - H_mode_fraction
-    ) + H_mode_fraction * base_multiplier
-    transport_decrease = pedestal_model_output.TransportMultipliers(
+    saturation_fractions = self.saturation_model(
+        runtime_params, geo, core_profiles, pedestal_output
+    )
+
+    def to_multiplier(fraction, base_multiplier):
+      return (1.0 - fraction) + fraction * base_multiplier
+
+    formation_base_multiplier = runtime_params.pedestal.formation.base_multiplier
+    decrease_multiplier = to_multiplier(H_mode_fraction, formation_base_multiplier)
+    transport_decrease_multiplier = pedestal_model_output.TransportMultipliers(
         chi_e_multiplier=decrease_multiplier,
         chi_i_multiplier=decrease_multiplier,
         D_e_multiplier=decrease_multiplier,
         v_e_multiplier=decrease_multiplier,
     )
-    transport_increase = self.saturation_model(
-        runtime_params, geo, core_profiles, pedestal_output
+
+    saturation_base_multiplier = runtime_params.pedestal.saturation.base_multiplier
+    # The pinch follows the electron heat channel's saturation fraction.
+    chi_e_increase_multiplier = to_multiplier(
+        saturation_fractions.chi_e_saturation_fraction, saturation_base_multiplier
+    )
+    transport_increase_multiplier = pedestal_model_output.TransportMultipliers(
+        chi_e_multiplier=chi_e_increase_multiplier,
+        chi_i_multiplier=to_multiplier(
+            saturation_fractions.chi_i_saturation_fraction,
+            saturation_base_multiplier,
+        ),
+        D_e_multiplier=to_multiplier(
+            saturation_fractions.D_e_saturation_fraction,
+            saturation_base_multiplier,
+        ),
+        v_e_multiplier=chi_e_increase_multiplier,
     )
 
     # Combine via exp(log) for numerical stability, as multipliers can
     # be very small or large.
     return jax.tree.map(
         lambda x, y: jnp.exp(jnp.log(x) + jnp.log(y)),
-        transport_decrease,
-        transport_increase,
+        transport_decrease_multiplier,
+        transport_increase_multiplier,
     )
 
   def _evaluate_pedestal(

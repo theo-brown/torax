@@ -11,8 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from absl.testing import absltest
 from absl.testing import parameterized
+import jax
 import numpy as np
 from torax._src.config import build_runtime_params
 from torax._src.core_profiles import initialization
@@ -44,54 +46,79 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         self.neoclassical_models,
     )
 
-  @parameterized.named_parameters(
-      dict(
-          testcase_name='active',
-          # T_current >> T_target -> saturation is active.
-          T_target_over_T_current=1e-3,
-      ),
-      dict(
-          testcase_name='inactive',
-          # T_current << T_target -> no saturation.
-          T_target_over_T_current=1e3,
-      ),
-  )
-  def test_saturation_multiplier(
-      self,
-      T_target_over_T_current,
-  ):
+  def _saturation_fraction(self, pedestal_output, core_profiles=None):
+    """Runs the saturation model on the given pedestal output."""
     saturation_model = (
         profile_value_saturation_model.ProfileValueSaturationModel()
     )
+    return saturation_model(
+        self.runtime_params,
+        self.geo,
+        core_profiles if core_profiles is not None else self.core_profiles,
+        pedestal_output,
+    )
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='above_target',
+          # T_current >> T_target -> saturation fraction ~1 (saturated).
+          T_target_over_T_current=1e-1,
+      ),
+      dict(
+          testcase_name='below_target',
+          # T_current << T_target -> saturation fraction ~0 (not saturated).
+          T_target_over_T_current=1e1,
+      ),
+  )
+  def test_temperature_saturation_fraction(
+      self,
+      T_target_over_T_current,
+  ):
     # For this test, we put the pedestal top at the last grid point.
     ped_top_idx = -1
     current_T_e_ped = self.core_profiles.T_e.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
 
-    # Construct a pedestal output that is asking for a pedestal with
-    # target temperature.
-    pedestal_output = pedestal_model_output.PedestalModelOutput(
-        rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
-        T_i_ped=1.0,
-        T_e_ped=current_T_e_ped * T_target_over_T_current,
-        n_e_ped=1.0,
-    )
-
-    transport_multipliers = saturation_model(
-        self.runtime_params,
-        self.geo,
-        self.core_profiles,
-        pedestal_output,
+    saturation_fraction = self._saturation_fraction(
+        pedestal_model_output.PedestalModelOutput(
+            rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
+            T_i_ped=1.0,
+            T_e_ped=current_T_e_ped * T_target_over_T_current,
+            n_e_ped=1.0,
+        )
     )
 
     if T_target_over_T_current > 1.0:
-      # If the target temperature is above the current temperature, we expect
-      # the multiplier to be equal to 1.0 - the pedestal is not saturated.
-      np.testing.assert_allclose(transport_multipliers.chi_e_multiplier, 1.0)
+      # Below target: the channel is not saturated.
+      self.assertLess(float(saturation_fraction.chi_e_saturation_fraction), 0.01)
     else:
-      # If the target temperature is below the current temperature, we expect
-      # the multiplier to be greater than 1.0 - the pedestal is saturated.
-      self.assertGreater(transport_multipliers.chi_e_multiplier, 1.0)
+      # Above target: the channel is fully saturated.
+      self.assertGreater(float(saturation_fraction.chi_e_saturation_fraction), 0.99)
+    # The saturation fraction is a sigmoid of the relative target deviation.
+    saturation_params = self.runtime_params.pedestal.saturation
+    deviation = 1.0 / T_target_over_T_current - 1.0 - saturation_params.offset
+    np.testing.assert_allclose(
+        saturation_fraction.chi_e_saturation_fraction,
+        jax.nn.sigmoid(deviation * saturation_params.steepness),
+        rtol=1e-6,
+    )
+
+  def test_particle_channel_aliased_to_electron_heat_channel(self):
+    """The particle channel currently follows the electron heat channel."""
+    ped_top_idx = -1
+    current_T_e_ped = self.core_profiles.T_e.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
+
+    saturation_fraction = self._saturation_fraction(
+        pedestal_model_output.PedestalModelOutput(
+            rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
+            T_i_ped=1.0,
+            T_e_ped=current_T_e_ped * 0.5,
+            n_e_ped=1.0,
+        )
+    )
+    np.testing.assert_allclose(
+        saturation_fraction.D_e_saturation_fraction,
+        saturation_fraction.chi_e_saturation_fraction,
+    )
 
 
 if __name__ == '__main__':

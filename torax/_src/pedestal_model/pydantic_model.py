@@ -156,24 +156,22 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   """Configuration for ProfileValueSaturation model.
 
   This saturation model triggers an increase in pedestal transport when the
-  pedestal temperature and density are above the values requested by the
-  pedestal model. The increase is a smooth linear function of the ratio of the
-  current value to the value requested by the pedestal model.
-
-  The formula is
-    transport_multiplier = 1 + alpha * base_multiplier,
-  where alpha is a softplus function of the normalized deviation from the target
-  value, with given steepness and offset:
+  pedestal temperature is above the value requested by the pedestal model.
+  Each heat channel's saturation fraction is a sigmoid of the normalized
+  deviation from the target value, with given steepness and offset:
     x = (current - target) / target - offset
-    alpha = log(1 + exp(steepness * x))
-
+    saturation_fraction = sigmoid(steepness * x)
+  and the resulting transport multiplier is an affine remap between 1
+  (saturation_fraction = 0, channel unaffected) and base_multiplier
+  (saturation_fraction = 1, channel fully affected):
+    transport_multiplier = 1 + saturation_fraction * (base_multiplier - 1).
 
   Attributes:
-    steepness: Scaling factor applied to the argument of the softplus function,
+    steepness: Scaling factor applied to the argument of the sigmoid function,
       setting the steepness of the smooth saturation function. Decrease for a
       smoother saturation, which may be more numerically stable but may lead to
       starting saturation at a temperature or density below the target values.
-    offset: Bias applied to the argument of the softplus function, setting the
+    offset: Bias applied to the argument of the sigmoid function, setting the
       dimensionless offset of the saturation window. Increase to start
       saturation at a higher temperature or density.
     base_multiplier: The base value of the transport multiplier. Increase for
@@ -184,8 +182,7 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
       "profile_value"
   )
   steepness: pydantic.PositiveFloat = 100.0
-  # Default offset is > 0 as otherwise saturation starts too early. This is
-  # because the softplus function is nonzero before the argument is zero.
+  # Default offset is > 0 so saturation stays off at current == target.
   offset: Annotated[
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
   ] = 0.1

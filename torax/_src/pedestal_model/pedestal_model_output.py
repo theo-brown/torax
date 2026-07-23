@@ -24,6 +24,7 @@ from torax._src import state
 from torax._src.geometry import geometry
 from torax._src.internal_boundary_conditions import internal_boundary_conditions as internal_boundary_conditions_lib
 from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_lib
+from torax._src.pedestal_model.saturation import base as saturation_base
 
 # pylint: disable=invalid-name
 
