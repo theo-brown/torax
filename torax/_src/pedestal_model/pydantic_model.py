@@ -150,24 +150,41 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   model's target,
     x = current / target - 1.
   The heat channels chi_e and chi_i sense T_e and T_i at the pedestal-top
-  face against T_e_ped and T_i_ped. This supports pedestal models that ask
-  for specific pedestal-top values, e.g. EPED-style predictions of T_e_ped.
+  face against T_e_ped and T_i_ped; the particle diffusivity channel D_e
+  senses the (smooth) maximum of n_e over the pedestal region against
+  n_e_ped, so that density pileup anywhere inside the pedestal (e.g. from
+  edge fueling against suppressed transport) activates the response. This
+  supports pedestal models that ask for specific pedestal-top values, e.g.
+  EPED-style predictions of T_e_ped.
 
   The proximities are mapped to a saturation fraction by the shared bounded
   response
     r = sigmoid((x - offset) / response_width),
   so the regulated value settles within a band of roughly +/- response_width
-  (relative) around target * (1 + offset). Saturation is one-sided: it can
-  raise transport at most to the chi_H_mode_max / D_e_H_mode_max caps, so if the incoming
-  flux exceeds what the caps can exhaust, the profile settles above the
-  target with the saturation fraction at 1.
+  (relative) around target * (1 + offset). The particle pinch v_e has no
+  saturation proximity (it is suppressed to zero within the H-mode branch):
+  the steady-state density profile shape is set by the ratio v/D, so raising
+  D alone shifts that ratio and regulates the pedestal density height,
+  whereas raising D and v together would only change the relaxation
+  timescale.
+
+  Saturation is one-sided: it can raise transport at most to the
+  chi_H_mode_max / D_e_H_mode_max caps, i.e. throttle the pedestal at the target. In
+  particular, the achieved pedestal density cannot exceed what the edge
+  particle fueling (and any inward pinch) can sustain; conversely, if the
+  incoming flux exceeds what the caps can exhaust, the profile settles above
+  the target with the saturation fraction at 1.
 
   Attributes:
-    offset: Relative deviation from target at which the saturation fraction
-      reaches 0.5.
-    response_width: Width of the response in relative deviation from target.
-      Decrease for tighter regulation of the pedestal-top values, at the cost
-      of a steeper (stiffer) transport response for the solver.
+    offset: Relative deviation from target at which the heat channel
+      saturation fraction reaches 0.5.
+    response_width: Width of the heat channel response in relative deviation
+      from target. Decrease for tighter regulation of the pedestal-top values,
+      at the cost of a steeper (stiffer) transport response for the solver.
+    density_offset: As `offset`, for the particle diffusivity channel driven
+      by the n_e deviation from n_e_ped.
+    density_response_width: As `response_width`, for the particle diffusivity
+      channel.
   """
 
   model_name: Annotated[Literal["profile_value"], torax_pydantic.JAX_STATIC] = (
@@ -177,6 +194,10 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
       array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
   ] = 0.0
   response_width: pydantic.PositiveFloat = 0.05
+  density_offset: Annotated[
+      array_typing.FloatScalar, pydantic.Field(ge=-10.0, le=10.0)
+  ] = 0.0
+  density_response_width: pydantic.PositiveFloat = 0.05
 
   def build_saturation_model(
       self,
@@ -190,6 +211,8 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
     return runtime_params.SaturationRuntimeParams(
         offset=self.offset,
         response_width=self.response_width,
+        density_offset=self.density_offset,
+        density_response_width=self.density_response_width,
     )
 
 

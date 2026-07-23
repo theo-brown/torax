@@ -72,17 +72,26 @@ class SaturationRuntimeParams:
   """Runtime params for pedestal saturation models.
 
   The shared response maps each proximity-to-limit value x to a
-  saturation fraction r = sigmoid((x - offset) / response_width).
+  saturation fraction r = sigmoid((x - offset) / response_width); the heat
+  channels
+  (chi_i, chi_e) use (offset, response_width) and the particle diffusivity
+  channel (D_e) uses (density_offset, density_response_width).
 
   Attributes:
-    offset: Proximity value at which the saturation fraction reaches 0.5
-      (r = 0.5).
-    response_width: Width of the saturation response in proximity units. Smaller
-      values regulate more tightly but stiffen the implicit solve.
+    offset: Proximity value at which the heat channel saturation fraction
+      reaches 0.5 (r = 0.5).
+    response_width: Width of the heat channel saturation response in proximity
+      units. Smaller values regulate more tightly but stiffen the implicit
+      solve.
+    density_offset: As `offset`, for the particle diffusivity channel.
+    density_response_width: As `response_width`, for the particle diffusivity
+      channel.
   """
 
   offset: array_typing.FloatScalar
   response_width: array_typing.FloatScalar
+  density_offset: array_typing.FloatScalar
+  density_response_width: array_typing.FloatScalar
 
 
 @jax.tree_util.register_dataclass

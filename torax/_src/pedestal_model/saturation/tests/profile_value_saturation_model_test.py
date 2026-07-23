@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import dataclasses
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -58,15 +59,38 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         pedestal_output,
     )
 
+  def _ped_output(
+      self,
+      ped_top_idx,
+      T_i_factor,
+      T_e_factor,
+      n_e_factor,
+      rho_norm_ped_top=None,
+  ):
+    """Pedestal output with targets scaled from the current profile values.
+
+    Each target is the current face value at ped_top_idx times its factor:
+    a factor >> 1 puts the target far above the current value (channel
+    closed), a factor << 1 far below it (channel open).
+    """
+    if rho_norm_ped_top is None:
+      rho_norm_ped_top = self.geo.rho_face[ped_top_idx]
+    return pedestal_model_output.PedestalModelOutput(
+        rho_norm_ped_top=rho_norm_ped_top,
+        T_i_ped=self.core_profiles.T_i.face_value()[ped_top_idx] * T_i_factor,  # pyrefly: ignore[bad-index]
+        T_e_ped=self.core_profiles.T_e.face_value()[ped_top_idx] * T_e_factor,  # pyrefly: ignore[bad-index]
+        n_e_ped=self.core_profiles.n_e.face_value()[ped_top_idx] * n_e_factor,  # pyrefly: ignore[bad-index]
+    )
+
   @parameterized.named_parameters(
       dict(
           testcase_name='above_target',
-          # T_current >> T_target -> saturation fraction ~1 (saturation active).
+          # T_current >> T_target -> saturation fraction ~1 (transport opens).
           T_target_over_T_current=1e-1,
       ),
       dict(
           testcase_name='below_target',
-          # T_current << T_target -> saturation fraction ~0 (no saturation).
+          # T_current << T_target -> saturation fraction ~0 (transport suppressed).
           T_target_over_T_current=1e1,
       ),
   )
@@ -74,24 +98,22 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
       self,
       T_target_over_T_current,
   ):
-    # For this test, we put the pedestal top at the last grid point.
-    ped_top_idx = -1
-    current_T_e_ped = self.core_profiles.T_e.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
-
+    # Pedestal top at the last grid point. The T_i and n_e targets are set
+    # far above their current values so those channels stay closed.
     saturation_fraction = self._saturation_fraction(
-        pedestal_model_output.PedestalModelOutput(
-            rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
-            T_i_ped=1.0,
-            T_e_ped=current_T_e_ped * T_target_over_T_current,
-            n_e_ped=1.0,
+        self._ped_output(
+            ped_top_idx=-1,
+            T_i_factor=1e3,
+            T_e_factor=T_target_over_T_current,
+            n_e_factor=1e3,
         )
     )
 
     if T_target_over_T_current > 1.0:
-      # Below target: the channel is closed (no saturation).
+      # Below target: the channel is closed (transport stays suppressed).
       self.assertLess(float(saturation_fraction.chi_e_saturation_fraction), 0.01)
     else:
-      # Above target: the channel is fully open (saturation active).
+      # Above target: the channel is fully open (transport opens up).
       self.assertGreater(float(saturation_fraction.chi_e_saturation_fraction), 0.99)
     # The saturation fraction is the bounded response of the relative target
     # deviation.
@@ -105,23 +127,95 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
         rtol=1e-6,
     )
 
-  def test_particle_channel_aliased_to_electron_heat_channel(self):
-    """The particle channel currently follows the electron heat channel."""
-    ped_top_idx = -1
-    current_T_e_ped = self.core_profiles.T_e.face_value()[ped_top_idx]  # pyrefly: ignore[bad-index]
-
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='above_target',
+          # n_current >> n_target -> particle channel open.
+          n_target_over_n_current=1e-1,
+      ),
+      dict(
+          testcase_name='below_target',
+          # n_current << n_target -> particle channel closed.
+          n_target_over_n_current=1e1,
+      ),
+  )
+  def test_density_saturation_fraction(self, n_target_over_n_current):
+    """The particle diffusivity channel is driven by the n_e deviation."""
+    # Temperature targets far above current values: heat channels closed.
     saturation_fraction = self._saturation_fraction(
-        pedestal_model_output.PedestalModelOutput(
-            rho_norm_ped_top=self.geo.rho_face[ped_top_idx],
-            T_i_ped=1.0,
-            T_e_ped=current_T_e_ped * 0.5,
-            n_e_ped=1.0,
+        self._ped_output(
+            ped_top_idx=-1,
+            T_i_factor=1e3,
+            T_e_factor=1e3,
+            n_e_factor=n_target_over_n_current,
         )
     )
-    np.testing.assert_allclose(
-        saturation_fraction.D_e_saturation_fraction,
-        saturation_fraction.chi_e_saturation_fraction,
+
+    with self.subTest('heat_channels_unaffected'):
+      self.assertLess(float(saturation_fraction.chi_e_saturation_fraction), 0.01)
+      self.assertLess(float(saturation_fraction.chi_i_saturation_fraction), 0.01)
+    if n_target_over_n_current > 1.0:
+      self.assertLess(float(saturation_fraction.D_e_saturation_fraction), 0.01)
+    else:
+      self.assertGreater(float(saturation_fraction.D_e_saturation_fraction), 0.99)
+
+  def test_density_saturation_fraction_senses_pedestal_region_maximum(self):
+    """Density pileup inside the pedestal region activates the feedback.
+
+    With edge fueling and strongly suppressed D, density can pile up at
+    interior pedestal cells while the ped-top value is still below target.
+    The density channel senses the (smooth) maximum over the pedestal region,
+    so such pileup opens the particle channel even when the ped-top point
+    value alone would not.
+    """
+    # Pedestal top a few cells inside the boundary, with the density target
+    # above the ped-top value: point sampling alone would be inactive.
+    ped_top_idx = -4
+    pedestal_output = self._ped_output(
+        ped_top_idx=ped_top_idx,
+        T_i_factor=1e3,
+        T_e_factor=1e3,
+        n_e_factor=2.0,
+        rho_norm_ped_top=self.geo.rho_face_norm[ped_top_idx],
     )
+
+    with self.subTest('no_pileup_is_below_target'):
+      saturation_fraction = self._saturation_fraction(pedestal_output)
+      self.assertLess(float(saturation_fraction.D_e_saturation_fraction), 0.01)
+
+    with self.subTest('interior_pileup_activates'):
+      # Create a density spike at the second-to-last cell, well above target.
+      spiked_value = self.core_profiles.n_e.value.at[-2].mul(10.0)
+      spiked_core_profiles = dataclasses.replace(
+          self.core_profiles,
+          n_e=dataclasses.replace(self.core_profiles.n_e, value=spiked_value),
+      )
+      saturation_fraction = self._saturation_fraction(pedestal_output, spiked_core_profiles)
+      self.assertGreater(float(saturation_fraction.D_e_saturation_fraction), 0.5)
+      # Heat channels remain unaffected by the density spike.
+      self.assertLess(float(saturation_fraction.chi_e_saturation_fraction), 0.01)
+      self.assertLess(float(saturation_fraction.chi_i_saturation_fraction), 0.01)
+
+  def test_channels_are_decoupled(self):
+    """Regression test for the old aliasing of D_e to chi_e.
+
+    A temperature overshoot must not open the particle diffusivity channel
+    (that was the mechanism that flushed the density pedestal).
+    """
+    # Temperatures far above target (heat channels open), density far
+    # below target (particle channel closed).
+    saturation_fraction = self._saturation_fraction(
+        self._ped_output(
+            ped_top_idx=-1,
+            T_i_factor=1e-3,
+            T_e_factor=1e-3,
+            n_e_factor=1e3,
+        )
+    )
+
+    self.assertGreater(float(saturation_fraction.chi_e_saturation_fraction), 0.99)
+    self.assertGreater(float(saturation_fraction.chi_i_saturation_fraction), 0.99)
+    self.assertLess(float(saturation_fraction.D_e_saturation_fraction), 0.01)
 
 
 if __name__ == '__main__':
