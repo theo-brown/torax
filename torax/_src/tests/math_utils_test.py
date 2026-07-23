@@ -315,6 +315,25 @@ class MathUtilsTest(parameterized.TestCase):
         expected,
     )
 
+  def test_bounded_sigmoid_response_at_offset_is_half(self):
+    x = jnp.array(3.0)
+    result = math_utils.bounded_sigmoid_response(
+        x, offset=jnp.array(3.0), sharpness=jnp.array(7.0)
+    )
+    np.testing.assert_allclose(result, 0.5, rtol=1e-6)
+
+  @parameterized.parameters(0.1, 1.0, 10.0)
+  def test_bounded_sigmoid_response_saturates(self, sharpness):
+    offset = jnp.array(0.0)
+    below = math_utils.bounded_sigmoid_response(
+        jnp.array(-1e3), offset, jnp.array(sharpness)
+    )
+    above = math_utils.bounded_sigmoid_response(
+        jnp.array(1e3), offset, jnp.array(sharpness)
+    )
+    np.testing.assert_allclose(below, 0.0, atol=1e-6)
+    np.testing.assert_allclose(above, 1.0, atol=1e-6)
+
   @parameterized.parameters(1e-14, 1e-6, 1e-4, 0.1)
   def test_inverse_softplus_small_values(self, value):
     x_val = jnp.array(value)
