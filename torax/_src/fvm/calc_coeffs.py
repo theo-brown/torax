@@ -298,21 +298,23 @@ def _calc_coeffs_full(
       == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
   ):
     # Explicit mode with ADAPTIVE_TRANSPORT: pedestal output (T_ped, n_ped,
-    # rho_ped_top) stays frozen from pre_step, but transport multipliers are
+    # rho_ped_top) stays frozen from pre_step, but the transport blend is
     # re-evaluated with current profiles.
     frozen_pedestal_output = pedestal_transition_state.pedestal_model_output
-    transport_multipliers = models.pedestal_model.compute_transport_multipliers(
-        runtime_params,
-        geo,
-        core_profiles,
-        merged_source_profiles,
-        pedestal_transition_state,
-        frozen_pedestal_output,
-    )
     pedestal_transition_state = dataclasses.replace(
         pedestal_transition_state,
         pedestal_model_output=dataclasses.replace(
-            frozen_pedestal_output, transport_multipliers=transport_multipliers
+            frozen_pedestal_output,
+            H_mode_fraction=models.pedestal_model.formation_model(
+                runtime_params,
+                geo,
+                core_profiles,
+                merged_source_profiles,
+                pedestal_transition_state,
+            ),
+            saturation_fraction=models.pedestal_model.saturation_model(
+                runtime_params, geo, core_profiles, frozen_pedestal_output
+            ),
         ),
     )
 

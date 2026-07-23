@@ -16,11 +16,11 @@
 
 import abc
 import dataclasses
+from torax._src import array_typing
 from torax._src import state
 from torax._src import static_dataclass
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
-from torax._src.pedestal_model import pedestal_model_output
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.sources import source_profiles as source_profiles_lib
 
@@ -37,8 +37,8 @@ class FormationModel(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles: state.CoreProfiles,
       source_profiles: source_profiles_lib.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
-  ) -> pedestal_model_output.TransportMultipliers:
-    """Calculates the transport decrease multipliers.
+  ) -> array_typing.FloatScalar:
+    """Calculates the H-mode fraction.
 
     Args:
       runtime_params: Runtime parameters.
@@ -48,6 +48,6 @@ class FormationModel(static_dataclass.StaticDataclass, abc.ABC):
       pedestal_transition_state: Current pedestal transition state.
 
     Returns:
-      transport_decrease_multiplier: Factors to multiply transport coefficients
-        by (<= 1.0).
+      H_mode_fraction: Blend weight g in [0, 1] between the unmodified
+        (L-mode) transport (g=0) and the H-mode transport branch (g=1).
     """

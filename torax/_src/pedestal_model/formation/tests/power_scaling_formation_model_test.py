@@ -94,29 +94,29 @@ class PowerScalingFormationModelTest(parameterized.TestCase):
           testcase_name='martin_above_threshold',
           scaling_law='martin',
           power=1e6,
-          expected_multiplier=1e-6,
+          expected_H_mode_fraction=1.0,
       ),
       dict(
           testcase_name='martin_below_threshold',
           scaling_law='martin',
           power=-1e6,
-          expected_multiplier=1.0,
+          expected_H_mode_fraction=0.0,
       ),
       dict(
           testcase_name='delabie_above_threshold',
           scaling_law='delabie',
           power=1e6,
-          expected_multiplier=1e-6,
+          expected_H_mode_fraction=1.0,
       ),
       dict(
           testcase_name='delabie_below_threshold',
           scaling_law='delabie',
           power=-1e6,
-          expected_multiplier=1.0,
+          expected_H_mode_fraction=0.0,
       ),
   )
-  def test_power_scaling_formation_model_suppression(
-      self, scaling_law, power, expected_multiplier
+  def test_power_scaling_formation_model_H_mode_fraction(
+      self, scaling_law, power, expected_H_mode_fraction
   ):
     formation_model = power_scaling_formation_model.PowerScalingFormationModel(
         scaling_law=scaling_law,
@@ -130,23 +130,23 @@ class PowerScalingFormationModelTest(parameterized.TestCase):
         T_i={'aux': aux_power_profile},
     )
 
-    transport_multipliers = formation_model(
+    H_mode_fraction = formation_model(
         self.runtime_params,
         self.initial_state.geometry,
         self.initial_state.core_profiles,
         high_power_profiles,
         pedestal_transition_state_lib.PedestalTransitionState.empty_L_mode(),
     )
-    for k, multiplier in dataclasses.asdict(transport_multipliers).items():
-      np.testing.assert_allclose(
-          multiplier,
-          expected_multiplier,
-          atol=1e-3,
-          err_msg=(
-              f'{k}={multiplier} is not close to the expected value of'
-              f' {expected_multiplier} for scaling law {scaling_law}.'
-          ),
-      )
+    np.testing.assert_allclose(
+        H_mode_fraction,
+        expected_H_mode_fraction,
+        atol=1e-3,
+        err_msg=(
+            f'H_mode_fraction={H_mode_fraction} is not close to the expected'
+            f' value of {expected_H_mode_fraction} for scaling law'
+            f' {scaling_law}.'
+        ),
+    )
 
   @parameterized.named_parameters(
       dict(
@@ -289,14 +289,14 @@ class PowerScalingFormationModelTest(parameterized.TestCase):
       with mock.patch.object(scaling_laws, 'calculate_P_LH') as mock_calc_p_lh:
         mock_calc_p_lh.return_value = (jnp.array(target_P_LH), None)
 
-        multiplier_l_mode = formation_model(
+        H_mode_fraction_l_mode = formation_model(
             runtime_params,
             self.initial_state.geometry,
             self.initial_state.core_profiles,
             self.initial_state.core_sources,
             l_mode_state,
         )
-        multiplier_h_mode = formation_model(
+        H_mode_fraction_h_mode = formation_model(
             runtime_params,
             self.initial_state.geometry,
             self.initial_state.core_profiles,
@@ -305,11 +305,11 @@ class PowerScalingFormationModelTest(parameterized.TestCase):
         )
 
     # In H-mode, the effective P_LH is lower (P_LH * 0.5), so P_SOL is
-    # more likely to be above threshold, meaning the multiplier should be
-    # smaller (more suppression). In L-mode the full P_LH is used.
-    self.assertLess(
-        multiplier_h_mode.chi_e_multiplier,
-        multiplier_l_mode.chi_e_multiplier,
+    # more likely to be above threshold, meaning the H-mode fraction should
+    # be larger (more suppression). In L-mode the full P_LH is used.
+    self.assertGreater(
+        H_mode_fraction_h_mode,
+        H_mode_fraction_l_mode,
     )
 
 
