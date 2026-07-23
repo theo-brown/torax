@@ -61,12 +61,12 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
   @parameterized.named_parameters(
       dict(
           testcase_name='above_target',
-          # T_current >> T_target -> saturation fraction ~1 (saturated).
+          # T_current >> T_target -> saturation fraction ~1 (saturation active).
           T_target_over_T_current=1e-1,
       ),
       dict(
           testcase_name='below_target',
-          # T_current << T_target -> saturation fraction ~0 (not saturated).
+          # T_current << T_target -> saturation fraction ~0 (no saturation).
           T_target_over_T_current=1e1,
       ),
   )
@@ -88,17 +88,20 @@ class FromPedestalModelSaturationModelTest(parameterized.TestCase):
     )
 
     if T_target_over_T_current > 1.0:
-      # Below target: the channel is not saturated.
+      # Below target: the channel is closed (no saturation).
       self.assertLess(float(saturation_fraction.chi_e_saturation_fraction), 0.01)
     else:
-      # Above target: the channel is fully saturated.
+      # Above target: the channel is fully open (saturation active).
       self.assertGreater(float(saturation_fraction.chi_e_saturation_fraction), 0.99)
-    # The saturation fraction is a sigmoid of the relative target deviation.
+    # The saturation fraction is the bounded response of the relative target
+    # deviation.
     saturation_params = self.runtime_params.pedestal.saturation
-    deviation = 1.0 / T_target_over_T_current - 1.0 - saturation_params.offset
     np.testing.assert_allclose(
         saturation_fraction.chi_e_saturation_fraction,
-        jax.nn.sigmoid(deviation * saturation_params.steepness),
+        jax.nn.sigmoid(
+            (1.0 / T_target_over_T_current - 1.0 - saturation_params.offset)
+            / saturation_params.response_width
+        ),
         rtol=1e-6,
     )
 

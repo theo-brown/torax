@@ -15,7 +15,6 @@
 """Saturation model based on deviation from pedestal model."""
 
 import dataclasses
-import jax
 import jax.numpy as jnp
 from torax._src import array_typing
 from torax._src import constants
@@ -30,7 +29,7 @@ from torax._src.pedestal_model.saturation import base
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class ProfileValueSaturationModel(base.SaturationModel):
-  """Target-based saturation fraction: sigmoid of current/target - 1.
+  """Target-based saturation: proximity is current / target - 1 per channel.
 
   The heat channels sense T_e and T_i at the pedestal-top face against the
   pedestal model's targets. Suitable for pedestal models that prescribe
@@ -44,7 +43,7 @@ class ProfileValueSaturationModel(base.SaturationModel):
       core_profiles: state.CoreProfiles,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
   ) -> base.SaturationFraction:
-    """Calculates the saturation fraction of each channel from its target deviation."""
+    """Calculates the saturation fraction of each channel from its deviation."""
     # Get the current profile values at the pedestal top.
     # Interpolating to get the values at exactly rho_norm_ped_top is difficult,
     # as the gradients in the pedestal and the core are very different and are
@@ -63,13 +62,11 @@ class ProfileValueSaturationModel(base.SaturationModel):
     saturation_params = runtime_params.pedestal.saturation
 
     def saturation_fraction(current, target):
-      # Guard against zero targets (e.g. the set_pedestal=False fallback
-      # output carries all-zero targets); without this the deviation is inf
-      # and can poison downstream jnp.where branches with NaNs under
-      # differentiation, even though the resulting fraction is masked out.
-      safe_target = jnp.maximum(target, constants.CONSTANTS.eps)
-      deviation = (current - safe_target) / safe_target - saturation_params.offset
-      return jax.nn.sigmoid(deviation * saturation_params.steepness)
+      return base.bounded_response(
+          _relative_deviation(current, target),
+          saturation_params.offset,
+          saturation_params.response_width,
+      )
 
     chi_e_saturation_fraction = saturation_fraction(
         current_T_e_ped_top, pedestal_output.T_e_ped
@@ -83,3 +80,17 @@ class ProfileValueSaturationModel(base.SaturationModel):
         # based on n_e_ped. In testing, we found this could be unstable.
         D_e_saturation_fraction=chi_e_saturation_fraction,
     )
+
+
+def _relative_deviation(
+    current: array_typing.FloatScalar,
+    target: array_typing.FloatScalar,
+) -> array_typing.FloatScalar:
+  """Returns current / target - 1, guarding against zero targets.
+
+  The set_pedestal=False fallback output carries all-zero targets; an inf
+  deviation there can poison downstream jnp.where branches with NaNs under
+  differentiation, even though the resulting response is masked out.
+  """
+  safe_target = jnp.maximum(target, constants.CONSTANTS.eps)
+  return (current - safe_target) / safe_target

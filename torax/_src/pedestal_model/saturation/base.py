@@ -22,6 +22,7 @@ import jax
 from jax import numpy as jnp
 from torax._src import array_typing
 from torax._src import jax_utils
+from torax._src import math_utils
 from torax._src import state
 from torax._src import static_dataclass
 from torax._src.config import runtime_params as runtime_params_lib
@@ -31,21 +32,42 @@ if typing.TYPE_CHECKING:
   from torax._src.pedestal_model import pedestal_model_output
 
 
+def bounded_response(
+    proximity: array_typing.FloatScalar,
+    offset: array_typing.FloatScalar,
+    response_width: array_typing.FloatScalar,
+) -> array_typing.FloatScalar:
+  """Shared bounded response mapping a proximity-to-limit value to a
+  saturation fraction.
+
+  r = sigmoid((proximity - offset) / response_width). Saturation models should
+  map their sensed proximity through this response (mirroring the formation
+  model applying its trigger sigmoid via the same
+  `math_utils.bounded_sigmoid_response`), so that every saturation model
+  produces the same bounded, solver-friendly transport sensitivity.
+  """
+  return math_utils.bounded_sigmoid_response(
+      proximity, offset, 1.0 / response_width
+  )
+
+
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, eq=False)
 class SaturationFraction:
-  """Per-channel saturation fraction from a saturation model.
+  """Per-channel saturation fraction values from a saturation model.
 
-  Each value is bounded in (0, 1), mirroring the formation model's H-mode
-  fraction: 0 far below the limit the saturation model regulates towards, 1
-  at or beyond it (see `SaturationModel`).
+  Each saturation fraction r is in (0, 1): 0 with the channel fully
+  suppressed (far below the limit the saturation model regulates towards), 1
+  fully open (see `SaturationModel`).
 
   Attributes:
     chi_i_saturation_fraction: Saturation fraction of the ion heat channel.
     chi_e_saturation_fraction: Saturation fraction of the electron heat
       channel.
     D_e_saturation_fraction: Saturation fraction of the particle diffusivity
-      channel.
+      channel. There is deliberately no pinch saturation fraction: raising D
+      alone shifts the steady-state v/D ratio and thus controls the pedestal
+      density height, which common D and v scaling would not.
   """
 
   chi_i_saturation_fraction: array_typing.FloatScalar
@@ -54,6 +76,7 @@ class SaturationFraction:
 
   @classmethod
   def default(cls):
+    """Fully suppressed: the H-mode branch floors to its residual."""
     return cls(
         chi_i_saturation_fraction=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         chi_e_saturation_fraction=jnp.array(0.0, dtype=jax_utils.get_dtype()),
@@ -67,9 +90,10 @@ class SaturationModel(static_dataclass.StaticDataclass, abc.ABC):
 
   A saturation model senses how close the pedestal is to the limit it
   regulates towards (a prescribed pedestal-top target, a stability
-  boundary, ...) and returns a bounded (0, 1) saturation fraction per
-  transport channel, mirroring how a formation model returns the H-mode
-  fraction.
+  boundary, ...) as a dimensionless proximity-to-limit value per transport
+  channel (0 at the limit, negative below it), and maps each through the
+  shared `bounded_response` to the returned per-channel saturation
+  fraction. Models choose what is sensed, not the response shape.
   """
 
   @abc.abstractmethod
@@ -89,6 +113,5 @@ class SaturationModel(static_dataclass.StaticDataclass, abc.ABC):
       pedestal_output: Output from the pedestal model implementation.
 
     Returns:
-      Per-channel saturation fraction values in (0, 1): 0 far below the
-      limit being regulated towards, 1 at or beyond it.
+      Per-channel saturation fraction values in (0, 1).
     """

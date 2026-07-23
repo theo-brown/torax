@@ -45,73 +45,6 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
   formation_model: formation_base.FormationModel
   saturation_model: saturation_base.SaturationModel
 
-  def compute_transport_multipliers(
-      self,
-      runtime_params: runtime_params_lib.RuntimeParams,
-      geo: geometry.Geometry,
-      core_profiles: state.CoreProfiles,
-      source_profiles: source_profiles_lib.SourceProfiles,
-      pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
-      pedestal_output: pedestal_model_output.PedestalModelOutput,
-  ) -> pedestal_model_output.TransportMultipliers:
-    """Computes transport multipliers from formation and saturation models.
-
-    Both the formation model's H-mode fraction and the saturation model's
-    per-channel saturation fractions are bounded in (0, 1). Each is mapped to
-    a multiplier by the same affine remap between 1 (channel unaffected) and
-    that model's base_multiplier (channel fully affected); the two
-    multipliers are then combined multiplicatively.
-    """
-
-    H_mode_fraction = self.formation_model(
-        runtime_params,
-        geo,
-        core_profiles,
-        source_profiles,
-        pedestal_transition_state,
-    )
-    saturation_fractions = self.saturation_model(
-        runtime_params, geo, core_profiles, pedestal_output
-    )
-
-    def to_multiplier(fraction, base_multiplier):
-      return (1.0 - fraction) + fraction * base_multiplier
-
-    formation_base_multiplier = runtime_params.pedestal.formation.base_multiplier
-    decrease_multiplier = to_multiplier(H_mode_fraction, formation_base_multiplier)
-    transport_decrease_multiplier = pedestal_model_output.TransportMultipliers(
-        chi_e_multiplier=decrease_multiplier,
-        chi_i_multiplier=decrease_multiplier,
-        D_e_multiplier=decrease_multiplier,
-        v_e_multiplier=decrease_multiplier,
-    )
-
-    saturation_base_multiplier = runtime_params.pedestal.saturation.base_multiplier
-    # The pinch follows the electron heat channel's saturation fraction.
-    chi_e_increase_multiplier = to_multiplier(
-        saturation_fractions.chi_e_saturation_fraction, saturation_base_multiplier
-    )
-    transport_increase_multiplier = pedestal_model_output.TransportMultipliers(
-        chi_e_multiplier=chi_e_increase_multiplier,
-        chi_i_multiplier=to_multiplier(
-            saturation_fractions.chi_i_saturation_fraction,
-            saturation_base_multiplier,
-        ),
-        D_e_multiplier=to_multiplier(
-            saturation_fractions.D_e_saturation_fraction,
-            saturation_base_multiplier,
-        ),
-        v_e_multiplier=chi_e_increase_multiplier,
-    )
-
-    # Combine via exp(log) for numerical stability, as multipliers can
-    # be very small or large.
-    return jax.tree.map(
-        lambda x, y: jnp.exp(jnp.log(x) + jnp.log(y)),
-        transport_decrease_multiplier,
-        transport_increase_multiplier,
-    )
-
   def _evaluate_pedestal(
       self,
       runtime_params: runtime_params_lib.RuntimeParams,
@@ -124,22 +57,25 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
         runtime_params, geo, core_profiles, pedestal_transition_state,
     )
 
-    # If in ADAPTIVE_TRANSPORT mode, calculate the transport multipliers based
-    # on the formation and saturation models.
+    # If in ADAPTIVE_TRANSPORT mode, calculate the H-mode fraction and
+    # per-channel saturation fraction from the formation and saturation
+    # models (both bounded sigmoids of their respective sensed quantities).
     if (
         runtime_params.pedestal.mode
         == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
     ):
-      transport_multipliers = self.compute_transport_multipliers(
-          runtime_params,
-          geo,
-          core_profiles,
-          source_profiles,
-          pedestal_transition_state,
-          pedestal_output,
-      )
       pedestal_output = dataclasses.replace(
-          pedestal_output, transport_multipliers=transport_multipliers
+          pedestal_output,
+          H_mode_fraction=self.formation_model(
+              runtime_params,
+              geo,
+              core_profiles,
+              source_profiles,
+              pedestal_transition_state,
+          ),
+          saturation_fraction=self.saturation_model(
+              runtime_params, geo, core_profiles, pedestal_output
+          ),
       )
 
     return pedestal_output
