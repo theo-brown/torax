@@ -56,12 +56,24 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
   ) -> pedestal_model_output.TransportMultipliers:
     """Computes transport multipliers from formation and saturation models."""
 
-    transport_decrease = self.formation_model(
+    H_mode_fraction = self.formation_model(
         runtime_params,
         geo,
         core_profiles,
         source_profiles,
         pedestal_transition_state,
+    )
+    # Map the H-mode fraction g in [0, 1] to the transport decrease
+    # multiplier: 1 in L-mode (g=0), base_multiplier in H-mode (g=1).
+    base_multiplier = runtime_params.pedestal.formation.base_multiplier
+    decrease_multiplier = (
+        1.0 - H_mode_fraction
+    ) + H_mode_fraction * base_multiplier
+    transport_decrease = pedestal_model_output.TransportMultipliers(
+        chi_e_multiplier=decrease_multiplier,
+        chi_i_multiplier=decrease_multiplier,
+        D_e_multiplier=decrease_multiplier,
+        v_e_multiplier=decrease_multiplier,
     )
     transport_increase = self.saturation_model(
         runtime_params, geo, core_profiles, pedestal_output
