@@ -170,12 +170,12 @@ class ProfileValueSaturation(torax_pydantic.BaseModelFrozen):
   change the relaxation timescale.
 
   Note that saturation is one-sided within the barrier branch: it can raise
-  transport at most to the chi_max / D_e_max caps, i.e. throttle the pedestal
-  at the target. In particular, the achieved pedestal density cannot exceed
-  what the edge particle fueling (and any inward pinch) can sustain; with
-  insufficient fueling n_e_ped is not reached. Conversely, if the incoming
-  flux exceeds what the caps can exhaust, the profile settles above the
-  target with the barrier fully open.
+  transport at most to the local raw (turbulent) transport level, i.e.
+  throttle the pedestal at the target. In particular, the achieved pedestal
+  density cannot exceed what the edge particle fueling (and any inward pinch)
+  can sustain; with insufficient fueling n_e_ped is not reached. Conversely,
+  if the incoming flux exceeds what that cap can exhaust, the profile settles
+  above the target with the barrier fully open.
 
   Attributes:
     offset: Dimensionless offset of the heat channel saturation response: the
@@ -327,23 +327,16 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
       dW/dt. Excluding dW/dt avoids unphysical dithering during transients.
     formation_model: Configuration for the pedestal formation model.
     saturation_model: Configuration for the pedestal saturation model.
-    chi_max: Heat diffusivity of the ADAPTIVE_TRANSPORT barrier branch at full
-      saturation openness [m^2/s]. Bounds the transport increase the
-      saturation feedback can apply, and hence the throttling authority of
-      the pedestal regulation.
-    D_e_max: Particle diffusivity of the ADAPTIVE_TRANSPORT barrier branch at
-      full saturation openness [m^2/s].
-    chi_residual: Heat diffusivity of the ADAPTIVE_TRANSPORT barrier branch at
-      zero saturation openness [m^2/s]. Represents heat transport that is not
-      suppressed by the edge transport barrier (e.g. ion neoclassical
-      levels); keeping this positive avoids a vanishing diffusivity in the
-      solved equations under full suppression.
-    D_e_residual: Particle diffusivity of the ADAPTIVE_TRANSPORT barrier
-      branch at zero saturation openness [m^2/s]. Represents particle
-      transport that is not suppressed by the edge transport barrier (e.g.
-      neoclassical-scale levels), ensuring particle fueling deposited inside
-      the pedestal region has a finite transport channel even under full
-      suppression.
+
+  The ADAPTIVE_TRANSPORT barrier branch has no free cap/residual parameters:
+  at zero saturation openness (r = 0) each channel's transport sits at the
+  local neoclassical level (chi_neo_i / chi_neo_e / D_neo_e, already computed
+  by the neoclassical model, floored at `constants.CONSTANTS.eps` to avoid a
+  vanishing diffusivity under full suppression); at full openness (r = 1) it
+  reverts to whatever the turbulent transport model already predicts for the
+  current profile at that face. Both bounds are therefore local, machine- and
+  scenario-scaled quantities the existing models already compute, rather than
+  hand-picked absolute diffusivities.
   """
 
   set_pedestal: torax_pydantic.TimeVaryingScalar = (
@@ -371,20 +364,6 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
   )
   saturation_model: SaturationConfig = torax_pydantic.ValidatedDefault(
       ProfileValueSaturation()
-  )
-  # TODO(b/491895183): Do a sweep across different cases to find good default
-  # values for these parameters.
-  chi_max: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
-      1.0
-  )
-  D_e_max: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
-      1.0
-  )
-  chi_residual: torax_pydantic.NonNegativeTimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(0.05)
-  )
-  D_e_residual: torax_pydantic.NonNegativeTimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(0.02)
   )
   pedestal_top_smoothing_width: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.02)
@@ -448,10 +427,6 @@ class BasePedestal(torax_pydantic.BaseModelFrozen, abc.ABC):
         pedestal_profile_form=self.pedestal_profile_form,
         formation=self.formation_model.build_runtime_params(t),
         saturation=self.saturation_model.build_runtime_params(t),
-        chi_max=self.chi_max.get_value(t),
-        D_e_max=self.D_e_max.get_value(t),
-        chi_residual=self.chi_residual.get_value(t),
-        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
@@ -522,10 +497,6 @@ class SetPpedTpedRatioNped(BasePedestal):
         rho_norm_ped_top=self.rho_norm_ped_top.get_value(t),
         formation=base_runtime_params.formation,
         saturation=base_runtime_params.saturation,
-        chi_max=self.chi_max.get_value(t),
-        D_e_max=self.D_e_max.get_value(t),
-        chi_residual=self.chi_residual.get_value(t),
-        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
@@ -591,10 +562,6 @@ class SetTpedNped(BasePedestal):
         rho_norm_ped_top=self.rho_norm_ped_top.get_value(t),
         formation=base_runtime_params.formation,
         saturation=base_runtime_params.saturation,
-        chi_max=self.chi_max.get_value(t),
-        D_e_max=self.D_e_max.get_value(t),
-        chi_residual=self.chi_residual.get_value(t),
-        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
@@ -635,10 +602,6 @@ class NoPedestal(BasePedestal):
         pedestal_profile_form=base_runtime_params.pedestal_profile_form,
         formation=base_runtime_params.formation,
         saturation=base_runtime_params.saturation,
-        chi_max=self.chi_max.get_value(t),
-        D_e_max=self.D_e_max.get_value(t),
-        chi_residual=self.chi_residual.get_value(t),
-        D_e_residual=self.D_e_residual.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),

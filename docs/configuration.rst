@@ -873,15 +873,26 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
 
     .. math::
 
-       \chi_{ped} = (1 - g)\,\chi_{raw} + g\,[\chi_{residual} + r\,(\chi_{max} - \chi_{residual})]
+       \chi_{ped} = (1 - g)\,\chi_{raw} + g\,[\chi_{residual} + r\,(\chi_{cap} - \chi_{residual})]
 
     where the barrier fraction :math:`g \in [0, 1]` is set by the formation
     model (which transport branch is active) and the per-channel barrier
     openness :math:`r \in (0, 1)` is set by the saturation model's
     proximity-to-limit signal through a shared sigmoid response (position
-    within the barrier branch). The particle channel uses ``D_e_residual``
-    and ``D_e_max`` analogously; the turbulent pinch is suppressed to zero
-    within the barrier branch.
+    within the barrier branch). Neither :math:`\chi_{residual}` nor
+    :math:`\chi_{cap}` is a free parameter: :math:`\chi_{residual}` is the
+    local neoclassical heat diffusivity (already computed independently by
+    the neoclassical model, floored at a small epsilon to avoid a vanishing
+    diffusivity under full suppression), and :math:`\chi_{cap} =
+    \max(\chi_{raw}, \chi_{residual})` is the local raw (turbulent)
+    diffusivity itself, so a fully open barrier reverts exactly to whatever
+    the turbulence model already predicts for the current profile. The
+    particle channel is defined analogously from :math:`D_{neo,e}` and the
+    raw :math:`D_e`; the turbulent pinch is suppressed to zero within the
+    barrier branch. Because both bounds are local quantities the
+    neoclassical and turbulent transport models already compute, the
+    barrier's throttling authority is automatically scaled to the machine
+    and scenario rather than needing to be hand-tuned.
 
 ``use_formation_model_with_internal_boundary_condition`` (bool [default = False])
   Only applicable when ``mode`` is ``'INTERNAL_BOUNDARY_CONDITION'``. When True, enables
@@ -1003,7 +1014,7 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
     saturation is one-sided: it can only throttle the pedestal at the target,
     so the achieved pedestal density is limited by the available edge
     particle fueling (and any inward pinch), and the throttling authority is
-    bounded by ``chi_max`` / ``D_e_max``.
+    bounded by the local raw (turbulent) transport level (see ``mode`` above).
     Additional parameters:
 
     * ``offset`` (float [default = 0.0]): Relative deviation from target at
@@ -1046,32 +1057,14 @@ top. These models will only be used if the ``set_pedestal`` flag is set to True.
   Width of the smoothing region at the pedestal top boundary, in units of
   :math:`\hat{\rho}`.
 
-``chi_max`` (**time-varying-scalar** [default = 1.0])
-  Heat diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch at
-  full saturation openness [m^2/s]. Bounds the transport increase the
-  saturation feedback can apply, and hence the throttling authority of the
-  pedestal regulation.
+.. note::
 
-``D_e_max`` (**time-varying-scalar** [default = 1.0])
-  Particle diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch
-  at full saturation openness [m^2/s].
-
-``chi_residual`` (**time-varying-scalar** [default = 0.05])
-  Heat diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch at
-  zero saturation openness [m^2/s]. Represents heat transport that is not
-  suppressed by the edge transport barrier (e.g. ion neoclassical levels);
-  keeping this positive avoids a vanishing diffusivity in the solved equations
-  under full suppression.
-
-``D_e_residual`` (**time-varying-scalar** [default = 0.02])
-  Particle diffusivity of the ``ADAPTIVE_TRANSPORT`` barrier transport branch
-  at zero saturation openness [m^2/s]. Represents particle transport that is
-  not suppressed by the edge transport barrier (e.g. neoclassical-scale
-  levels), ensuring that particle fueling deposited inside the pedestal region
-  has a finite transport channel even under full suppression. Important when
-  density evolution is enabled with edge fueling: with a value of 0, fueling
-  deposited inside a fully suppressed pedestal has no transport channel and
-  accumulates without bound.
+  ``ADAPTIVE_TRANSPORT`` mode has no configurable cap/residual parameters
+  for the barrier branch. As described under ``mode`` above, the residual
+  (zero saturation openness) is the local neoclassical transport level and
+  the cap (full saturation openness) is the local raw (turbulent) transport
+  level, both already computed by the neoclassical and turbulent transport
+  models for the current profile, machine, and scenario.
 
 The following ``model_name`` options are currently supported:
 

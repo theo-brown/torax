@@ -75,7 +75,23 @@ class PedestalModelOutputTest(absltest.TestCase):
           jnp.sum(ibc.n_e), self.pedestal_model_output.n_e_ped
       )
 
-  def _make_uniform_core_transport(self, value=1.0):
+  def _make_uniform_core_transport(
+      self, value=1.0, chi_neo=None, D_neo=None
+  ):
+    """Builds a uniform CoreTransport.
+
+    Args:
+      value: Uniform value for the raw (turbulent) fields, including the
+        diagnostic components and Pereverzev pairs.
+      chi_neo: Uniform value for chi_neo_i / chi_neo_e (the barrier residual
+        floor for the heat channels). Defaults to `value` when unspecified.
+      D_neo: Uniform value for D_neo_e (the barrier residual floor for the
+        particle channel). Defaults to `value` when unspecified.
+    """
+    if chi_neo is None:
+      chi_neo = value
+    if D_neo is None:
+      D_neo = value
     n_face = self.geo.rho_face_norm.shape[0]
     return state.CoreTransport(
         chi_face_ion=value * jnp.ones(n_face),
@@ -95,9 +111,9 @@ class PedestalModelOutputTest(absltest.TestCase):
         d_face_el_tem=value * jnp.ones(n_face),
         v_face_el_itg=value * jnp.ones(n_face),
         v_face_el_tem=value * jnp.ones(n_face),
-        chi_neo_i=value * jnp.ones(n_face),
-        chi_neo_e=value * jnp.ones(n_face),
-        D_neo_e=value * jnp.ones(n_face),
+        chi_neo_i=chi_neo * jnp.ones(n_face),
+        chi_neo_e=chi_neo * jnp.ones(n_face),
+        D_neo_e=D_neo * jnp.ones(n_face),
         V_neo_e=value * jnp.ones(n_face),
         V_neo_ware_e=value * jnp.ones(n_face),
         chi_face_ion_pereverzev=value * jnp.ones(n_face),
@@ -112,10 +128,6 @@ class PedestalModelOutputTest(absltest.TestCase):
     pedestal_runtime_params = mock.create_autospec(
         pedestal_runtime_params_lib.RuntimeParams, instance=True
     )
-    pedestal_runtime_params.chi_max = jnp.array(1.0)
-    pedestal_runtime_params.D_e_max = jnp.array(1.0)
-    pedestal_runtime_params.chi_residual = jnp.array(0.05)
-    pedestal_runtime_params.D_e_residual = jnp.array(0.02)
     pedestal_runtime_params.pedestal_top_smoothing_width = jnp.array(0.0)
     return pedestal_runtime_params
 
@@ -134,7 +146,12 @@ class PedestalModelOutputTest(absltest.TestCase):
     )
 
   def test_modify_core_transport_applies_barrier_blend(self):
-    core_transport = self._make_uniform_core_transport(value=1.0)
+    # Raw (turbulent) fields at 1.0; neoclassical residual floors at 0.05
+    # (heat channels) / 0.02 (particle channel), so cap = max(1.0, floor) =
+    # 1.0 for all three channels.
+    core_transport = self._make_uniform_core_transport(
+        value=1.0, chi_neo=0.05, D_neo=0.02
+    )
     pedestal_runtime_params = self._make_pedestal_runtime_params()
 
     modified_core_transport = self.pedestal_model_output.modify_core_transport(
@@ -146,7 +163,8 @@ class PedestalModelOutputTest(absltest.TestCase):
 
     # The barrier fraction is 1, so in the pedestal region the total
     # coefficients equal the barrier branch residual + r * (cap - residual)
-    # with per-channel openness r (chi_i: 0.25, chi_e: 0.5, D_e: 0.75).
+    # with per-channel openness r (chi_i: 0.25, chi_e: 0.5, D_e: 0.75), cap
+    # = max(raw, residual) and residual = the local neoclassical level.
     def expected_barrier(openness, cap, residual):
       return residual + openness * (cap - residual)
 
@@ -253,8 +271,8 @@ class PedestalModelOutputTest(absltest.TestCase):
     modified = output.modify_core_transport(
         core_transport, self.geo, pedestal_runtime_params
     )
-    # Even though the coefficient (3.0) exceeds chi_max (1.0), no cap is
-    # applied when the barrier fraction is 0 (L-mode branch is unclipped).
+    # No cap/residual blend is applied at all when the barrier fraction is 0
+    # (the L-mode branch is unmodified).
     np.testing.assert_allclose(modified.chi_face_ion, 3.0)
     np.testing.assert_allclose(modified.chi_face_el, 3.0)
     np.testing.assert_allclose(modified.d_face_el, 3.0)
@@ -264,10 +282,11 @@ class PedestalModelOutputTest(absltest.TestCase):
     """chi is a continuous function of the barrier fraction.
 
     The blend is linear in g, so sweeping g from 0 (L-mode) to 1 (barrier)
-    with a raw coefficient well above the barrier cap must change chi
-    continuously, with no jumps.
+    must change chi continuously, with no jumps, even though the barrier
+    branch spans the full range from the neoclassical residual floor up to
+    the raw (turbulent) coefficient.
     """
-    core_transport = self._make_uniform_core_transport(value=5.0)
+    core_transport = self._make_uniform_core_transport(value=5.0, chi_neo=0.05)
     pedestal_runtime_params = self._make_pedestal_runtime_params()
 
     fractions = np.linspace(0.0, 1.0, 401)
@@ -281,7 +300,7 @@ class PedestalModelOutputTest(absltest.TestCase):
       chi_values.append(float(modified.chi_face_ion[ped_top_idx]))
     chi_values = np.array(chi_values)
 
-    # The full swing over the sweep is large (raw 5 vs barrier ~0.5), but
+    # The full swing over the sweep is large (raw 5.0 vs barrier ~2.5), but
     # each step must be a small fraction of the swing: no jumps.
     total_swing = np.max(chi_values) - np.min(chi_values)
     max_step = np.max(np.abs(np.diff(chi_values)))
@@ -289,10 +308,11 @@ class PedestalModelOutputTest(absltest.TestCase):
     self.assertLess(max_step, 0.05 * total_swing)
 
     # At g = 0 the coefficient is untouched; at g = 1 it is the barrier
-    # branch value, independent of the raw coefficient.
+    # branch value: residual + r * (cap - residual), with cap = max(raw,
+    # residual) = 5.0 and residual = 0.05.
     np.testing.assert_allclose(chi_values[0], 5.0, rtol=1e-6)
     np.testing.assert_allclose(
-        chi_values[-1], 0.05 + 0.5 * (1.0 - 0.05), rtol=1e-6
+        chi_values[-1], 0.05 + 0.5 * (5.0 - 0.05), rtol=1e-6
     )
 
   def test_modify_core_transport_preserves_pereverzev_cancellation(self):
@@ -346,11 +366,15 @@ class PedestalModelOutputTest(absltest.TestCase):
         )
 
   def test_residual_floors_apply_under_full_suppression(self):
-    """At g=1, r=0 the barrier transport equals the residual floors."""
-    core_transport = self._make_uniform_core_transport(value=1.0)
+    """At g=1, r=0 the barrier transport sits at the local neoclassical floor.
+
+    At g=1, r=1 it reverts to the raw (turbulent) coefficient itself: the cap
+    is not an externally chosen constant.
+    """
+    core_transport = self._make_uniform_core_transport(
+        value=1.0, chi_neo=0.07, D_neo=0.5
+    )
     pedestal_runtime_params = self._make_pedestal_runtime_params()
-    pedestal_runtime_params.chi_residual = jnp.array(0.07)
-    pedestal_runtime_params.D_e_residual = jnp.array(0.5)
     pedestal_mask = self.geo.rho_face_norm > 0.5
 
     with self.subTest('closed_barrier_sits_at_residuals'):
@@ -369,21 +393,18 @@ class PedestalModelOutputTest(absltest.TestCase):
       # Outside the region: untouched.
       np.testing.assert_allclose(modified.d_face_el[~pedestal_mask], 1.0)
 
-    with self.subTest('open_barrier_reaches_caps'):
-      # At r=1 the barrier transport equals the caps, independent of the raw
-      # coefficient: the saturation authority is bounded by chi_max/D_e_max.
+    with self.subTest('open_barrier_reverts_to_raw_coefficient'):
+      # At r=1 the barrier transport equals the cap, which is max(raw,
+      # residual) = the raw coefficient itself (1.0) here, independent of how
+      # large the residual floors are.
       modified = self._make_output(
           barrier_fraction=1.0, openness=1.0
       ).modify_core_transport(core_transport, self.geo, pedestal_runtime_params)
       np.testing.assert_allclose(
-          modified.chi_face_ion[pedestal_mask],
-          pedestal_runtime_params.chi_max,
-          rtol=1e-6,
+          modified.chi_face_ion[pedestal_mask], 1.0, rtol=1e-6
       )
       np.testing.assert_allclose(
-          modified.d_face_el[pedestal_mask],
-          pedestal_runtime_params.D_e_max,
-          rtol=1e-6,
+          modified.d_face_el[pedestal_mask], 1.0, rtol=1e-6
       )
 
     with self.subTest('zero_barrier_fraction_ignores_residuals'):
@@ -391,6 +412,32 @@ class PedestalModelOutputTest(absltest.TestCase):
           barrier_fraction=0.0, openness=0.0
       ).modify_core_transport(core_transport, self.geo, pedestal_runtime_params)
       np.testing.assert_allclose(modified.d_face_el, 1.0)
+
+  def test_cap_clamps_to_residual_when_raw_is_below_it(self):
+    """The cap never falls below the residual, even if raw transport does.
+
+    If the raw (turbulent) coefficient dips below the local neoclassical
+    floor, cap = max(raw, residual) clamps to the residual, so the barrier
+    branch collapses to a flat residual value (no throttling authority)
+    rather than inverting the sign of (cap - residual).
+    """
+    core_transport = self._make_uniform_core_transport(
+        value=0.01, chi_neo=0.07, D_neo=0.02
+    )
+    pedestal_runtime_params = self._make_pedestal_runtime_params()
+    pedestal_mask = self.geo.rho_face_norm > 0.5
+
+    for openness in (0.0, 0.5, 1.0):
+      modified = self._make_output(
+          barrier_fraction=1.0, openness=openness
+      ).modify_core_transport(core_transport, self.geo, pedestal_runtime_params)
+      with self.subTest(openness=openness):
+        np.testing.assert_allclose(
+            modified.chi_face_ion[pedestal_mask], 0.07, rtol=1e-6
+        )
+        np.testing.assert_allclose(
+            modified.d_face_el[pedestal_mask], 0.02, rtol=1e-6
+        )
 
   def test_to_internal_boundary_conditions_tanh_profiles(self):
     """Tests mtanh-shaped IBC when pedestal_profile_form=MTANH."""

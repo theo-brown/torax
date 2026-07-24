@@ -73,6 +73,15 @@ class BarrierState:
   both are bounded in [0, 1]: the solver residual has no large-gain product
   terms.
 
+  Neither residual nor cap is a free parameter: residual is the local
+  neoclassical transport level (already computed independently by the
+  neoclassical model), and cap is the local raw (turbulent) transport level
+  coeff_raw itself, i.e. a fully open barrier (r = 1) reverts exactly to
+  whatever the turbulence model already predicts for the current profile at
+  that face. Both bounds are therefore machine- and profile-scaled quantities
+  the existing models already compute, rather than hand-picked absolute
+  diffusivities.
+
   Attributes:
     barrier_fraction: Blend weight g in [0, 1] between the unmodified
       transport (g=0, L-mode) and the barrier transport branch (g=1, fully
@@ -339,11 +348,17 @@ class PedestalModelOutput:
       coeff_ped = (1 - g) * coeff_raw + g * (residual + r * (cap - residual))
 
     where g is the barrier fraction (formation), r is the per-channel barrier
-    openness (saturation response), residual is the transport not suppressed
-    by the barrier (chi_residual / D_e_residual; zero for the pinch) and cap
-    is the barrier transport at full openness (chi_max / D_e_max). Transport
-    coefficients from neoclassical and pedestal transport models are not
-    affected.
+    openness (saturation response), residual is the local neoclassical
+    transport level (chi_neo_i / chi_neo_e / D_neo_e, floored at
+    constants.CONSTANTS.eps; zero for the pinch) and cap is
+    max(coeff_raw, residual): the local raw (turbulent) transport level for
+    that channel, i.e. a fully open barrier reverts exactly to whatever the
+    turbulence model already predicts for the current profile. Neither bound
+    is a hand-picked constant: both are local, machine- and profile-scaled
+    quantities the neoclassical and turbulent transport models already
+    compute, so the barrier's throttling authority is not something that
+    needs re-tuning per device or scenario. Transport coefficients from
+    neoclassical and pedestal transport models are not otherwise affected.
 
     Both g and r are bounded in [0, 1] and the blend is linear in each, so the
     modified coefficients are smooth functions of the profiles (through the
@@ -383,8 +398,17 @@ class PedestalModelOutput:
     barrier = self.barrier_state
     g = barrier.barrier_fraction
 
-    def barrier_blend(coeff, openness, cap, residual):
-      """Blend between the raw coefficient and the barrier branch."""
+    def barrier_blend(coeff, openness, residual):
+      """Blend between the raw coefficient and the barrier branch.
+
+      The cap is max(coeff, residual): the local raw (turbulent) transport
+      level for this channel, so a fully open barrier (openness=1) reverts
+      exactly to the turbulence model's own prediction rather than an
+      externally chosen constant. Clamping at residual guards against the
+      (rare) case where the raw level dips below the neoclassical floor,
+      which would otherwise invert the sign of (cap - residual).
+      """
+      cap = jnp.maximum(coeff, residual)
       barrier_coeff = residual + openness * (cap - residual)
       return (1.0 - g) * coeff + g * barrier_coeff
 
@@ -401,30 +425,23 @@ class PedestalModelOutput:
       name = key.name if hasattr(key, "name") else str(key).lstrip(".")
 
       if name == _CHI_I_TOTAL_FIELD:
-        modified_coeff = barrier_blend(
-            coeff,
-            barrier.chi_i_openness,
-            pedestal_runtime_params.chi_max,
-            pedestal_runtime_params.chi_residual,
+        residual = jnp.maximum(
+            core_transport.chi_neo_i, constants.CONSTANTS.eps
         )
+        modified_coeff = barrier_blend(coeff, barrier.chi_i_openness, residual)
       elif name == _CHI_E_TOTAL_FIELD:
-        modified_coeff = barrier_blend(
-            coeff,
-            barrier.chi_e_openness,
-            pedestal_runtime_params.chi_max,
-            pedestal_runtime_params.chi_residual,
+        residual = jnp.maximum(
+            core_transport.chi_neo_e, constants.CONSTANTS.eps
         )
+        modified_coeff = barrier_blend(coeff, barrier.chi_e_openness, residual)
       elif name == _D_E_TOTAL_FIELD:
-        # D_e_residual represents particle transport that is not suppressed
-        # by the edge transport barrier (e.g. neoclassical-scale), ensuring
-        # fueling deposited in the pedestal region has a finite transport
-        # channel even under full suppression.
-        modified_coeff = barrier_blend(
-            coeff,
-            barrier.D_e_openness,
-            pedestal_runtime_params.D_e_max,
-            pedestal_runtime_params.D_e_residual,
+        # The residual floor is the local neoclassical particle diffusivity,
+        # ensuring fueling deposited in the pedestal region has a finite
+        # transport channel even under full suppression.
+        residual = jnp.maximum(
+            core_transport.D_neo_e, constants.CONSTANTS.eps
         )
+        modified_coeff = barrier_blend(coeff, barrier.D_e_openness, residual)
       elif name == _V_E_TOTAL_FIELD:
         # The turbulent pinch is suppressed to zero within the barrier branch
         # and has no saturation openness (see BarrierSignals.D_e_signal for

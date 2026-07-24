@@ -143,22 +143,6 @@ class RuntimeParams:
       core_profiles.
     formation: Runtime params for the formation model.
     saturation: Runtime params for the saturation model.
-    chi_max: Heat diffusivity of the barrier transport branch at full
-      saturation openness (r = 1) [m^2/s]. Bounds the transport increase the
-      saturation feedback can apply, and hence the throttling authority of the
-      pedestal regulation.
-    D_e_max: Particle diffusivity of the barrier transport branch at full
-      saturation openness (r = 1) [m^2/s].
-    chi_residual: Heat diffusivity of the barrier transport branch at zero
-      saturation openness (r = 0) [m^2/s]. Represents heat transport that is
-      not suppressed by the edge transport barrier (e.g. ion neoclassical
-      levels); keeping this positive avoids a vanishing diffusivity in the
-      solved equations under full suppression.
-    D_e_residual: Particle diffusivity of the barrier transport branch at zero
-      saturation openness (r = 0) [m^2/s]. Represents particle transport that
-      is not suppressed by the edge transport barrier (e.g. neoclassical-scale
-      levels), ensuring that particle fueling deposited inside the pedestal
-      region has a finite transport channel even under full suppression.
     pedestal_top_smoothing_width: Width of the smoothing kernel at the pedestal
       top.
   """
@@ -177,8 +161,4 @@ class RuntimeParams:
   )
   formation: FormationRuntimeParams
   saturation: SaturationRuntimeParams
-  chi_max: array_typing.FloatScalar
-  D_e_max: array_typing.FloatScalar
-  chi_residual: array_typing.FloatScalar
-  D_e_residual: array_typing.FloatScalar
   pedestal_top_smoothing_width: array_typing.FloatScalar
