@@ -51,6 +51,42 @@ def calculate_main_ion_dilution_factor(
   return (Z_impurity - Z_eff) / (Z_i * (Z_impurity - Z_i))
 
 
+def calc_ballooning_alpha_face(
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+) -> array_typing.FloatVectorFace:
+  r"""Calculates the s-alpha normalized pressure gradient on the face grid.
+
+  The standard ballooning parameter of the s-alpha model:
+
+  .. math::
+      \alpha = -\frac{2 \mu_0 q^2 R_0}{B_0^2} \frac{dp}{dr}
+
+  where :math:`p` is the total thermal pressure and the radial coordinate is
+  the midplane-average minor radius, consistent with the circular-geometry
+  assumption underlying the s-alpha model.
+
+  Args:
+    geo: Geometry of the torus.
+    core_profiles: Core plasma profiles.
+
+  Returns:
+    alpha on the face grid (positive for normal, outward-decreasing pressure).
+  """
+  rmid = (geo.R_out - geo.R_in) * 0.5
+  dp_dr = core_profiles.pressure_thermal_total.face_grad(
+      x=rmid, x_left=geo.r_mid_face[0], x_right=geo.r_mid_face[-1]
+  )
+  return (
+      -2.0
+      * constants.CONSTANTS.mu_0
+      * core_profiles.q_face**2
+      * geo.R_major
+      / geo.B_0**2
+      * dp_dr
+  )
+
+
 def calc_pprime(
     core_profiles: state.CoreProfiles,
 ) -> array_typing.FloatVector:

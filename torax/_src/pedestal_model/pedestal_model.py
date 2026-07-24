@@ -45,7 +45,7 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
   formation_model: formation_base.FormationModel
   saturation_model: saturation_base.SaturationModel
 
-  def compute_transport_multipliers(
+  def compute_barrier_state(
       self,
       runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
@@ -53,26 +53,55 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
       source_profiles: source_profiles_lib.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
       pedestal_output: pedestal_model_output.PedestalModelOutput,
-  ) -> pedestal_model_output.TransportMultipliers:
-    """Computes transport multipliers from formation and saturation models."""
+  ) -> pedestal_model_output.BarrierState:
+    """Computes the barrier state from the formation and saturation models.
 
-    transport_decrease = self.formation_model(
+    The formation model provides the barrier fraction g (which transport
+    branch is active); the saturation model provides per-channel
+    proximity-to-limit signals, mapped here by the shared bounded response
+
+      r = sigmoid((x - offset) / response_width)
+
+    to the barrier openness of each channel (position within the barrier
+    branch). The response is shared across saturation models: they choose the
+    signal (profile-target deviation, stability-boundary proximity, ...), not
+    the response shape, so every saturation signal produces the same bounded,
+    solver-friendly transport sensitivity.
+    """
+
+    barrier_fraction = self.formation_model(
         runtime_params,
         geo,
         core_profiles,
         source_profiles,
         pedestal_transition_state,
     )
-    transport_increase = self.saturation_model(
+    signals = self.saturation_model(
         runtime_params, geo, core_profiles, pedestal_output
     )
 
-    # Combine via exp(log) for numerical stability, as multipliers can
-    # be very small or large.
-    return jax.tree.map(
-        lambda x, y: jnp.exp(jnp.log(x) + jnp.log(y)),
-        transport_decrease,
-        transport_increase,
+    saturation_params = runtime_params.pedestal.saturation
+
+    def response(signal, offset, width):
+      return jax.nn.sigmoid((signal - offset) / width)
+
+    return pedestal_model_output.BarrierState(
+        barrier_fraction=barrier_fraction,
+        chi_i_openness=response(
+            signals.chi_i_signal,
+            saturation_params.offset,
+            saturation_params.response_width,
+        ),
+        chi_e_openness=response(
+            signals.chi_e_signal,
+            saturation_params.offset,
+            saturation_params.response_width,
+        ),
+        D_e_openness=response(
+            signals.D_e_signal,
+            saturation_params.density_offset,
+            saturation_params.density_response_width,
+        ),
     )
 
   def _evaluate_pedestal(
@@ -87,13 +116,13 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
         runtime_params, geo, core_profiles, pedestal_transition_state,
     )
 
-    # If in ADAPTIVE_TRANSPORT mode, calculate the transport multipliers based
-    # on the formation and saturation models.
+    # If in ADAPTIVE_TRANSPORT mode, calculate the barrier state based on the
+    # formation and saturation models.
     if (
         runtime_params.pedestal.mode
         == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
     ):
-      transport_multipliers = self.compute_transport_multipliers(
+      barrier_state = self.compute_barrier_state(
           runtime_params,
           geo,
           core_profiles,
@@ -102,7 +131,7 @@ class PedestalModel(static_dataclass.StaticDataclass, abc.ABC):
           pedestal_output,
       )
       pedestal_output = dataclasses.replace(
-          pedestal_output, transport_multipliers=transport_multipliers
+          pedestal_output, barrier_state=barrier_state
       )
 
     return pedestal_output
