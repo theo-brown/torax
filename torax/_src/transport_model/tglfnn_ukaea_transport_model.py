@@ -21,6 +21,7 @@ from typing import Literal
 from fusion_surrogates.tglfnn_ukaea import tglfnn_ukaea_model
 import jax
 import jax.numpy as jnp
+import tglfnn_ukaea as tglfnn_ukaea_lib
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
@@ -29,12 +30,42 @@ from torax._src.transport_model import tglf_based_transport_model
 from torax._src.transport_model import transport_model as transport_model_lib
 
 
+# Inputs whose training-space bounds are recorded in log10 in the checkpoint
+# but which are fed to the network in linear units.
+_LOG10_SAMPLED_INPUTS = ('XNUE', 'BETAE')
+
+
 # pylint: disable=invalid-name
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class RuntimeParams(tglf_based_transport_model.RuntimeParams):
-  # Left blank for future extension: bool
-  pass
+  """Runtime parameters for the TGLFNN-ukaea transport model.
+
+  Attributes:
+    clip_inputs: Whether to clip the network inputs to the training-set
+      bounds recorded in the model checkpoint before inference, avoiding
+      uncontrolled extrapolation outside the training hypercube.
+    clip_margin: Margin for the clipping, with the same semantics as the
+      qlknn model's `clip_margin`: bounds are shrunk towards zero by
+      `|bound| * (1 - clip_margin)`.
+  """
+
+  clip_inputs: bool
+  clip_margin: float
+
+
+def clip_inputs_to_bounds(
+    feature_tensor: jax.Array,
+    clip_margin: float,
+    input_bounds: tuple[tuple[float, float], ...],
+) -> jax.Array:
+  """Clips network inputs to the training-set bounds + optional margin."""
+  bounds = jnp.asarray(input_bounds)
+  min_vals = bounds[:, 0]
+  max_vals = bounds[:, 1]
+  min_vals += jnp.abs(min_vals) * (1 - clip_margin)
+  max_vals -= jnp.abs(max_vals) * (1 - clip_margin)
+  return jnp.clip(feature_tensor, min_vals, max_vals)
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -47,6 +78,9 @@ class TGLFNNukaeaTransportModel(
 
   # The following fields are set by __post_init__
   model: tglfnn_ukaea_model.TGLFNNukaeaModel = dataclasses.field(init=False)
+  # Training-set bounds per network input, in the network's input order and
+  # in linear units, read from the checkpoint's recorded parameter space.
+  input_bounds: tuple[tuple[float, float], ...] = dataclasses.field(init=False)
 
   def __post_init__(self):
     # Load weights in post-init, so that they are not reloaded on every call.
@@ -55,6 +89,15 @@ class TGLFNNukaeaTransportModel(
     object.__setattr__(
         self, "model", tglfnn_ukaea_model.TGLFNNukaeaModel(self.machine)
     )
+    checkpoint = tglfnn_ukaea_lib.load(self.machine)
+    param_space = checkpoint["config"]["param_space"]
+    bounds = []
+    for label in checkpoint["input_labels"]:
+      low, high = (float(b) for b in param_space[label])
+      if label in _LOG10_SAMPLED_INPUTS:
+        low, high = 10.0**low, 10.0**high
+      bounds.append((low, high))
+    object.__setattr__(self, "input_bounds", tuple(bounds))
     super().__post_init__()
 
   def _make_input_tensor_step(
@@ -132,7 +175,7 @@ class TGLFNNukaeaTransportModel(
 
   def call_implementation(
       self,
-      transport: tglf_based_transport_model.RuntimeParams,
+      transport: RuntimeParams,
       runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
@@ -146,6 +189,13 @@ class TGLFNNukaeaTransportModel(
         poloidal_velocity_multiplier=runtime_params.neoclassical.poloidal_velocity_multiplier,
     )
     tglfnn_inputs = self._prepare_tglfnn_inputs(tglf_inputs)
+    tglfnn_inputs = jax.lax.cond(
+        transport.clip_inputs,
+        lambda: clip_inputs_to_bounds(
+            tglfnn_inputs, transport.clip_margin, self.input_bounds
+        ),
+        lambda: tglfnn_inputs,
+    )
     predictions = self.model.predict(tglfnn_inputs)
 
     # TODO(b/323504363): expose variance outputs

@@ -1749,6 +1749,19 @@ Runtime parameters for the TGLFNN-UKAEA model. If you use this model, please cit
   details. Note: currently, only the 'multimachine' model and its distilled
   student are publicly available.
 
+``clip_inputs`` (bool [default = False])
+  Whether to clip the network inputs to the training-set bounds recorded in
+  the model checkpoint before inference. The TGLFNN-UKAEA training
+  hypercubes are relatively narrow (e.g. ``KAPPA_LOC`` up to 1.5 for the
+  multimachine models), and simulations of strongly-shaped plasmas can
+  query the network well outside them, where its extrapolation is
+  uncontrolled. Same semantics as the ``qlknn`` model's ``clip_inputs``.
+
+``clip_margin`` (float [default = 0.95])
+  Margin used when ``clip_inputs`` is True: each bound is shrunk towards
+  zero by ``|bound| * (1 - clip_margin)``. Same semantics as the ``qlknn``
+  model's ``clip_margin``.
+
 ``DV_effective`` (bool [default = False])
   If ``True``, use either :math:`D_{eff}` or :math:`V_{eff}` for particle
   transport. See :ref:`physics_models` for more details.

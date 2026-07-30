@@ -221,6 +221,11 @@ class TGLFNNukaeaTransportModel(pydantic_model_base.TransportBase):
   ] = 'multimachine'
   rotation_multiplier: pydantic.NonNegativeFloat = 1.0
   use_rotation: Annotated[bool, torax_pydantic.JAX_STATIC] = False
+  # Whether to clip inputs to the training-set bounds recorded in the model
+  # checkpoint (avoids uncontrolled extrapolation outside the training
+  # hypercube), and the associated margin (same semantics as qlknn).
+  clip_inputs: bool = False
+  clip_margin: float = 0.95
   # Quasilinear transport options
   DV_effective: bool = False
   An_min: pydantic.PositiveFloat = 0.05
@@ -238,6 +243,8 @@ class TGLFNNukaeaTransportModel(pydantic_model_base.TransportBase):
   ) -> tglfnn_ukaea_transport_model.RuntimeParams:
     base_kwargs = dataclasses.asdict(super().build_runtime_params(t))
     return tglfnn_ukaea_transport_model.RuntimeParams(
+        clip_inputs=self.clip_inputs,
+        clip_margin=self.clip_margin,
         DV_effective=self.DV_effective,
         An_min=self.An_min,
         rotation_multiplier=self.rotation_multiplier,
