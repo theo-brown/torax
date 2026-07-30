@@ -33,3 +33,6 @@ venv
 
 # Python version file
 .python-version
+
+# Compiled TGLF f2py extension (built locally, see docs/installation.rst)
+torax/_src/transport_model/tglf/tglf2py_lib*.so
