@@ -1736,12 +1736,18 @@ Runtime parameters for the TGLFNN-UKAEA model. If you use this model, please cit
 `L. Zanisi et al. (2025) <https://conferences.iaea.org/event/392/contributions/36059/>`_.
 
 ``machine`` (str [default = 'multimachine'])
-  Machine type for TGLFNN-UKAEA. Options are 'multimachine', and 'step'.
+  Machine type for TGLFNN-UKAEA. Options are 'multimachine', 'step', and
+  'multimachine_student'.
   The 'multimachine' model is trained on a hypercube covering a wide variety
   of conventional tokamaks. The 'step' model is trained specifically on the
   design space of UKAEA's Spherical Tokamak for Energy Production (STEP).
+  The 'multimachine_student' model is a fast single-network distillation of
+  the 'multimachine' deep ensemble with the same inputs and outputs
+  (~26x fewer FLOPs per evaluation), suitable for speed-critical
+  applications.
   See `ukaea/tglfnn-ukaea <https://github.com/ukaea/tglfnn-ukaea>`_ for more
-  details. Note: currently, only the 'multimachine' model is publicly available.
+  details. Note: currently, only the 'multimachine' model and its distilled
+  student are publicly available.
 
 ``DV_effective`` (bool [default = False])
   If ``True``, use either :math:`D_{eff}` or :math:`V_{eff}` for particle

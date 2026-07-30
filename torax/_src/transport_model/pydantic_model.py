@@ -207,14 +207,17 @@ class TGLFNNukaeaTransportModel(pydantic_model_base.TransportBase):
 
   Attributes:
     model_name: The transport model to use. Hardcoded to 'tglfnn-ukaea'.
-    machine: The machine type to use. Either 'step' or 'multimachine'.
+    machine: The machine type to use. One of 'step', 'multimachine', or
+      'multimachine_student' (a fast single-network distillation of the
+      multimachine deep ensemble with the same inputs and outputs).
   """
 
   model_name: Annotated[Literal['tglfnn-ukaea'], torax_pydantic.JAX_STATIC] = (
       'tglfnn-ukaea'
   )
   machine: Annotated[
-      Literal['step', 'multimachine'], torax_pydantic.JAX_STATIC
+      Literal['step', 'multimachine', 'multimachine_student'],
+      torax_pydantic.JAX_STATIC,
   ] = 'multimachine'
   rotation_multiplier: pydantic.NonNegativeFloat = 1.0
   use_rotation: Annotated[bool, torax_pydantic.JAX_STATIC] = False

@@ -43,7 +43,7 @@ class TGLFNNukaeaTransportModel(
 ):
   """TGLFNN-ukaea transport model."""
 
-  machine: Literal["step", "multimachine"]
+  machine: Literal["step", "multimachine", "multimachine_student"]
 
   # The following fields are set by __post_init__
   model: tglfnn_ukaea_model.TGLFNNukaeaModel = dataclasses.field(init=False)
@@ -123,7 +123,9 @@ class TGLFNNukaeaTransportModel(
     match self.machine:
       case "step":
         return self._make_input_tensor_step(tglf_inputs)
-      case "multimachine":
+      case "multimachine" | "multimachine_student":
+        # The student is a distillation of the multimachine ensemble and
+        # shares its inputs, outputs and normalisation stats.
         return self._make_input_tensor_multimachine(tglf_inputs)
       case _:
         raise ValueError(f"Unsupported machine: {self.machine}")
