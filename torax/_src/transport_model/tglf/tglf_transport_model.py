@@ -222,11 +222,12 @@ class TGLFTransportModel(tglf_based_transport_model.TGLFBasedTransportModel):
     face_array_shape_dtype = jax.ShapeDtypeStruct(
         shape=(n_faces,), dtype=jax_utils.get_dtype()
     )
-    result_shape_dtypes = transport_model.TurbulentTransport(
-        chi_face_ion=face_array_shape_dtype,  # pyrefly: ignore[bad-argument-type]
-        chi_face_el=face_array_shape_dtype,  # pyrefly: ignore[bad-argument-type]
-        d_face_el=face_array_shape_dtype,  # pyrefly: ignore[bad-argument-type]
-        v_face_el=face_array_shape_dtype,  # pyrefly: ignore[bad-argument-type]
+    # Must match the structure returned by `callback`: a 3-tuple of
+    # (electron heat flux, ion heat flux, electron particle flux) face arrays.
+    result_shape_dtypes = (
+        face_array_shape_dtype,
+        face_array_shape_dtype,
+        face_array_shape_dtype,
     )
 
     # We must pass local_settings_dict explicitly as an argument (*args) to

@@ -30,7 +30,12 @@ try:
   from torax._src.transport_model.tglf import tglf2py_lib  # pylint: disable=g-import-not-at-top
 
   tglf_interface = tglf2py_lib.tglf_interface
-  _TGLFInterfaceType = tglf2py_lib.TGLFInterface
+  # f2py's meson backend does not generate the `TGLFInterface` type alias that
+  # the (type-stub-oriented) distutils build exposed; fall back to the runtime
+  # type of the interface object.
+  _TGLFInterfaceType = getattr(
+      tglf2py_lib, 'TGLFInterface', type(tglf2py_lib.tglf_interface)
+  )
   _TGLF2pyLibType = types.ModuleType
 except (ImportError, ModuleNotFoundError, AttributeError):
   # At runtime, if the extension fails to import, then set it to None.
@@ -86,6 +91,12 @@ def _assign_setting(key: str, value: str | bool | int | float | np.ndarray):
     # Case 2: Scalar setting (e.g. USE_BPER, TAUE, etc.).
     # Get previous value.
     interface_key = f'tglf_{key_lower}_in'
+    if not hasattr(interface, interface_key):
+      # Some GACODE inputs (e.g. the SHAPE_COS*/SHAPE_SIN* Miller extended
+      # harmonics) are stored with a `_loc` suffix in tglf_interface.
+      loc_key = f'tglf_{key_lower}_loc_in'
+      if hasattr(interface, loc_key):
+        interface_key = loc_key
     previous_value = getattr(interface, interface_key)
 
     # Parse based on type of previous value.
