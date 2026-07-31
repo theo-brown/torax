@@ -136,6 +136,4 @@ class BaseGeometryConfig(torax_pydantic.BaseModelFrozen):
     return (
         np.array_equal(self.get_face_centers(), other.get_face_centers())
         and self.hires_factor == other.hires_factor
-        and self.trapped_fraction_source == other.trapped_fraction_source
     )
-
