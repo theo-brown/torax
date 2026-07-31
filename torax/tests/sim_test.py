@@ -194,6 +194,18 @@ class SimTest(sim_test_case.SimTestCase):
           0,
           'test_iterhybrid_predictor_corrector_eqdsk.nc',
       ),
+      # As test_iterhybrid_predictor_corrector_eqdsk, but with the trapped
+      # particle fraction computed from the exact bounce-averaged integral
+      # over the traced 2D equilibrium (trapped_fraction_source='EXACT').
+      # Same tolerance rationale as the parent EQDSK test.
+      (
+          'test_eqdsk_trapped_fraction_exact',
+          'test_eqdsk_trapped_fraction_exact.py',
+          _ALL_PROFILES,
+          1e-6,
+          0,
+          'test_eqdsk_trapped_fraction_exact.nc',
+      ),
       # Predictor-corrector solver with clipped QLKNN inputs.
       (
           'test_iterhybrid_predictor_corrector_clip_inputs',
