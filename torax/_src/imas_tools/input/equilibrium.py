@@ -224,6 +224,15 @@ def _geometry_from_single_slice(
   match trapped_fraction_source:
     case base.TrappedFractionSource.SAUTER:
       trapped_fraction = sauter_trapped_fraction
+    case base.TrappedFractionSource.FILE:
+      if not IMAS_data.profiles_1d.trapped_fraction:
+        raise ValueError(
+            "trapped_fraction_source=FILE requires the equilibrium IDS to"
+            " populate profiles_1d.trapped_fraction, but this IDS does"
+            " not. Use trapped_fraction_source=SAUTER for the analytic"
+            " approximation instead."
+        )
+      trapped_fraction = np.asarray(IMAS_data.profiles_1d.trapped_fraction)
     case _:
       raise ValueError(
           f"Unknown trapped_fraction_source: {trapped_fraction_source}"

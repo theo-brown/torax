@@ -176,6 +176,13 @@ class SimTest(sim_test_case.SimTestCase):
           'test_iterhybrid_predictor_corrector',
           'test_iterhybrid_predictor_corrector.py',
       ),
+      # As test_iterhybrid_predictor_corrector, but with the trapped particle
+      # fraction read directly from the CHEASE geometry file
+      # (trapped_fraction_source='FILE').
+      (
+          'test_chease_trapped_fraction_file',
+          'test_chease_trapped_fraction_file.py',
+      ),
       # ITERhybrid_predictor_corrector with EQDSK geometry.
       # See https://github.com/google-deepmind/torax/pull/482 for a plot
       # of the CHEASE vs EQDSK sim test comparison.
