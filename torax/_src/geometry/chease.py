@@ -42,7 +42,10 @@ class CheaseConfig(base.BaseGeometryConfig):
 
   _supported_trapped_fraction_sources: ClassVar[
       frozenset[base.TrappedFractionSource]
-  ] = frozenset({base.TrappedFractionSource.SAUTER})
+  ] = frozenset({
+      base.TrappedFractionSource.SAUTER,
+      base.TrappedFractionSource.FILE,
+  })
 
   geometry_type: Annotated[Literal['chease'], torax_pydantic.TIME_INVARIANT] = (
       'chease'
@@ -159,6 +162,8 @@ def _construct_intermediates_from_chease(
   flux_surf_avg_B2 = chease_data['<B**2>'] * B_0**2
   flux_surf_avg_1_over_B2 = chease_data['<1/B**2>'] / B_0**2
   match trapped_fraction_source:
+    case base.TrappedFractionSource.FILE:
+      trapped_fraction = chease_data['FTRAP']
     case base.TrappedFractionSource.SAUTER:
       trapped_fraction = formulas.calculate_sauter_trapped_fraction(
           epsilon=(R_out_chease - R_in_chease) / (R_out_chease + R_in_chease),
