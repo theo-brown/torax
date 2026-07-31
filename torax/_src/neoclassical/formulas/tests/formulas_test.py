@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest import mock
-
 from absl.testing import absltest
 from absl.testing import parameterized
 import numpy as np
 from torax._src.config import build_runtime_params
 from torax._src.core_profiles import initialization
-from torax._src.geometry import geometry
 from torax._src.neoclassical.formulas import formulas
 from torax._src.physics import collisions
 from torax._src.torax_pydantic import model_config
@@ -91,29 +88,74 @@ class FormulasTest(parameterized.TestCase):
         log_lambda_ei=log_lambda_ei,
     )
 
-    self.f_trap = formulas.calculate_f_trap(self.geo)
-
-  def test_calculate_f_trap_positive_triangularity(self):
-    geo = mock.create_autospec(
-        geometry.Geometry,
-        instance=True,
-        delta_face=np.array(0.2),
-        epsilon_face=np.array(0.1),
+  def test_calculate_sauter_trapped_fraction_positive_triangularity(self):
+    result = formulas.calculate_sauter_trapped_fraction(
+        epsilon=np.array(0.1), delta=np.array(0.2)
     )
-    result = formulas.calculate_f_trap(geo)
     expected = 0.4362384616678634
     np.testing.assert_allclose(result, expected)
 
-  def test_calculate_f_trap_negative_triangularity(self):
-    geo = mock.create_autospec(
-        geometry.Geometry,
-        instance=True,
-        delta_face=np.array(-0.2),
-        epsilon_face=np.array(0.1),
+  def test_calculate_sauter_trapped_fraction_negative_triangularity(self):
+    result = formulas.calculate_sauter_trapped_fraction(
+        epsilon=np.array(0.1), delta=np.array(-0.2)
     )
-    result = formulas.calculate_f_trap(geo)
     expected = 0.45134158459680895
     np.testing.assert_allclose(result, expected)
+
+  def test_calculate_bounce_averaged_trapped_fraction_uniform_B_is_zero(self):
+    """A surface with uniform |B| has no magnetic wells, so f_t = 0."""
+    theta = np.linspace(0, 2 * np.pi, 500, endpoint=False)
+    B_0 = 2.5
+    B = np.full_like(theta, B_0)
+    trapped_fraction = formulas.calculate_bounce_averaged_trapped_fraction(
+        B=B,
+        dl_over_Bp=np.ones_like(theta),
+        flux_surf_avg_B2=B_0**2,
+    )
+    np.testing.assert_allclose(trapped_fraction, 0.0, atol=1e-3)
+
+  @parameterized.parameters(0.001, 0.01)
+  def test_calculate_bounce_averaged_trapped_fraction_large_aspect_ratio(
+      self, epsilon: float
+  ):
+    """Compares against the analytic circular large-aspect-ratio limit.
+
+    For a large-aspect-ratio circular flux surface with B = B_0/(1 + eps*cos
+    (theta)), the effective trapped fraction approaches 1.46*sqrt(eps) as
+    eps -> 0. See e.g. Y.R. Lin-Liu and R.L. Miller, Phys. Plasmas 2, 1666
+    (1995), Eq. 8.
+    """
+    theta = np.linspace(0, 2 * np.pi, 500, endpoint=False)
+    B = 1.0 / (1.0 + epsilon * np.cos(theta))
+    dl_over_Bp = np.ones_like(theta)
+    flux_surf_avg_B2 = np.mean(B**2)
+    trapped_fraction = formulas.calculate_bounce_averaged_trapped_fraction(
+        B=B,
+        dl_over_Bp=dl_over_Bp,
+        flux_surf_avg_B2=flux_surf_avg_B2,
+    )
+    np.testing.assert_allclose(
+        trapped_fraction, 1.46 * np.sqrt(epsilon), rtol=0.02
+    )
+
+  def test_calculate_bounce_averaged_trapped_fraction_is_physical(self):
+    """f_t lies in [0, 1] and grows with the depth of the magnetic well."""
+    theta = np.linspace(0, 2 * np.pi, 500, endpoint=False)
+    trapped_fractions = []
+    for epsilon in [0.05, 0.1, 0.2, 0.3]:
+      B = 1.0 / (1.0 + epsilon * np.cos(theta))
+      trapped_fraction = formulas.calculate_bounce_averaged_trapped_fraction(
+          B=B,
+          dl_over_Bp=np.ones_like(theta),
+          flux_surf_avg_B2=np.mean(B**2),
+      )
+      trapped_fractions.append(float(trapped_fraction))
+    trapped_fractions = np.array(trapped_fractions)
+    with self.subTest('within_physical_bounds'):
+      self.assertTrue(np.all(trapped_fractions >= 0.0))
+      self.assertTrue(np.all(trapped_fractions <= 1.0))
+    with self.subTest('increases_with_epsilon'):
+      self.assertTrue(np.all(np.diff(trapped_fractions) > 0.0))
 
   def test_calculate_poloidal_velocity_values_are_correct(self):
     poloidal_velocity = formulas.calculate_poloidal_velocity(
