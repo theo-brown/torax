@@ -213,6 +213,7 @@ def calc_coeffs(
     static_argnames=[
         'models',
         'evolving_names',
+        'use_pereverzev',
     ],
 )
 def _calc_coeffs_full(
@@ -325,7 +326,7 @@ def _calc_coeffs_full(
           geo,
           core_profiles,
           pedestal_transition_state,
-          use_pereverzev,
+          use_pereverzev=use_pereverzev,
       )
   )
 
