@@ -144,6 +144,36 @@ class BlockTriDiagonal:
     )
 
   @classmethod
+  def from_channel_diagonals(
+      cls,
+      diagonal: jt.Float[array_typing.Array, 'num_blocks block_size'],
+      above: jt.Float[array_typing.Array, 'num_blocks-1 block_size'],
+      below: jt.Float[array_typing.Array, 'num_blocks-1 block_size'],
+  ) -> 'BlockTriDiagonal':
+    """Creates a BlockTriDiagonal from stacked per-channel scalar diagonals.
+
+    Each channel contributes an independent scalar tridiagonal system placed
+    along the (i, i) block diagonal, so every (C, C) block is diagonal. Taking
+    the diagonals already stacked lets callers accumulate several contributions
+    (diffusion, convection) in the compact (N, C) form and materialise the
+    (N, C, C) blocks only once.
+
+    Args:
+      diagonal: Main diagonal, shape (num_blocks, block_size).
+      above: Super-diagonal, shape (num_blocks - 1, block_size).
+      below: Sub-diagonal, shape (num_blocks - 1, block_size).
+
+    Returns:
+      BlockTriDiagonal with block size C, where each (C, C) block is diagonal.
+    """
+    eye = jnp.eye(diagonal.shape[-1], dtype=diagonal.dtype)
+    return cls(
+        lower=below[..., None, :] * eye,
+        diagonal=diagonal[..., None, :] * eye,
+        upper=above[..., None, :] * eye,
+    )
+
+  @classmethod
   def from_tridiagonals(
       cls,
       tridiagonals: typing_extensions.Iterable[TriDiagonal],
@@ -159,17 +189,11 @@ class BlockTriDiagonal:
     Returns:
       BlockTriDiagonal with block size C, where each (C, C) block is diagonal.
     """
-    tridiagonals_seq = tuple(tridiagonals)
     stacked = jax.tree.map(
-        lambda *args: jnp.stack(args, axis=1), *tridiagonals_seq
-        )
-    return cls(
-        lower=stacked.below[..., None, :]
-        * jnp.eye(stacked.below.shape[-1], dtype=stacked.below.dtype),
-        diagonal=stacked.diagonal[..., None, :]
-        * jnp.eye(stacked.diagonal.shape[-1], dtype=stacked.diagonal.dtype),
-        upper=stacked.above[..., None, :]
-        * jnp.eye(stacked.above.shape[-1], dtype=stacked.above.dtype),
+        lambda *args: jnp.stack(args, axis=1), *tuple(tridiagonals)
+    )
+    return cls.from_channel_diagonals(
+        diagonal=stacked.diagonal, above=stacked.above, below=stacked.below
     )
 
   def to_dense(self) -> jt.Float[array_typing.Array, 'total total']:

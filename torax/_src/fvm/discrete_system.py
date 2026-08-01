@@ -79,63 +79,78 @@ def calc_c(
           f'but got {x_i.value.shape}.'
       )
 
-  # Add diffusion terms
-  if d_face is None:
-    c_matrix = tridiagonal.BlockTriDiagonal.zeros(num_cells, num_channels)
+  def stack_channels(values, fallback_like):
+    """Stacks per-channel arrays on a trailing channel axis, zeroing Nones.
+
+    Missing channels take the shape of the first channel that is present, so
+    face-grid and cell-grid tuples both round-trip correctly; `fallback_like`
+    is only consulted when every channel is None.
+    """
+    template = next((v for v in values if v is not None), fallback_like)
+    return jnp.stack(
+        [jnp.zeros_like(template) if v is None else v for v in values], axis=-1
+    )
+
+  # The channels share a mesh, so diffusion and convection are assembled once
+  # for all of them on (face, channel) arrays. The three diagonals are
+  # accumulated in the compact (cell, channel) form and expanded into (C, C)
+  # blocks only once, at the end.
+  d_face_stacked = (
+      None if d_face is None else stack_channels(d_face, x[0].value)
+  )
+  v_face_stacked = (
+      None if v_face is None else stack_channels(v_face, x[0].value)
+  )
+
+  if d_face_stacked is None:
+    diagonal = jnp.zeros((num_cells, num_channels))
+    above = jnp.zeros((num_cells - 1, num_channels))
+    below = jnp.zeros((num_cells - 1, num_channels))
     c_forcing = jnp.zeros((num_cells, num_channels))
   else:
-    d_terms = [
-        diffusion_terms.make_diffusion_terms(d_face_i, x_i)
-        for d_face_i, x_i in zip(d_face, x)
-    ]
-    # stack the forcing terms along the channel axis (axis=1)
-    c_forcing = jnp.stack([c_forcing for _, c_forcing in d_terms], axis=1)
-    c_matrix = tridiagonal.BlockTriDiagonal.from_tridiagonals(
-        [d_mat for d_mat, _ in d_terms]
+    diagonal, above, below, c_forcing = (
+        diffusion_terms.make_multichannel_diffusion_terms(d_face_stacked, x)
     )
 
-  # Add convection terms
-  if v_face is not None:
-    conv_terms = []
-    for i in range(num_channels):
-      # Resolve diffusion to zeros if it is not specified
-      d_face_i = d_face[i] if d_face is not None else None
-      d_face_i = jnp.zeros_like(v_face[i]) if d_face_i is None else d_face_i
-      conv_mat, conv_forcing = convection_terms.make_convection_terms(
-          v_face[i],
-          d_face_i,
-          x[i],
-          dirichlet_mode=convection_dirichlet_mode,
-          neumann_mode=convection_neumann_mode,
-      )
-      conv_terms.append((conv_mat, conv_forcing))
-    # stack the forcing terms along the channel axis (axis=1)
-    conv_forcing = jnp.stack(
-        [conv_forcing for _, conv_forcing in conv_terms], axis=1
+  if v_face_stacked is not None:
+    # Resolve diffusion to zeros if it is not specified
+    d_for_convection = (
+        jnp.zeros_like(v_face_stacked)
+        if d_face_stacked is None
+        else d_face_stacked
     )
-    c_matrix += tridiagonal.BlockTriDiagonal.from_tridiagonals(
-        [conv_mat for conv_mat, _ in conv_terms]
+    conv_diagonal, conv_above, conv_below, conv_forcing = (
+        convection_terms.make_multichannel_convection_terms(
+            v_face_stacked,
+            d_for_convection,
+            x,
+            dirichlet_mode=convection_dirichlet_mode,
+            neumann_mode=convection_neumann_mode,
+        )
     )
+    diagonal += conv_diagonal
+    above += conv_above
+    below += conv_below
     c_forcing += conv_forcing
 
-  # Add implicit source terms
+  c_matrix = tridiagonal.BlockTriDiagonal.from_channel_diagonals(
+      diagonal=diagonal, above=above, below=below
+  )
+
+  # Add implicit source terms. These are the only terms that couple channels,
+  # so they are the only contribution that is not block-diagonal.
   if source_mat_cell is not None:
-    diag = c_matrix.diagonal
-    for i in range(num_channels):
-      for j in range(num_channels):
-        source = source_mat_cell[i][j]
-        if source is not None:
-          diag = diag.at[:, i, j].add(source)  # pyrefly: ignore[missing-attribute]
+    source_block = jnp.stack(
+        [stack_channels(row, x[0].value) for row in source_mat_cell], axis=1
+    )
     c_matrix = tridiagonal.BlockTriDiagonal(
         lower=c_matrix.lower,
-        diagonal=diag,
+        diagonal=c_matrix.diagonal + source_block,
         upper=c_matrix.upper,
     )
 
   # Add explicit source terms
   if source_cell is not None:
-    for i in range(num_channels):
-      if source_cell[i] is not None:
-        c_forcing = c_forcing.at[:, i].add(source_cell[i])
+    c_forcing += stack_channels(source_cell, x[0].value)
 
   return c_matrix, c_forcing
