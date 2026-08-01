@@ -392,16 +392,22 @@ class TransportModel(static_dataclass.StaticDataclass, abc.ABC):
         pedestal_model_output,
     )
 
-    # Iterate over fields of the CoreTransport dataclass.
-    # Ignore optional fields that are made all zero in post_init.
-    def smooth_single_coeff(coeff):
-      return jax.lax.cond(
-          jnp.all(coeff == 0.0),
-          lambda: coeff,
-          lambda: jnp.dot(smoothing_matrix, coeff),
-      )
-
-    return jax.tree_util.tree_map(smooth_single_coeff, transport_coeffs)
+    # Every coefficient is smoothed by the same linear operator, so stack the
+    # populated fields (optional ones are None, and are skipped by
+    # tree_flatten) into one (face, coefficient) array and apply the kernel as
+    # a single matmul rather than one matrix-vector product per field.
+    #
+    # The per-field `jnp.all(coeff == 0)` short-circuit this replaces was a
+    # runtime branch that cost a full reduction and a control-flow region to
+    # skip a multiply; smoothing an all-zero coefficient yields exactly zero,
+    # so dropping it leaves the result bit-identical.
+    coeffs, treedef = jax.tree_util.tree_flatten(transport_coeffs)
+    if not coeffs:
+      return transport_coeffs
+    smoothed = smoothing_matrix @ jnp.stack(coeffs, axis=-1)
+    return jax.tree_util.tree_unflatten(
+        treedef, [smoothed[:, i] for i in range(len(coeffs))]
+    )
 
 
 def _build_smoothing_matrix(
