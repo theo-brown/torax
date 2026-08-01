@@ -45,6 +45,13 @@ from torax._src.sources import source_profiles
 Block1DCoeffs: TypeAlias = block_1d_coeffs.Block1DCoeffs
 
 
+def _scale_band(
+    scale: jax.Array, band: jax.Array | None
+) -> jax.Array | None:
+  """Scales an optional band, propagating None for absent contributions."""
+  return None if band is None else scale * band
+
+
 @jax.jit(
     static_argnames=[
         'convection_dirichlet_mode',
@@ -62,9 +69,9 @@ def theta_method_matrix_equation(
     convection_dirichlet_mode: str = 'ghost',
     convection_neumann_mode: str = 'ghost',
 ) -> tuple[
-    tridiagonal.BlockTriDiagonal,
+    tridiagonal.ChannelTriDiagonal,
     jax.Array,
-    tridiagonal.BlockTriDiagonal,
+    tridiagonal.ChannelTriDiagonal,
     jax.Array,
 ]:
   """Returns the banded left-hand and right-hand sides of the theta method.
@@ -123,9 +130,9 @@ def theta_method_matrix_equation(
 
   Returns:
     A tuple of (lhs, lhs_vec, rhs, rhs_vec) where:
-      lhs_matrix: BlockTriDiagonal for the LHS matrix A.
+      lhs_matrix: ChannelTriDiagonal for the LHS matrix A.
       lhs_vec: LHS vector a.
-      rhs_matrix: BlockTriDiagonal for the RHS matrix B.
+      rhs_matrix: ChannelTriDiagonal for the RHS matrix B.
       rhs_vec: RHS vector b.
   """
 
@@ -162,15 +169,14 @@ def theta_method_matrix_equation(
   )
 
   # Compute LHS = I - scale_new * C_new directly, avoiding intermediate
-  # BlockTriDiagonal objects. The transient part (I) only contributes to the
-  # diagonal, so off-diagonal blocks are just -scale * C_new.
-  ch_idx = jnp.arange(len(x_old))
-  lhs_diag = -scale_new[:, :, None] * c_new_matrix.diagonal
-  lhs_diag = lhs_diag.at[:, ch_idx, ch_idx].add(1.0)
-  lhs_matrix = tridiagonal.BlockTriDiagonal(
-      lower=-scale_new[1:, :, None] * c_new_matrix.lower,
-      diagonal=lhs_diag,
-      upper=-scale_new[:-1, :, None] * c_new_matrix.upper,
+  # BlockTriDiagonal objects. The transient part (I) is diagonal in both cell
+  # and channel space, so it lands on the main-diagonal band and the channel
+  # coupling is left untouched.
+  lhs_matrix = tridiagonal.ChannelTriDiagonal(
+      diagonal=1.0 - scale_new * c_new_matrix.diagonal,
+      above=_scale_band(-scale_new[:-1], c_new_matrix.above),
+      below=_scale_band(-scale_new[1:], c_new_matrix.below),
+      coupling=_scale_band(-scale_new[:, :, None], c_new_matrix.coupling),
   )
   lhs_vec = -scale_new * c_new_forcing
 
@@ -192,17 +198,18 @@ def theta_method_matrix_equation(
 
     # Compute RHS = diag(tc_in_old/tc_in_new) + scale_old * C_old directly.
     # The transient part only contributes to the diagonal.
-    rhs_diag = scale_old[:, :, None] * c_old_matrix.diagonal
-    rhs_diag = rhs_diag.at[:, ch_idx, ch_idx].add((tc_in_old / tc_in_new))
-    rhs_matrix = tridiagonal.BlockTriDiagonal(
-        lower=scale_old[1:, :, None] * c_old_matrix.lower,
-        diagonal=rhs_diag,
-        upper=scale_old[:-1, :, None] * c_old_matrix.upper,
+    rhs_matrix = tridiagonal.ChannelTriDiagonal(
+        diagonal=tc_in_old / tc_in_new + scale_old * c_old_matrix.diagonal,
+        above=_scale_band(scale_old[:-1], c_old_matrix.above),
+        below=_scale_band(scale_old[1:], c_old_matrix.below),
+        coupling=_scale_band(scale_old[:, :, None], c_old_matrix.coupling),
     )
     rhs_vec = scale_old * c_old_forcing
   else:
-    rhs_matrix = tridiagonal.BlockTriDiagonal.from_diagonal(
-        tc_in_old / tc_in_new
+    # The RHS is the transient term alone: diagonal in both cell and channel
+    # space, so it stays an elementwise multiply rather than a block matvec.
+    rhs_matrix = tridiagonal.ChannelTriDiagonal(
+        diagonal=tc_in_old / tc_in_new
         )
     rhs_vec = jnp.zeros(
         (rhs_matrix.num_blocks, rhs_matrix.block_size), dtype=tc_in_new.dtype
@@ -212,15 +219,15 @@ def theta_method_matrix_equation(
 
 
 def apply_internal_boundary_conditions(
-    lhs: tridiagonal.BlockTriDiagonal,
+    lhs: tridiagonal.ChannelTriDiagonal,
     lhs_vec: jax.Array,
-    rhs: tridiagonal.BlockTriDiagonal,
+    rhs: tridiagonal.ChannelTriDiagonal,
     rhs_vec: jax.Array,
     internal_boundary_condition_mask: jax.Array,
     internal_boundary_condition_target_vec: jax.Array,
 ) -> tuple[
-    tridiagonal.BlockTriDiagonal, jax.Array,
-    tridiagonal.BlockTriDiagonal, jax.Array,
+    tridiagonal.ChannelTriDiagonal, jax.Array,
+    tridiagonal.ChannelTriDiagonal, jax.Array,
 ]:
   """Enforce internal boundary conditions via matrix row replacement.
 
@@ -234,9 +241,9 @@ def apply_internal_boundary_conditions(
   boundary condition without introducing ill-conditioning.
 
   Args:
-    lhs: LHS block-tridiagonal matrix.
+    lhs: LHS block-tridiagonal matrix in compact per-channel form.
     lhs_vec: LHS forcing vector, shape (num_cells, num_channels).
-    rhs: RHS block-tridiagonal matrix.
+    rhs: RHS block-tridiagonal matrix in compact per-channel form.
     rhs_vec: RHS forcing vector, shape (num_cells, num_channels).
     internal_boundary_condition_mask: Boolean array, shape
       (num_cells, num_channels). True at constrained (cell, channel) entries.
@@ -246,68 +253,50 @@ def apply_internal_boundary_conditions(
   Returns:
     Modified (lhs, lhs_vec, rhs, rhs_vec) with Dirichlet rows enforced.
   """
-  num_channels = lhs.block_size
+  mask = internal_boundary_condition_mask
 
-  # Identity block used to replace constrained rows in the LHS diagonal.
-  eye = jnp.eye(num_channels)
+  def clear_bands(
+      matrix: tridiagonal.ChannelTriDiagonal,
+      diagonal: jax.Array,
+  ) -> tridiagonal.ChannelTriDiagonal:
+    """Zeroes every off-(cell, channel)-diagonal entry of a constrained row."""
+    # `below` has shape (N-1, C): band i couples cell i+1's equation to cell i,
+    # so we index the mask at [1:] (cells 1..N-1) to zero the right rows.
+    # `above` has shape (N-1, C): band i lives in cell i's equation, so we
+    # index the mask at [:-1] (cells 0..N-2). The coupling has shape
+    # (N, C, C); masking on [:, :, None] broadcasts over the columns so the
+    # whole of row j of block i is zeroed.
+    return tridiagonal.ChannelTriDiagonal(
+        diagonal=diagonal,
+        above=None if matrix.above is None
+        else jnp.where(mask[:-1], 0.0, matrix.above),
+        below=None if matrix.below is None
+        else jnp.where(mask[1:], 0.0, matrix.below),
+        coupling=None if matrix.coupling is None
+        else jnp.where(mask[:, :, None], 0.0, matrix.coupling),
+    )
 
   # --- LHS: constrained rows become identity ---
-  # diagonal has shape (N, C, C).
-  # internal_boundary_condition_mask[:, :, None] broadcasts over the last
-  # axis so that row j of block i is replaced by eye[j, :] when
-  # internal_boundary_condition_mask[i, j] is True. This makes
-  # L · x_new = 1 · x_new at that entry.
-  new_lhs_diag = jnp.where(
-      internal_boundary_condition_mask[:, :, None],
-      eye[None, :, :],
-      lhs.diagonal,
-  )
-  # lower has shape (N-1, C, C): block i couples cell i+1's equation to cell
-  # i, so we index the mask at [1:] (cells 1..N-1) to zero the right rows.
-  new_lhs_lower = jnp.where(
-      internal_boundary_condition_mask[1:, :, None], 0.0, lhs.lower
-  )
-  # upper has shape (N-1, C, C): block i lives in cell i's equation, so we
-  # index the mask at [:-1] (cells 0..N-2).
-  new_lhs_upper = jnp.where(
-      internal_boundary_condition_mask[:-1, :, None], 0.0, lhs.upper
-  )
+  # Setting the main-diagonal band to 1 and clearing everything else in the row
+  # makes L · x_new = 1 · x_new at that entry.
+  new_lhs = clear_bands(lhs, jnp.where(mask, 1.0, lhs.diagonal))
   # Zero the LHS source term so the constraint has no additive forcing on the
   # left-hand side.
-  new_lhs_vec = jnp.where(
-      internal_boundary_condition_mask, 0.0, lhs_vec
-  )
+  new_lhs_vec = jnp.where(mask, 0.0, lhs_vec)
 
   # --- RHS: zero the matrix where needed (decouple x_old) and inject target ---
   # All RHS matrix bands are zeroed at constrained rows so x_old does not
   # enter the constraint equation.
-  new_rhs_diag = jnp.where(
-      internal_boundary_condition_mask[:, :, None], 0.0, rhs.diagonal
-  )
-  new_rhs_lower = jnp.where(
-      internal_boundary_condition_mask[1:, :, None], 0.0, rhs.lower
-  )
-  new_rhs_upper = jnp.where(
-      internal_boundary_condition_mask[:-1, :, None], 0.0, rhs.upper
-  )
+  new_rhs = clear_bands(rhs, jnp.where(mask, 0.0, rhs.diagonal))
   # The RHS forcing is replaced with the target value, giving
   # the final constraint: 1 · x_new[i, j] = target[i, j].
   new_rhs_vec = jnp.where(
-      internal_boundary_condition_mask,
+      mask,
       internal_boundary_condition_target_vec,
       rhs_vec,
   )
 
-  return (
-      tridiagonal.BlockTriDiagonal(
-          lower=new_lhs_lower, diagonal=new_lhs_diag, upper=new_lhs_upper,
-      ),
-      new_lhs_vec,
-      tridiagonal.BlockTriDiagonal(
-          lower=new_rhs_lower, diagonal=new_rhs_diag, upper=new_rhs_upper,
-      ),
-      new_rhs_vec,
-  )
+  return new_lhs, new_lhs_vec, new_rhs, new_rhs_vec
 
 
 @jax.jit(

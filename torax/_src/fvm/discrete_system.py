@@ -43,7 +43,7 @@ def calc_c(
     coeffs: Block1DCoeffs,
     convection_dirichlet_mode: str = 'ghost',
     convection_neumann_mode: str = 'ghost',
-) -> tuple[tridiagonal.BlockTriDiagonal, jax.Array]:
+) -> tuple[tridiagonal.ChannelTriDiagonal, jax.Array]:
   """Calculate banded blocks and vector c such that F = C x + c.
 
   Returns the block-tridiagonal representation of C. The matrix structure comes
@@ -60,7 +60,8 @@ def calc_c(
 
   Returns:
     A tuple of (c_matrix, c_forcing) where:
-      c_matrix: BlockTriDiagonal with sub/main/super-diagonal blocks.
+      c_matrix: ChannelTriDiagonal with sub/main/super-diagonal bands and the
+        implicit-source channel coupling.
       c_forcing: An array with the terms arising from explicit sources and
         boundary conditions.
   """
@@ -133,21 +134,20 @@ def calc_c(
     below += conv_below
     c_forcing += conv_forcing
 
-  c_matrix = tridiagonal.BlockTriDiagonal.from_channel_diagonals(
-      diagonal=diagonal, above=above, below=below
-  )
-
-  # Add implicit source terms. These are the only terms that couple channels,
-  # so they are the only contribution that is not block-diagonal.
-  if source_mat_cell is not None:
-    source_block = jnp.stack(
+  # Implicit source terms are the only terms that couple channels, so they are
+  # the only contribution that is not diagonal within a block. They are kept
+  # separate from the three bands so that callers which only need a matrix-
+  # vector product never materialise the (N, C, C) blocks.
+  if source_mat_cell is None:
+    coupling = None
+  else:
+    coupling = jnp.stack(
         [stack_channels(row, x[0].value) for row in source_mat_cell], axis=1
     )
-    c_matrix = tridiagonal.BlockTriDiagonal(
-        lower=c_matrix.lower,
-        diagonal=c_matrix.diagonal + source_block,
-        upper=c_matrix.upper,
-    )
+
+  c_matrix = tridiagonal.ChannelTriDiagonal(
+      diagonal=diagonal, above=above, below=below, coupling=coupling
+  )
 
   # Add explicit source terms
   if source_cell is not None:

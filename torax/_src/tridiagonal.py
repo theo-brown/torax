@@ -257,6 +257,91 @@ class BlockTriDiagonal:
     return jnp.einsum('nij,nj->ni', self.diagonal, x) + y_upper + y_lower
 
 
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class ChannelTriDiagonal:
+  """A block-tridiagonal matrix stored in its natural sparse form.
+
+  The 1D FVM stencil couples each cell to its two neighbours, and diffusion and
+  convection act on one channel at a time, so the off-diagonal blocks are
+  diagonal in channel space and only the main-diagonal blocks carry
+  channel-to-channel coupling (from implicit source terms such as Qei). Keeping
+  the three bands as (num_blocks, block_size) instead of inflating them to
+  (num_blocks, block_size, block_size) makes `matvec` cost a factor of
+  block_size less memory traffic, which is what the nonlinear residual needs.
+  `to_block_tridiagonal` materialises the dense blocks for the linear solve,
+  which needs a real matrix.
+
+  `above`, `below` and `coupling` are None when that contribution is
+  identically zero, so a matrix with no cell coupling (such as the transient
+  term alone) reduces to an elementwise multiply.
+
+  Attributes:
+    diagonal: Main-diagonal band, shape (num_blocks, block_size).
+    above: Super-diagonal band, shape (num_blocks-1, block_size), or None.
+    below: Sub-diagonal band, shape (num_blocks-1, block_size), or None.
+    coupling: Dense channel coupling added to the main-diagonal blocks, shape
+      (num_blocks, block_size, block_size), or None if channels are uncoupled.
+  """
+
+  diagonal: jt.Float[array_typing.Array, 'num_blocks block_size']
+  above: jt.Float[array_typing.Array, 'num_blocks-1 block_size'] | None = None
+  below: jt.Float[array_typing.Array, 'num_blocks-1 block_size'] | None = None
+  coupling: (
+      jt.Float[array_typing.Array, 'num_blocks block_size block_size'] | None
+  ) = None
+
+  @property
+  def num_blocks(self) -> int:
+    """Number of blocks in the main diagonal."""
+    return self.diagonal.shape[0]
+
+  @property
+  def block_size(self) -> int:
+    """Size of each block."""
+    return self.diagonal.shape[1]
+
+  def matvec(
+      self, x: jt.Float[array_typing.Array, 'num_blocks block_size']
+  ) -> jt.Float[array_typing.Array, 'num_blocks block_size']:
+    """Block-tridiagonal matrix-vector multiply: y = A @ x.
+
+    Args:
+      x: Input vector, shape (num_blocks, block_size).
+
+    Returns:
+      Result y, shape (num_blocks, block_size).
+    """
+    y = self.diagonal * x
+    if self.above is not None:
+      y += jnp.pad(self.above * x[1:], ((0, 1), (0, 0)))
+    if self.below is not None:
+      y += jnp.pad(self.below * x[:-1], ((1, 0), (0, 0)))
+    if self.coupling is not None:
+      y += jnp.einsum('nij,nj->ni', self.coupling, x)
+    return y
+
+  def to_block_tridiagonal(self) -> BlockTriDiagonal:
+    """Materialises the dense (block_size, block_size) blocks."""
+    eye = jnp.eye(self.block_size, dtype=self.diagonal.dtype)
+    diagonal = self.diagonal[..., None, :] * eye
+    if self.coupling is not None:
+      diagonal += self.coupling
+    zeros = jnp.zeros(
+        (self.num_blocks - 1, self.block_size, self.block_size),
+        dtype=self.diagonal.dtype,
+    )
+    return BlockTriDiagonal(
+        lower=zeros if self.below is None else self.below[..., None, :] * eye,
+        diagonal=diagonal,
+        upper=zeros if self.above is None else self.above[..., None, :] * eye,
+    )
+
+  def to_dense(self) -> jt.Float[array_typing.Array, 'total total']:
+    """Constructs the dense matrix representation."""
+    return self.to_block_tridiagonal().to_dense()
+
+
 def dense_solve(
     block_tridiag: BlockTriDiagonal,
     rhs: jt.Float[array_typing.Array, 'num_blocks block_size'],

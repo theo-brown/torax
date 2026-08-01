@@ -109,7 +109,11 @@ def implicit_solve_block(
     )
 
   rhs_result = rhs_matrix.matvec(x_old_array) + rhs_vec - lhs_vec
-  x_new = lhs_matrix.solve(rhs_result, solver_type=implicit_solver_type)
+  # The linear solve is the one consumer that needs a real matrix, so this is
+  # where the dense (num_channels, num_channels) blocks get materialised.
+  x_new = lhs_matrix.to_block_tridiagonal().solve(
+      rhs_result, solver_type=implicit_solver_type
+  )
 
   # Create updated CellVariable instances based on state_plus_dt which has
   # updated boundary conditions and prescribed profiles.
