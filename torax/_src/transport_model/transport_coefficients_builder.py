@@ -34,7 +34,6 @@ from torax._src.transport_model import transport_model as transport_model_lib
     static_argnames=(
         'transport_model',
         'neoclassical_models',
-        'use_pereverzev',
     )
 )
 def calculate_all_transport_coeffs(
@@ -87,16 +86,20 @@ def calculate_all_transport_coeffs(
       core_profiles,
   )
 
-  # `use_pereverzev` is static, so this is a trace-time branch: when the
-  # Pereverzev-Corrigan terms are off, their computation is never traced and
-  # the zero-valued convection terms are folded away by the compiler rather
-  # than carried through the discrete system.
-  if use_pereverzev:
-    pereverzev_transport_coeffs = pereverzev_lib.calculate_pereverzev_transport(
-        runtime_params, geo, core_profiles
-    )
-  else:
-    pereverzev_transport_coeffs = pereverzev_lib.PereverzevTransport.zeros(geo)
+  # TODO(b/311653933) this pattern for Pereverzev-Corrigan terms forces us to
+  # include value zero convection terms in the discrete system, slowing
+  # compilation down by ~10%. See if can improve with a different pattern.
+  # TODO(b/485528848) Replace cond with if.
+  pereverzev_transport_coeffs = jax.lax.cond(
+      use_pereverzev,
+      pereverzev_lib.calculate_pereverzev_transport,
+      lambda runtime_params, geo, core_profiles: pereverzev_lib.PereverzevTransport.zeros(
+          geo
+      ),
+      runtime_params,
+      geo,
+      core_profiles,
+  )
 
   core_transport = state.CoreTransport(
       **dataclasses.asdict(turbulent_transport_coeffs),
