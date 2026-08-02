@@ -29,6 +29,11 @@ are set.
 Requires the optional ``tglf2py`` extension module; see
 https://torax.readthedocs.io/en/latest/installation.html#optional-install-tglf.
 
+This is expensive. On 4 cores with ``n_processes=4``, the predictor-corrector
+case to ``t_final=5`` took ~31 min electrostatic (56 steps, ~33 s/step) and
+~4 h 11 min electromagnetic (52 steps, ~289 s/step). Use ``--max_steps`` to
+measure per-step cost on a new machine before committing to a full run.
+
 Example::
 
   python torax/benchmarks/tglf_es_vs_em.py --output_dir=/tmp/tglf_es_vs_em
