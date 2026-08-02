@@ -47,7 +47,6 @@ import torax
 from torax._src import simulation_app
 from torax._src.plotting import plotruns_lib
 from torax.examples import iterhybrid_predictor_corrector
-from torax.examples import iterhybrid_rampup
 from torax.plotting.configs import default_plot_config
 from torax.plotting.configs import transport_plot_config
 
@@ -126,9 +125,13 @@ TGLF_SETTINGS_BY_VARIANT = {
     'em': EM_TGLF_SETTINGS,
 }
 
+# Only base scenarios whose solver does not differentiate through the transport
+# model can be used here. The TGLF interface dispatches to Fortran through
+# `jax.pure_callback`, which has no JVP rule, so a `newton_raphson` solver fails
+# when it forms the Jacobian of the residual. This rules out
+# `torax.examples.iterhybrid_rampup` unless its solver is changed.
 BASE_CONFIGS = {
     'predictor_corrector': iterhybrid_predictor_corrector.CONFIG,
-    'rampup': iterhybrid_rampup.CONFIG,
 }
 
 _OUTPUT_DIR = flags.DEFINE_string(
