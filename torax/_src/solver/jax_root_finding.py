@@ -207,6 +207,20 @@ def gmres_right_preconditioned(
   b_norm = jnp.linalg.norm(b)
   target_norm = rtol * b_norm
 
+  if restart >= max_krylov:
+    # A cycle stops either because it converged, or because it used its full
+    # Krylov dimension. When `restart >= max_krylov` the second case exhausts
+    # the total budget too, so a second cycle is unreachable. Emitting the
+    # restart loop anyway would put a second instantiation of `matvec` -- a JVP
+    # through the whole physics model -- into the graph for a branch that never
+    # runs, which is a large fraction of the compiled program. Since `restart`
+    # and `max_krylov` are static, resolve it here instead.
+    x, norm, iterations = _gmres_cycle(
+        matvec, preconditioner, target_norm, jnp.zeros_like(b), b, b_norm,
+        restart,
+    )
+    return x, iterations
+
   def cond_fun(carry):
     _, _, norm, total = carry
     return (norm > target_norm) & (total < max_krylov)
