@@ -36,3 +36,6 @@ venv
 
 # Transient worktrees created for background agents
 .claude/worktrees/
+
+# Generated benchmark figures; regenerate with bench/plot_variants.py.
+bench/figs/

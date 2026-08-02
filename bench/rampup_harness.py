@@ -50,6 +50,11 @@ import numpy as np
 _OUT_DIR = os.environ.get('RAMPUP_BENCH_DIR', '/tmp/rampup_bench')
 _CONFIG_PATH = 'torax/tests/test_data/test_iterhybrid_rampup.py'
 _PROFILES = ('T_i', 'T_e', 'n_e', 'psi')
+# Face-grid diagnostics. `q_face` is a *gradient* of psi, so it amplifies error
+# in the psi solution rather than inheriting it one-for-one -- which makes it
+# the sensitive test for the psi-splitting variants. `s_face` (magnetic shear)
+# differentiates once more again.
+_FACE_DIAGNOSTICS = ('q_face', 's_face')
 
 
 def _build(overrides, n_rho, t_final):
@@ -107,7 +112,7 @@ def run(tag, overrides, n_rho, t_final, reps):
     fixed.append((time.perf_counter() - a) * 1e3)
 
   # --- full trajectory: accuracy record + felt runtime + step count ---
-  traj = {name: [] for name in _PROFILES}
+  traj = {name: [] for name in _PROFILES + _FACE_DIAGNOSTICS}
   times, dts, inner, outer, err = [], [], [], [], []
   s, p = s0, p0
   t_start = time.perf_counter()
@@ -118,6 +123,8 @@ def run(tag, overrides, n_rho, t_final, reps):
     n_steps += 1
     for name in _PROFILES:
       traj[name].append(np.asarray(getattr(s.core_profiles, name).value))
+    for name in _FACE_DIAGNOSTICS:
+      traj[name].append(np.asarray(getattr(s.core_profiles, name)))
     times.append(float(s.t))
     dts.append(float(s.dt))
     sno = s.solver_numeric_outputs
@@ -158,7 +165,8 @@ def run(tag, overrides, n_rho, t_final, reps):
       os.path.join(_OUT_DIR, f'{tag}.npz'),
       t=np.array(times), dt=np.array(dts),
       inner=np.array(inner), outer=np.array(outer), err=np.array(err),
-      **{name: np.stack(traj[name]) for name in _PROFILES},
+      **{name: np.stack(traj[name])
+         for name in _PROFILES + _FACE_DIAGNOSTICS},
   )
   with open(os.path.join(_OUT_DIR, f'{tag}.json'), 'w') as f:
     json.dump(summary, f, indent=1)
