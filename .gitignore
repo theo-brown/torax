@@ -1,6 +1,10 @@
 # Compiled python modules.
 *.pyc
 
+# Compiled extension modules, e.g. the optional TGLF f2py wrapper which is
+# built into torax/_src/transport_model/tglf/.
+*.so
+
 # Byte-compiled
 _pycache__/
 .cache/
