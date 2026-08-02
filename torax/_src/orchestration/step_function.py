@@ -568,6 +568,20 @@ class SimulationStepFn:
         geo_t_plus_dt=geo_t_plus_dt,
         core_profiles_t=input_state.core_profiles,
     )
+    # `time_integrator` is a static field, so nothing extra is traced or
+    # compiled for the default theta method.
+    if runtime_params_t.solver.time_integrator == 'tr_bdf2':
+      tr_bdf2_stage_inputs = step_function_processing.build_tr_bdf2_stage_inputs(
+          t=input_state.t,
+          dt=dt,
+          runtime_params_t=runtime_params_t,
+          core_profiles_t=input_state.core_profiles,
+          edge_outputs=edge_outputs,
+          runtime_params_provider=runtime_params_provider,
+          geometry_provider=geometry_provider,
+      )
+    else:
+      tr_bdf2_stage_inputs = None
     # The solver returned state is still "intermediate" since the CoreProfiles
     # need to be updated by the evolved CellVariables in x_new
     x_new, solver_numeric_outputs = self._solver(
@@ -581,6 +595,7 @@ class SimulationStepFn:
         core_profiles_t_plus_dt=core_profiles_t_plus_dt,
         explicit_source_profiles=explicit_source_profiles,
         pedestal_transition_state=pedestal_transition_state,
+        tr_bdf2_stage_inputs=tr_bdf2_stage_inputs,
     )
     output_state, post_processed_outputs = (
         step_function_processing.finalize_outputs(

@@ -28,6 +28,7 @@ from torax._src import state
 from torax._src import static_dataclass
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.fvm import cell_variable
+from torax._src.fvm import tr_bdf2
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.sources import source_profiles
@@ -60,6 +61,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles_t_plus_dt: state.CoreProfiles,
       explicit_source_profiles: source_profiles.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      tr_bdf2_stage_inputs: tr_bdf2.StageInputs | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -90,6 +92,10 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
         non-JAX-friendly ways.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      tr_bdf2_stage_inputs: Runtime params, geometry and core profiles at the
+        TR-BDF2 stage-1 time. Only needed when `solver.time_integrator` is
+        'tr_bdf2'; the intermediate time cannot be resolved inside the solver
+        because it needs the runtime params and geometry providers.
 
     Returns:
       x_new: Tuple containing new cell-grid values of the evolving variables.
@@ -115,6 +121,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
           explicit_source_profiles=explicit_source_profiles,
           evolving_names=runtime_params_t.numerics.evolving_names,
           pedestal_transition_state=pedestal_transition_state,
+          tr_bdf2_stage_inputs=tr_bdf2_stage_inputs,
       )
     else:
       x_new = tuple()
@@ -142,6 +149,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      tr_bdf2_stage_inputs: tr_bdf2.StageInputs | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -169,6 +177,7 @@ class Solver(static_dataclass.StaticDataclass, abc.ABC):
       evolving_names: The names of core_profiles variables that should evolve.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      tr_bdf2_stage_inputs: See the `__call__` docstring.
 
     Returns:
       x_new: The values of the evolving variables at time t + dt.

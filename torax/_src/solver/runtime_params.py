@@ -25,6 +25,7 @@ class RuntimeParams:
   """Input params for the solver which can be used as compiled args."""
 
   theta_implicit: float = dataclasses.field(metadata={'static': True})
+  time_integrator: str = dataclasses.field(metadata={'static': True})
   use_predictor_corrector: bool = dataclasses.field(metadata={'static': True})
   n_corrector_steps: int = dataclasses.field(metadata={'static': True})
   convection_dirichlet_mode: str = dataclasses.field(metadata={'static': True})

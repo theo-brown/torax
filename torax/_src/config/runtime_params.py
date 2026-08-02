@@ -90,6 +90,33 @@ class RuntimeParams:
   time_step_calculator: time_step_calculator_runtime_params.RuntimeParams
 
 
+def with_theta_implicit(
+    runtime_params: RuntimeParams,
+    theta_implicit: float,
+) -> RuntimeParams:
+  """Returns a copy of `runtime_params` with the solver's theta replaced.
+
+  `theta_implicit` is a static field, so callers get a compile-time constant
+  and every theta-aware function below them follows automatically: the
+  residual, the linear predictor, and the choice of full versus reduced
+  explicit coefficients in `calc_coeffs`. Multi-stage integrators use this to
+  express a stage as the theta method with the stage's own theta.
+
+  Args:
+    runtime_params: The runtime params to copy.
+    theta_implicit: The theta value the copy should carry.
+
+  Returns:
+    A copy of `runtime_params` with `solver.theta_implicit` replaced.
+  """
+  return dataclasses.replace(
+      runtime_params,
+      solver=dataclasses.replace(
+          runtime_params.solver, theta_implicit=theta_implicit
+      ),
+  )
+
+
 def make_ip_consistent(
     runtime_params: RuntimeParams,
     geo: geometry.Geometry,

@@ -2504,9 +2504,25 @@ specific solver are defined in the relevant section below.
 * ``'optimizer'``
     Nonlinear solver using the jaxopt library.
 
+``time_integrator`` (str [default = 'theta'])
+  Time integration scheme.
+
+* ``'theta'``
+    The theta method, controlled by ``theta_implicit`` below. With the default
+    ``theta_implicit=1.0`` this is backward Euler: L-stable but only first
+    order in time.
+
+* ``'tr_bdf2'``
+    TR-BDF2 (ESDIRK2): a trapezoidal sub-step to ``t + (2-sqrt(2))*dt``
+    followed by a BDF2 sub-step to ``t + dt``. Second order, L-stable and
+    stiffly accurate, at the cost of two implicit solves per step.
+    ``theta_implicit`` is ignored. Only supported by the ``'newton_raphson'``
+    solver.
+
 ``theta_implicit`` (float [default = 1.0])
   theta value in the theta method of time discretization. 0 = explicit, 1 =
-  fully implicit, 0.5 = Crank-Nicolson.
+  fully implicit, 0.5 = Crank-Nicolson. Ignored when
+  ``time_integrator='tr_bdf2'``.
 
 ``use_predictor_corrector`` (bool [default = True])
   Enables use_predictor_corrector iterations with the linear solver.

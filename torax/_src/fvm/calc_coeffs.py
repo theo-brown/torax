@@ -646,6 +646,29 @@ def _calc_coeffs_reduced(
   return coeffs
 
 
+def calc_transient_in_coeffs(
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+    evolving_names: tuple[str, ...],
+) -> block_1d_coeffs.Block1DCoeffs:
+  """Returns Block1DCoeffs holding only the `transient_in_cell` coefficients.
+
+  Multi-stage time integrators combine the conserved quantity
+  `transient_in_cell * x` across stages, so they need `transient_in_cell` at a
+  stage point without paying for the transport and source models there.
+
+  Args:
+    geo: Geometry describing the torus.
+    core_profiles: Core plasma profiles at the point of interest.
+    evolving_names: The names of the evolving variables in the order that their
+      coefficients should be written to `coeffs`.
+
+  Returns:
+    coeffs: Block1DCoeffs with only `transient_in_cell` populated.
+  """
+  return _calc_coeffs_reduced(geo, core_profiles, evolving_names)
+
+
 def _compute_ramp_fraction(
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     transition_time_width: array_typing.FloatScalar,

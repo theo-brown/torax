@@ -34,6 +34,11 @@ class BaseSolver(torax_pydantic.BaseModelFrozen, abc.ABC):
   """Base class for solver configs.
 
   Attributes:
+    time_integrator: The time integration scheme. 'theta' is the theta method
+      controlled by `theta_implicit` (first order for the default
+      `theta_implicit=1`). 'tr_bdf2' is TR-BDF2 (ESDIRK2): second order,
+      L-stable and stiffly accurate, taking two backward-Euler-shaped implicit
+      solves per step. `theta_implicit` is ignored when 'tr_bdf2' is selected.
     theta_implicit: The theta value in the theta method 0 = explicit, 1 = fully
       implicit, 0.5 = Crank-Nicolson.
     use_predictor_corrector: Enables use_predictor_corrector iterations with the
@@ -60,6 +65,9 @@ class BaseSolver(torax_pydantic.BaseModelFrozen, abc.ABC):
       point (predictor-corrector) method.
   """
 
+  time_integrator: Annotated[
+      Literal['theta', 'tr_bdf2'], torax_pydantic.JAX_STATIC
+  ] = 'theta'
   theta_implicit: Annotated[
       torax_pydantic.UnitInterval, torax_pydantic.JAX_STATIC
   ] = 1.0
@@ -127,6 +135,7 @@ class LinearThetaMethod(BaseSolver):
   @functools.cached_property
   def build_runtime_params(self) -> runtime_params.RuntimeParams:
     return runtime_params.RuntimeParams(
+        time_integrator=self.time_integrator,
         theta_implicit=self.theta_implicit,
         convection_dirichlet_mode=self.convection_dirichlet_mode,
         convection_neumann_mode=self.convection_neumann_mode,
@@ -186,6 +195,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
       self,
   ) -> nonlinear_theta_method.NewtonRaphsonRuntimeParams:
     return nonlinear_theta_method.NewtonRaphsonRuntimeParams(
+        time_integrator=self.time_integrator,
         theta_implicit=self.theta_implicit,
         convection_dirichlet_mode=self.convection_dirichlet_mode,
         convection_neumann_mode=self.convection_neumann_mode,
@@ -242,6 +252,7 @@ class OptimizerThetaMethod(BaseSolver):
       self,
   ) -> nonlinear_theta_method.OptimizerRuntimeParams:
     return nonlinear_theta_method.OptimizerRuntimeParams(
+        time_integrator=self.time_integrator,
         theta_implicit=self.theta_implicit,
         convection_dirichlet_mode=self.convection_dirichlet_mode,
         convection_neumann_mode=self.convection_neumann_mode,

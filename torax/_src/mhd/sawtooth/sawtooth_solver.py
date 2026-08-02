@@ -23,6 +23,7 @@ from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import convertors
 from torax._src.fvm import cell_variable
+from torax._src.fvm import tr_bdf2
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.solver import solver
@@ -51,6 +52,7 @@ class SawtoothSolver(solver.Solver):
       pedestal_transition_state: (
           pedestal_transition_state_lib.PedestalTransitionState
       ),
+      tr_bdf2_stage_inputs: tr_bdf2.StageInputs | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
@@ -77,6 +79,8 @@ class SawtoothSolver(solver.Solver):
       evolving_names: Names of evolving variables.
       pedestal_transition_state: State for tracking pedestal L-H and H-L
         transitions.
+      tr_bdf2_stage_inputs: Unused; the sawtooth step is an instantaneous
+        redistribution, not a time integration.
 
     Returns:
       Updated tuple of evolving CellVariables from CoreProfiles

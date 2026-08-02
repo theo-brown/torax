@@ -29,6 +29,7 @@ from torax._src.fvm import cell_variable
 from torax._src.geometry import geometry
 from torax._src.geometry import geometry_provider as geometry_provider_lib
 from torax._src.orchestration import sim_state
+from torax._src.orchestration import step_function_processing
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.solver import solver as solver_lib
 from torax._src.sources import source_profiles as source_profiles_lib
@@ -108,6 +109,21 @@ def compute_state(
       geo_t_plus_dt=geo_t_plus_dt,
       core_profiles_t=input_state.core_profiles,
   )
+  # `time_integrator` is a static field, so nothing extra is traced or compiled
+  # for the default theta method. Note the stage inputs must be rebuilt on each
+  # backtracking attempt, since they depend on the attempted dt.
+  if runtime_params_t.solver.time_integrator == 'tr_bdf2':
+    tr_bdf2_stage_inputs = step_function_processing.build_tr_bdf2_stage_inputs(
+        t=input_state.t,
+        dt=dt,
+        runtime_params_t=runtime_params_t,
+        core_profiles_t=input_state.core_profiles,
+        edge_outputs=edge_outputs,
+        runtime_params_provider=runtime_params_provider,
+        geometry_provider=geometry_provider,
+    )
+  else:
+    tr_bdf2_stage_inputs = None
   # The solver returned state is still "intermediate" since the CoreProfiles
   # need to be updated by the evolved CellVariables in x_new
   x_new, solver_numeric_outputs = solver(
@@ -121,6 +137,7 @@ def compute_state(
       core_profiles_t_plus_dt=core_profiles_t_plus_dt,
       explicit_source_profiles=explicit_source_profiles,
       pedestal_transition_state=pedestal_transition_state,
+      tr_bdf2_stage_inputs=tr_bdf2_stage_inputs,
   )
   loop_statistics[
       'inner_solver_iterations'

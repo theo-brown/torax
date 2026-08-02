@@ -52,7 +52,7 @@ _CONFIG_PATH = 'torax/tests/test_data/test_iterhybrid_rampup.py'
 _PROFILES = ('T_i', 'T_e', 'n_e', 'psi')
 
 
-def _build(overrides, n_rho, t_final):
+def _build(overrides, n_rho, t_final, config_path=None):
   """Loads the rampup config, applies overrides, returns a prepared sim."""
   from torax._src.config import config_loader
   from torax._src.orchestration import run_simulation
@@ -60,7 +60,9 @@ def _build(overrides, n_rho, t_final):
 
   repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
   cfg = copy.deepcopy(
-      config_loader.import_module(os.path.join(repo, _CONFIG_PATH))['CONFIG']
+      config_loader.import_module(
+          os.path.join(repo, config_path or _CONFIG_PATH)
+      )['CONFIG']
   )
   if n_rho is not None:
     cfg['geometry']['n_rho'] = n_rho
@@ -79,10 +81,12 @@ def _deep_update(dst, src):
       dst[k] = v
 
 
-def run(tag, overrides, n_rho, t_final, reps):
+def run(tag, overrides, n_rho, t_final, reps, config_path=None):
   """Records trajectory and timings for one variant."""
   os.makedirs(_OUT_DIR, exist_ok=True)
-  torax_config, (s0, p0, step_fn) = _build(overrides, n_rho, t_final)
+  torax_config, (s0, p0, step_fn) = _build(
+      overrides, n_rho, t_final, config_path
+  )
 
   t0 = time.perf_counter()
   lowered = jax.jit(step_fn.__call__).lower(s0, p0)
@@ -220,6 +224,9 @@ def main():
   r.add_argument('--n-rho', type=int, default=None)
   r.add_argument('--t-final', type=float, default=None)
   r.add_argument('--reps', type=int, default=7)
+  # Convergence-order studies need a config with smooth physics models,
+  # which the rampup config is not. Everything else still defaults to it.
+  r.add_argument('--config', default=None)
   c = sub.add_parser('cmp')
   c.add_argument('tag_a')
   c.add_argument('tag_b')
@@ -229,7 +236,7 @@ def main():
 
   if args.cmd == 'run':
     run(args.tag, json.loads(args.overrides) if args.overrides else None,
-        args.n_rho, args.t_final, args.reps)
+        args.n_rho, args.t_final, args.reps, args.config)
   elif args.cmd == 'cmp':
     cmp(args.tag_a, args.tag_b)
   else:

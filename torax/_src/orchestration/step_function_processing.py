@@ -15,6 +15,7 @@
 """Functions for pre and post processing used in the step function call."""
 
 import dataclasses
+import chex
 import jax
 import jax.numpy as jnp
 from torax._src import models as models_lib
@@ -24,6 +25,7 @@ from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import updaters
 from torax._src.edge import base as edge_base
 from torax._src.fvm import cell_variable
+from torax._src.fvm import tr_bdf2
 from torax._src.geometry import geometry
 from torax._src.geometry import geometry_provider as geometry_provider_lib
 from torax._src.orchestration import sim_state
@@ -344,6 +346,59 @@ def _update_internal_boundary_condition(
       n_e_ped_L_mode=new_n_e_ped_L_mode,
       pedestal_model_output=pedestal_transition_state.pedestal_model_output,
       previous_pedestal_model_output=pedestal_transition_state.previous_pedestal_model_output,
+  )
+
+
+def build_tr_bdf2_stage_inputs(
+    t: chex.Numeric,
+    dt: chex.Numeric,
+    runtime_params_t: runtime_params_lib.RuntimeParams,
+    core_profiles_t: state.CoreProfiles,
+    edge_outputs: edge_base.EdgeModelOutputs | None,
+    runtime_params_provider: build_runtime_params.RuntimeParamsProvider,
+    geometry_provider: geometry_provider_lib.GeometryProvider,
+) -> tr_bdf2.StageInputs:
+  """Builds the runtime inputs at the TR-BDF2 stage-1 time `t + GAMMA*dt`.
+
+  TR-BDF2's first stage lands strictly inside the step, so it needs runtime
+  params, geometry and boundary conditions at an intermediate time. Only the
+  orchestration layer holds the providers that can resolve those exactly, so
+  they are built here and passed down to the solver rather than approximated
+  inside it.
+
+  Args:
+    t: The time at the start of the step.
+    dt: The full step duration.
+    runtime_params_t: Runtime parameters at `t`.
+    core_profiles_t: Core profiles at `t`.
+    edge_outputs: Optional edge model outputs for updating boundary conditions.
+    runtime_params_provider: Provider for runtime params.
+    geometry_provider: Provider for geometry.
+
+  Returns:
+    The stage-1 runtime params, geometry and core profiles.
+  """
+  stage_dt = tr_bdf2.GAMMA * dt
+  stage_runtime_params, stage_geo = (
+      build_runtime_params.get_consistent_runtime_params_and_geometry(
+          t=t + stage_dt,
+          runtime_params_provider=runtime_params_provider,
+          geometry_provider=geometry_provider,
+          edge_outputs=edge_outputs,
+          core_profiles=core_profiles_t,
+      )
+  )
+  stage_core_profiles = updaters.provide_core_profiles_t_plus_dt(
+      dt=stage_dt,  # pyrefly: ignore[bad-argument-type]
+      runtime_params_t=runtime_params_t,
+      runtime_params_t_plus_dt=stage_runtime_params,
+      geo_t_plus_dt=stage_geo,
+      core_profiles_t=core_profiles_t,
+  )
+  return tr_bdf2.StageInputs(
+      runtime_params=stage_runtime_params,
+      geo=stage_geo,
+      core_profiles=stage_core_profiles,
   )
 
 

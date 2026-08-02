@@ -33,6 +33,7 @@ from torax._src.fvm import cell_variable
 from torax._src.fvm import enums
 from torax._src.fvm import fvm_conversions
 from torax._src.fvm import residual_and_loss
+from torax._src.fvm import tr_bdf2
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.solver import jax_root_finding
@@ -51,6 +52,7 @@ MIN_DELTA: Final[float] = 1e-7
         'models',
         'coeffs_callback',
         'initial_guess_mode',
+        'initial_guess_theta_implicit',
         'log_iterations',
     ],
 )
@@ -75,6 +77,8 @@ def newton_raphson_solve_block(
     tau_min: float,
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     log_iterations: bool = False,
+    tr_bdf2_stage2: tr_bdf2.Stage2Data | None = None,
+    initial_guess_theta_implicit: float | None = None,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -147,7 +151,14 @@ def newton_raphson_solve_block(
       transitions.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
-
+    tr_bdf2_stage2: If set, solve the TR-BDF2 BDF2 stage instead of the theta
+      method. The `_old` arguments then describe the TR-BDF2 stage-1 point
+      rather than the start of the step, and `dt` is the stage's implicit step
+      `B_IMPLICIT * dt_full`. See `tr_bdf2.tr_bdf2_stage2_block_residual`.
+    initial_guess_theta_implicit: If set, the LINEAR initial guess uses this
+      theta instead of the residual's. Needed when the residual's theta is not
+      1, because the Pereverzev stabilisation of the linear guess is only
+      unconditionally stable when treated fully implicitly.
 
   Returns:
     x_new: Tuple, with x_new[i] giving channel i of x at the next time step
@@ -173,11 +184,31 @@ def newton_raphson_solve_block(
     # LINEAR initial guess will provide the initial guess using the predictor-
     # corrector method if predictor_corrector=True in the solver config
     case enums.InitialGuessMode.LINEAR:
+      # The linear guess is Pereverzev-stabilised, which works by adding a
+      # deliberately huge artificial diffusion to the implicit operator and
+      # subtracting it again explicitly. That is only unconditionally stable
+      # when the added diffusion is treated fully implicitly, so a residual
+      # with theta < 1 (the TR-BDF2 trapezoidal stage) still needs a
+      # backward-Euler predictor: with theta = 1/2 half of chi_pereverzev
+      # lands on the explicit side and blows the guess up in one step.
+      if initial_guess_theta_implicit is None:
+        guess_runtime_params_t = runtime_params_t
+        guess_runtime_params_t_plus_dt = runtime_params_t_plus_dt
+      else:
+        guess_runtime_params_t = runtime_params_lib.with_theta_implicit(
+            runtime_params_t, initial_guess_theta_implicit
+        )
+        guess_runtime_params_t_plus_dt = (
+            runtime_params_lib.with_theta_implicit(
+                runtime_params_t_plus_dt, initial_guess_theta_implicit
+            )
+        )
+
       # returns transport coefficients with additional pereverzev terms
       # if set by runtime_params, needed if stiff transport models
       # (e.g. qlknn) are used.
       coeffs_exp_linear = coeffs_callback(
-          runtime_params_t,
+          guess_runtime_params_t,
           geo_t,
           core_profiles=core_profiles_t,
           prev_core_profiles=None,
@@ -195,7 +226,7 @@ def newton_raphson_solve_block(
       )
       init_x_new = predictor_corrector_method.predictor_corrector_method(
           dt=dt,
-          runtime_params_t_plus_dt=runtime_params_t_plus_dt,
+          runtime_params_t_plus_dt=guess_runtime_params_t_plus_dt,
           geo_t_plus_dt=geo_t_plus_dt,
           x_old=x_old,
           x_new_guess=x_new_guess,
@@ -217,8 +248,17 @@ def newton_raphson_solve_block(
   # The other arguments (dt, x_old, etc.) are fixed.
   # Note that core_profiles_t_plus_dt only contains the known quantities at
   # t_plus_dt, e.g. boundary conditions and prescribed profiles.
+  # `tr_bdf2_stage2` is None for the theta method, which is a static difference
+  # in the pytree structure, so this branch is resolved at trace time and the
+  # default path is untouched.
+  if tr_bdf2_stage2 is None:
+    residual_builder = residual_and_loss.theta_method_block_residual
+  else:
+    residual_builder = functools.partial(
+        tr_bdf2.tr_bdf2_stage2_block_residual, stage2=tr_bdf2_stage2
+    )
   residual_fun = functools.partial(
-      residual_and_loss.theta_method_block_residual,
+      residual_builder,
       dt=dt,
       runtime_params_t_plus_dt=runtime_params_t_plus_dt,
       geo_t_plus_dt=geo_t_plus_dt,

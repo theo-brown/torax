@@ -22,6 +22,7 @@ from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import convertors
 from torax._src.fvm import calc_coeffs
 from torax._src.fvm import cell_variable
+from torax._src.fvm import tr_bdf2
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.solver import predictor_corrector_method
@@ -50,11 +51,14 @@ class LinearThetaMethod(solver_lib.Solver):
       explicit_source_profiles: source_profiles.SourceProfiles,
       evolving_names: tuple[str, ...],
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+      tr_bdf2_stage_inputs: tr_bdf2.StageInputs | None = None,
   ) -> tuple[
       tuple[cell_variable.CellVariable, ...],
       state.SolverNumericOutputs,
   ]:
     """See Solver._x_new docstring."""
+    # The linear solver only implements the theta method.
+    del tr_bdf2_stage_inputs
 
     x_old = convertors.core_profiles_to_solver_x_tuple(
         core_profiles_t, evolving_names
