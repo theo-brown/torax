@@ -33,3 +33,6 @@ venv
 
 # Python version file
 .python-version
+
+# Transient worktrees created for background agents
+.claude/worktrees/
