@@ -26,6 +26,7 @@ from torax._src import array_typing
 from torax._src import jax_utils
 from torax._src import models as models_lib
 from torax._src import state as state_module
+from torax._src import tridiagonal
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import convertors
 from torax._src.fvm import calc_coeffs
@@ -52,6 +53,9 @@ MIN_DELTA: Final[float] = 1e-7
         'coeffs_callback',
         'initial_guess_mode',
         'log_iterations',
+        'newton_linear_solver',
+        'jfnk_max_krylov',
+        'jfnk_restart',
     ],
 )
 def newton_raphson_solve_block(
@@ -75,6 +79,10 @@ def newton_raphson_solve_block(
     tau_min: float,
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
     log_iterations: bool = False,
+    newton_linear_solver: str = 'direct',
+    jfnk_max_krylov: int = 30,
+    jfnk_restart: int = 30,
+    jfnk_rtol: float = 1e-2,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -147,6 +155,12 @@ def newton_raphson_solve_block(
       transitions.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
+    newton_linear_solver: 'direct' to form the Jacobian and solve densely, or
+      'jfnk' for a matrix-free preconditioned Krylov solve. See
+      `jax_root_finding.root_newton_raphson`.
+    jfnk_max_krylov: Maximum total Krylov iterations per Newton iteration.
+    jfnk_restart: Krylov subspace dimension between GMRES restarts.
+    jfnk_rtol: Relative tolerance of the Krylov solve.
 
 
   Returns:
@@ -217,8 +231,7 @@ def newton_raphson_solve_block(
   # The other arguments (dt, x_old, etc.) are fixed.
   # Note that core_profiles_t_plus_dt only contains the known quantities at
   # t_plus_dt, e.g. boundary conditions and prescribed profiles.
-  residual_fun = functools.partial(
-      residual_and_loss.theta_method_block_residual,
+  residual_kwargs = dict(
       dt=dt,
       runtime_params_t_plus_dt=runtime_params_t_plus_dt,
       geo_t_plus_dt=geo_t_plus_dt,
@@ -231,6 +244,42 @@ def newton_raphson_solve_block(
       evolving_names=evolving_names,
       pedestal_transition_state=pedestal_transition_state,
   )
+  residual_fun = functools.partial(
+      residual_and_loss.theta_method_block_residual, **residual_kwargs
+  )
+
+  jfnk_kwargs = {}
+  if newton_linear_solver == 'jfnk':
+    num_channels = len(evolving_names)
+    implicit_solver_type = runtime_params_t.solver.implicit_solver_type
+
+    def preconditioner_apply(
+        lhs: tridiagonal.ChannelTriDiagonal, v: jax.Array
+    ) -> jax.Array:
+      """Applies lhs^-1 to a solver vector.
+
+      The solver vector is laid out channel-major while the tridiagonal solve
+      works on (num_cells, num_channels), so the layout is converted on the way
+      in and back on the way out.
+      """
+      solution = lhs.to_block_tridiagonal().solve(
+          residual_and_loss.residual_vec_to_cell_channel_array(
+              v, num_channels
+          ),
+          solver_type=implicit_solver_type,
+      )
+      return residual_and_loss.cell_channel_array_to_residual_vec(solution)
+
+    jfnk_kwargs = dict(
+        residual_with_operator_fun=functools.partial(
+            residual_and_loss.theta_method_block_residual_with_operator,
+            **residual_kwargs,
+        ),
+        preconditioner_apply=preconditioner_apply,
+        jfnk_max_krylov=jfnk_max_krylov,
+        jfnk_restart=jfnk_restart,
+        jfnk_rtol=jfnk_rtol,
+    )
 
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
@@ -241,6 +290,8 @@ def newton_raphson_solve_block(
       delta_reduction_factor=delta_reduction_factor,
       tau_min=tau_min,
       log_iterations=log_iterations,
+      linear_solver=newton_linear_solver,
+      **jfnk_kwargs,
   )
   root_finder = jax_utils.xla_metadata_call(
       jax.jit(root_finder), compilation_unit='newton_raphson_root_finder'
