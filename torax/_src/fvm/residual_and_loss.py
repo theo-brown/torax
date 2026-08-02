@@ -310,13 +310,46 @@ def apply_internal_boundary_conditions(
   )
 
 
-@jax.jit(
-    static_argnames=[
-        'evolving_names',
-        'models',
-    ],
-)
-def theta_method_block_residual(
+def residual_vec_to_cell_channel_array(
+    residual_vec: jax.Array,
+    num_channels: int,
+) -> jax.Array:
+  """Unflattens a solver vector into the (num_cells, num_channels) layout.
+
+  The solver-facing vector concatenates the channels one after another (all
+  cells of channel 0, then all cells of channel 1, ...), which is the layout
+  produced by `(num_cells, num_channels) -> .T -> .reshape(-1)`. The
+  tridiagonal matvec and solve routines instead work on (num_cells,
+  num_channels) arrays, so anything that hands a solver vector to them has to
+  go through this conversion first.
+
+  Args:
+    residual_vec: Flat array of size num_cells * num_channels.
+    num_channels: Number of evolving channels.
+
+  Returns:
+    Array of shape (num_cells, num_channels).
+  """
+  return residual_vec.reshape(num_channels, -1).T
+
+
+def cell_channel_array_to_residual_vec(
+    cell_channel_array: jax.Array,
+) -> jax.Array:
+  """Flattens a (num_cells, num_channels) array into a solver vector.
+
+  Inverse of `residual_vec_to_cell_channel_array`.
+
+  Args:
+    cell_channel_array: Array of shape (num_cells, num_channels).
+
+  Returns:
+    Flat array of size num_cells * num_channels.
+  """
+  return cell_channel_array.T.reshape(-1)
+
+
+def _theta_method_block_residual_and_operator(
     x_new_guess_vec: jax.Array,
     dt: jax.Array,
     runtime_params_t_plus_dt: runtime_params_lib.RuntimeParams,
@@ -329,33 +362,23 @@ def theta_method_block_residual(
     coeffs_old: Block1DCoeffs,
     evolving_names: tuple[str, ...],
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
-) -> jax.Array:
-  """Residual of theta-method equation for core profiles at next time-step.
+) -> tuple[jax.Array, tridiagonal.BlockTriDiagonal]:
+  """Shared implementation of the theta-method residual.
 
-  Args:
-    x_new_guess_vec: Flattened array of current guess of x_new for all evolving
-      core profiles.
-    dt: Time step duration.
-    runtime_params_t_plus_dt: Runtime parameters for time t + dt.
-    geo_t_plus_dt: The geometry at time t + dt.
-    x_old: The starting x defined as a tuple of CellVariables.
-    core_profiles_t: Core plasma profiles which contain all available prescribed
-      quantities at the start of the time step.
-    core_profiles_t_plus_dt: Core plasma profiles which contain all available
-      prescribed quantities at the end of the time step. This includes evolving
-      boundary conditions and prescribed time-dependent profiles that are not
-      being evolved by the PDE system.
-    explicit_source_profiles: Pre-calculated sources implemented as explicit
-      sources in the PDE.
-    models: Models used for the calculations.
-    coeffs_old: The coefficients calculated at x_old.
-    evolving_names: The names of variables within the core profiles that should
-      evolve.
-    pedestal_transition_state: State for tracking pedestal L-H and H-L
-      transitions.
+  Returns both the residual vector and the assembled LHS matrix. The LHS is
+  the frozen-coefficient (Picard) linearisation of the residual, so it is a
+  ready-made preconditioner for a Jacobian-free Newton-Krylov solve: it differs
+  from the true Jacobian only by the derivative of the transport and source
+  coefficients with respect to the state. Returning it here means the
+  preconditioner costs nothing extra -- it is already built as part of
+  evaluating the residual.
+
+  Args: see `theta_method_block_residual`.
 
   Returns:
-    residual: Vector residual between LHS and RHS of the theta method equation.
+    A tuple of (residual, lhs_matrix), where lhs_matrix is post
+    internal-boundary-condition enforcement and acts on (num_cells,
+    num_channels) arrays.
   """
   # Prepare core_profiles_t_plus_dt for calc_coeffs. Explanation:
   # 1. The original (before iterative solving) core_profiles_t_plus_dt contained
@@ -412,13 +435,131 @@ def theta_method_block_residual(
   # Reshape x_new_guess_vec to a 2D array with shape (num_channels, num_cells)
   # then transpose it to (num_cells, num_channels) to allow for block
   # tridiagonal matvec multiplication with lhs and rhs.
-  num_cells, num_channels = x_old_array.shape
-  x_new_array = x_new_guess_vec.reshape(num_channels, num_cells).T
+  _, num_channels = x_old_array.shape
+  x_new_array = residual_vec_to_cell_channel_array(
+      x_new_guess_vec, num_channels
+  )
 
   lhs_result = lhs.matvec(x_new_array) + lhs_vec
   rhs_result = rhs.matvec(x_old_array) + rhs_vec
 
-  return (lhs_result - rhs_result).T.reshape(-1)
+  return cell_channel_array_to_residual_vec(lhs_result - rhs_result), lhs
+
+
+@jax.jit(
+    static_argnames=[
+        'evolving_names',
+        'models',
+    ],
+)
+def theta_method_block_residual(
+    x_new_guess_vec: jax.Array,
+    dt: jax.Array,
+    runtime_params_t_plus_dt: runtime_params_lib.RuntimeParams,
+    geo_t_plus_dt: geometry.Geometry,
+    x_old: tuple[cell_variable.CellVariable, ...],
+    core_profiles_t: state.CoreProfiles,
+    core_profiles_t_plus_dt: state.CoreProfiles,
+    explicit_source_profiles: source_profiles.SourceProfiles,
+    models: models_lib.Models,
+    coeffs_old: Block1DCoeffs,
+    evolving_names: tuple[str, ...],
+    pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+) -> jax.Array:
+  """Residual of theta-method equation for core profiles at next time-step.
+
+  Args:
+    x_new_guess_vec: Flattened array of current guess of x_new for all evolving
+      core profiles.
+    dt: Time step duration.
+    runtime_params_t_plus_dt: Runtime parameters for time t + dt.
+    geo_t_plus_dt: The geometry at time t + dt.
+    x_old: The starting x defined as a tuple of CellVariables.
+    core_profiles_t: Core plasma profiles which contain all available prescribed
+      quantities at the start of the time step.
+    core_profiles_t_plus_dt: Core plasma profiles which contain all available
+      prescribed quantities at the end of the time step. This includes evolving
+      boundary conditions and prescribed time-dependent profiles that are not
+      being evolved by the PDE system.
+    explicit_source_profiles: Pre-calculated sources implemented as explicit
+      sources in the PDE.
+    models: Models used for the calculations.
+    coeffs_old: The coefficients calculated at x_old.
+    evolving_names: The names of variables within the core profiles that should
+      evolve.
+    pedestal_transition_state: State for tracking pedestal L-H and H-L
+      transitions.
+
+  Returns:
+    residual: Vector residual between LHS and RHS of the theta method equation.
+  """
+  residual, _ = _theta_method_block_residual_and_operator(
+      x_new_guess_vec=x_new_guess_vec,
+      dt=dt,
+      runtime_params_t_plus_dt=runtime_params_t_plus_dt,
+      geo_t_plus_dt=geo_t_plus_dt,
+      x_old=x_old,
+      core_profiles_t=core_profiles_t,
+      core_profiles_t_plus_dt=core_profiles_t_plus_dt,
+      explicit_source_profiles=explicit_source_profiles,
+      models=models,
+      coeffs_old=coeffs_old,
+      evolving_names=evolving_names,
+      pedestal_transition_state=pedestal_transition_state,
+  )
+  return residual
+
+
+@jax.jit(
+    static_argnames=[
+        'evolving_names',
+        'models',
+    ],
+)
+def theta_method_block_residual_with_operator(
+    x_new_guess_vec: jax.Array,
+    dt: jax.Array,
+    runtime_params_t_plus_dt: runtime_params_lib.RuntimeParams,
+    geo_t_plus_dt: geometry.Geometry,
+    x_old: tuple[cell_variable.CellVariable, ...],
+    core_profiles_t: state.CoreProfiles,
+    core_profiles_t_plus_dt: state.CoreProfiles,
+    explicit_source_profiles: source_profiles.SourceProfiles,
+    models: models_lib.Models,
+    coeffs_old: Block1DCoeffs,
+    evolving_names: tuple[str, ...],
+    pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+) -> tuple[jax.Array, tridiagonal.BlockTriDiagonal]:
+  """Theta-method residual, together with its frozen-coefficient linearisation.
+
+  Same as `theta_method_block_residual`, but also returns the assembled LHS
+  matrix `I - dt*theta*diag(1/(tc_out*tc_in)) C_new` (after internal boundary
+  condition enforcement). This is the Picard linearisation of the residual and
+  makes an excellent preconditioner for a Krylov solve of the Newton system,
+  while being invertible in O(num_cells) with the Thomas algorithm.
+
+  Args: see `theta_method_block_residual`.
+
+  Returns:
+    A tuple of (residual, lhs_matrix). `lhs_matrix` acts on arrays of shape
+    (num_cells, num_channels); use `residual_vec_to_cell_channel_array` and
+    `cell_channel_array_to_residual_vec` to move between that layout and the
+    flat solver vector.
+  """
+  return _theta_method_block_residual_and_operator(
+      x_new_guess_vec=x_new_guess_vec,
+      dt=dt,
+      runtime_params_t_plus_dt=runtime_params_t_plus_dt,
+      geo_t_plus_dt=geo_t_plus_dt,
+      x_old=x_old,
+      core_profiles_t=core_profiles_t,
+      core_profiles_t_plus_dt=core_profiles_t_plus_dt,
+      explicit_source_profiles=explicit_source_profiles,
+      models=models,
+      coeffs_old=coeffs_old,
+      evolving_names=evolving_names,
+      pedestal_transition_state=pedestal_transition_state,
+  )
 
 
 @jax.jit(

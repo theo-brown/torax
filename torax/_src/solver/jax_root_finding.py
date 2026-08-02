@@ -16,7 +16,7 @@
 
 import dataclasses
 import functools
-from typing import Callable, Final
+from typing import Any, Callable, Final
 
 import jax
 import jax.numpy as jnp
@@ -29,6 +29,15 @@ from torax._src.solver import linesearch
 # cases with bad numerics.
 MIN_DELTA: Final[float] = 1e-7
 
+# Guard against dividing by a vanishing norm during a lucky GMRES breakdown.
+_GMRES_EPS: Final[float] = 1e-30
+
+# Type of a callable that, given x, returns (residual, preconditioner_operand).
+# The operand is an arbitrary pytree consumed by the preconditioner apply.
+ResidualWithOperatorFn = Callable[[jax.Array], tuple[jax.Array, Any]]
+# Type of a callable applying the inverse preconditioner: (operand, v) -> M^-1 v.
+PreconditionerApplyFn = Callable[[Any, jax.Array], jax.Array]
+
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass
@@ -37,6 +46,211 @@ class RootMetadata:
   residual: jax.Array
   last_tau: jax.Array
   error: jax.Array
+  # Total number of Krylov (Arnoldi) iterations summed over all Newton
+  # iterations. None for the direct linear solver, which has no Krylov loop.
+  krylov_iterations: jax.Array | None = None
+
+
+def _gmres_cycle(
+    matvec: Callable[[jax.Array], jax.Array],
+    preconditioner: Callable[[jax.Array], jax.Array],
+    target_norm: jax.Array,
+    x: jax.Array,
+    residual: jax.Array,
+    residual_norm: jax.Array,
+    restart: int,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+  """Runs one restart cycle of right-preconditioned GMRES.
+
+  Builds an Arnoldi basis for the Krylov space of `matvec . preconditioner`,
+  keeps the least-squares problem in triangular form with Givens rotations, and
+  stops as soon as the (exactly tracked) residual norm drops below
+  `target_norm`. Right preconditioning is used rather than left so that the
+  quantity being driven below the tolerance is the true residual `|b - A x|`
+  and not a preconditioned surrogate; that is what makes the inexact-Newton
+  forcing term meaningful.
+
+  Args:
+    matvec: Applies the (linear) system matrix A.
+    preconditioner: Applies the approximate inverse M^-1.
+    target_norm: Stop once the residual norm is at or below this.
+    x: Current iterate.
+    residual: b - A x at the current iterate.
+    residual_norm: Norm of `residual`.
+    restart: Maximum Krylov dimension of this cycle. Static; it sizes the
+      Arnoldi buffers.
+
+  Returns:
+    A tuple of (x, residual_norm, num_iterations) after the cycle.
+  """
+  size = x.shape[0]
+  dtype = x.dtype
+  # Arnoldi basis, one row per vector. `hessenberg` stores the triangularised
+  # least-squares factor column by column (row k is column k), so the upper
+  # triangular factor is its transpose.
+  basis = jnp.zeros((restart + 1, size), dtype=dtype).at[0].set(
+      residual / jnp.where(residual_norm > _GMRES_EPS, residual_norm, 1.0)
+  )
+  hessenberg = jnp.zeros((restart, restart), dtype=dtype)
+  cos = jnp.zeros((restart,), dtype=dtype)
+  sin = jnp.zeros((restart,), dtype=dtype)
+  # Right-hand side of the triangular least-squares problem. Its trailing entry
+  # is the exact residual norm of the current best iterate.
+  givens_rhs = jnp.zeros((restart + 1,), dtype=dtype).at[0].set(residual_norm)
+  basis_index = jnp.arange(restart + 1)
+
+  def cond_fun(carry):
+    iteration, _, _, _, _, _, norm = carry
+    return (iteration < restart) & (norm > target_norm)
+
+  def body_fun(carry):
+    iteration, basis, hessenberg, cos, sin, givens_rhs, _ = carry
+    w = matvec(preconditioner(basis[iteration]))
+
+    # Only the first `iteration + 1` basis vectors are populated; the rest of
+    # the buffer is stale, so mask their projections out.
+    active = basis_index <= iteration
+
+    def orthogonalise(w):
+      coeffs = jnp.where(active, basis @ w, 0.0)
+      return w - coeffs @ basis, coeffs
+
+    # Classical Gram-Schmidt applied twice. One pass vectorises into a single
+    # (restart+1, size) matmul, which is negligible next to a JVP through the
+    # physics, but loses orthogonality; a second pass restores it to the same
+    # accuracy as modified Gram-Schmidt without serialising over the basis.
+    w, coeffs_first = orthogonalise(w)
+    w, coeffs_second = orthogonalise(w)
+    column = (coeffs_first + coeffs_second).at[iteration + 1].set(
+        jnp.linalg.norm(w)
+    )
+    next_norm = column[iteration + 1]
+    basis = basis.at[iteration + 1].set(
+        w / jnp.where(next_norm > _GMRES_EPS, next_norm, 1.0)
+    )
+
+    # Apply the rotations accumulated by previous iterations, then eliminate
+    # the new subdiagonal entry with a fresh rotation.
+    def rotate(i, column):
+      rotated = cos[i] * column[i] + sin[i] * column[i + 1]
+      column = column.at[i + 1].set(
+          -sin[i] * column[i] + cos[i] * column[i + 1]
+      )
+      return column.at[i].set(rotated)
+
+    column = jax.lax.fori_loop(0, iteration, rotate, column)
+    hypot = jnp.sqrt(column[iteration] ** 2 + column[iteration + 1] ** 2)
+    hypot = jnp.where(hypot > _GMRES_EPS, hypot, 1.0)
+    cos_k = column[iteration] / hypot
+    sin_k = column[iteration + 1] / hypot
+    column = column.at[iteration].set(
+        cos_k * column[iteration] + sin_k * column[iteration + 1]
+    ).at[iteration + 1].set(0.0)
+
+    rhs_k = givens_rhs[iteration]
+    givens_rhs = givens_rhs.at[iteration].set(cos_k * rhs_k).at[
+        iteration + 1
+    ].set(-sin_k * rhs_k)
+
+    return (
+        iteration + 1,
+        basis,
+        hessenberg.at[iteration].set(column[:restart]),
+        cos.at[iteration].set(cos_k),
+        sin.at[iteration].set(sin_k),
+        givens_rhs,
+        jnp.abs(givens_rhs[iteration + 1]),
+    )
+
+  iteration, basis, hessenberg, _, _, givens_rhs, norm = jax.lax.while_loop(
+      cond_fun,
+      body_fun,
+      (0, basis, hessenberg, cos, sin, givens_rhs, residual_norm),
+  )
+
+  # Solve the triangular system over the columns that were actually built.
+  # Unused columns are replaced by the identity and their right-hand side by
+  # zero so the fixed-size solve returns zero for them.
+  active = jnp.arange(restart) < iteration
+  upper = jnp.where(
+      active[None, :], hessenberg.T, jnp.eye(restart, dtype=dtype)
+  )
+  y = jax.scipy.linalg.solve_triangular(
+      upper, jnp.where(active, givens_rhs[:restart], 0.0), lower=False
+  )
+  # Right preconditioning solves A M^-1 u = b, so the correction has to be
+  # pulled back through M^-1 once at the end of the cycle.
+  return x + preconditioner(y @ basis[:restart]), norm, iteration
+
+
+def gmres_right_preconditioned(
+    matvec: Callable[[jax.Array], jax.Array],
+    b: jax.Array,
+    preconditioner: Callable[[jax.Array], jax.Array],
+    restart: int,
+    max_krylov: int,
+    rtol: float,
+) -> tuple[jax.Array, jax.Array]:
+  """Solves A x = b with restarted, right-preconditioned GMRES.
+
+  Args:
+    matvec: Applies the system matrix A.
+    b: Right-hand side.
+    preconditioner: Applies the approximate inverse M^-1.
+    restart: Krylov dimension per cycle. Static.
+    max_krylov: Maximum total Arnoldi iterations across all cycles.
+    rtol: Relative tolerance; the solve stops once |b - A x| <= rtol * |b|.
+
+  Returns:
+    A tuple of (x, total_krylov_iterations).
+  """
+  b_norm = jnp.linalg.norm(b)
+  target_norm = rtol * b_norm
+
+  if restart >= max_krylov:
+    # A cycle stops either because it converged, or because it used its full
+    # Krylov dimension. When `restart >= max_krylov` the second case exhausts
+    # the total budget too, so a second cycle is unreachable. Emitting the
+    # restart loop anyway would put a second instantiation of `matvec` -- a JVP
+    # through the whole physics model -- into the graph for a branch that never
+    # runs, which is a large fraction of the compiled program. Since `restart`
+    # and `max_krylov` are static, resolve it here instead.
+    x, norm, iterations = _gmres_cycle(
+        matvec, preconditioner, target_norm, jnp.zeros_like(b), b, b_norm,
+        restart,
+    )
+    return x, iterations
+
+  def cond_fun(carry):
+    _, _, norm, total = carry
+    return (norm > target_norm) & (total < max_krylov)
+
+  def body_fun(carry):
+    x, residual, _, total = carry
+    x, norm, iterations = _gmres_cycle(
+        matvec,
+        preconditioner,
+        target_norm,
+        x,
+        residual,
+        jnp.linalg.norm(residual),
+        restart,
+    )
+    total += iterations
+    # Recomputing the residual costs a matvec, so only pay for it when another
+    # cycle will actually consume it. In the common single-cycle case this
+    # saves one JVP through the whole physics model per Newton iteration.
+    residual = jax.lax.cond(
+        (norm > target_norm) & (total < max_krylov),
+        lambda: b - matvec(x),
+        lambda: residual,
+    )
+    return x, residual, norm, total
+
+  x, _, _, total = jax.lax.while_loop(
+      cond_fun, body_fun, (jnp.zeros_like(b), b, b_norm, 0)
+  )
+  return x, total
 
 
 def root_newton_raphson(
@@ -52,6 +266,12 @@ def root_newton_raphson(
     log_iterations: bool = False,
     use_jax_custom_root: bool = True,
     custom_jac: Callable[[jax.Array], jax.Array] | None = None,
+    linear_solver: str = 'direct',
+    residual_with_operator_fun: ResidualWithOperatorFn | None = None,
+    preconditioner_apply: PreconditionerApplyFn | None = None,
+    jfnk_max_krylov: int = 30,
+    jfnk_restart: int = 30,
+    jfnk_rtol: float = 1e-2,
 ) -> tuple[jax.Array, RootMetadata]:
   """A differentiable Newton-Raphson root finder.
 
@@ -77,11 +297,39 @@ def root_newton_raphson(
       differentiable solving. This can increase compile times even when no
       derivatives are requested.
     custom_jac: If provided, use this function to compute the Jacobian of `fun`
-      instead of jax.jacfwd.
+      instead of jax.jacfwd. Only used by the 'direct' linear solver.
+    linear_solver: How to solve the Newton system for the step direction.
+      'direct' materialises the Jacobian with jax.jacfwd and does a dense LU
+      solve. 'jfnk' never forms the Jacobian: it uses Jacobian-vector products
+      and a preconditioned Krylov solve, which costs a number of JVPs set by
+      the Krylov convergence rather than one tangent per unknown.
+    residual_with_operator_fun: Only for 'jfnk'. Given x, returns the residual
+      and an operand for `preconditioner_apply`. This is linearised once per
+      Newton iteration, so the operand (the preconditioner) is obtained from
+      the same forward pass as the residual, at no extra cost.
+    preconditioner_apply: Only for 'jfnk'. Applies M^-1 to a vector given the
+      operand produced by `residual_with_operator_fun`.
+    jfnk_max_krylov: Only for 'jfnk'. Maximum total Krylov iterations per Newton
+      iteration.
+    jfnk_restart: Only for 'jfnk'. Krylov subspace dimension between restarts.
+      Static: it sizes the Arnoldi buffers.
+    jfnk_rtol: Only for 'jfnk'. Relative tolerance of the Krylov solve. This is
+      the inexact-Newton forcing term: since the Krylov right-hand side is the
+      current nonlinear residual, a fixed relative tolerance automatically
+      solves loosely when far from the root and tightly when close to it.
 
   Returns:
     A tuple `(x_root, RootMetadata(...))`.
   """
+  if linear_solver not in ('direct', 'jfnk'):
+    raise ValueError(f'Unknown linear_solver: {linear_solver}')
+  if linear_solver == 'jfnk' and (
+      residual_with_operator_fun is None or preconditioner_apply is None
+  ):
+    raise ValueError(
+        "linear_solver='jfnk' requires residual_with_operator_fun and"
+        ' preconditioner_apply.'
+    )
 
   def _newton_raphson(f, x, jacobian_fun=None):
     init_x_new_vec = x
@@ -91,10 +339,23 @@ def root_newton_raphson(
         f, compilation_unit='residual_fun_block'
     )
 
-    if jacobian_fun is None:
-      jacobian_fun = jax.jacfwd(f)
-      jacobian_fun = jax_utils.xla_metadata_call(
-          jax.jit(jacobian_fun), compilation_unit='jacobian_fun_block'
+    if linear_solver == 'jfnk':
+      direction_fun = functools.partial(
+          _jfnk_direction,
+          residual_with_operator_fun=residual_with_operator_fun,
+          preconditioner_apply=preconditioner_apply,
+          max_krylov=jfnk_max_krylov,
+          restart=jfnk_restart,
+          rtol=jfnk_rtol,
+      )
+    else:
+      if jacobian_fun is None:
+        jacobian_fun = jax.jacfwd(f)
+        jacobian_fun = jax_utils.xla_metadata_call(
+            jax.jit(jacobian_fun), compilation_unit='jacobian_fun_block'
+        )
+      direction_fun = functools.partial(
+          _direct_direction, jacobian_fun=jacobian_fun
       )
 
     # initialize state dict being passed around Newton-Raphson iterations
@@ -107,6 +368,11 @@ def root_newton_raphson(
         'residual': residual_vec_init_x_new,
         'last_tau': jnp.array(1.0, dtype=jax_utils.get_dtype()),
     }
+    if linear_solver == 'jfnk':
+      # Same integer-dtype caveat as `iterations` above.
+      initial_state['krylov_iterations'] = jnp.array(
+          0, dtype=jax_utils.get_dtype()
+      )
 
     # carry out iterations.
     cond_fun = functools.partial(
@@ -114,7 +380,7 @@ def root_newton_raphson(
     )
     body_fun = functools.partial(
         _body,
-        jacobian_fun=jacobian_fun,
+        direction_fun=direction_fun,
         residual_fun=residual_fun,
         log_iterations=log_iterations,
         delta_reduction_factor=delta_reduction_factor,
@@ -136,6 +402,10 @@ def root_newton_raphson(
   def back(g, y):
     return jnp.linalg.solve(jax.jacfwd(g)(y), y)
 
+  # JFNK is compatible with custom_root: custom_root only needs the forward
+  # solve to be traceable and to return the root, and it supplies its own
+  # tangent_solve for derivatives, so how the step direction is computed inside
+  # the loop is invisible to it.
   if use_jax_custom_root:
     if custom_jac is not None:
       raise ValueError('custom_jac is not compatible with use_jax_custom_root.')
@@ -164,6 +434,10 @@ def root_newton_raphson(
   metadata['iterations'] = metadata['iterations'].astype(
       jax_utils.get_int_dtype()
   )
+  if 'krylov_iterations' in metadata:
+    metadata['krylov_iterations'] = metadata['krylov_iterations'].astype(
+        jax_utils.get_int_dtype()
+    )
   return x_out, RootMetadata(**metadata, error=error)  # pytype: disable=bad-return-type
 
 
@@ -201,9 +475,65 @@ def _cond(
   )
 
 
+def _direct_direction(
+    x: jax.Array,
+    rhs: jax.Array,
+    jacobian_fun: Callable[[jax.Array], jax.Array],
+) -> tuple[jax.Array, jax.Array | int]:
+  """Solves the Newton system with a materialised Jacobian and a dense LU."""
+  a_mat = jacobian_fun(x)
+  return jnp.linalg.solve(a_mat, rhs), 0
+
+
+def _jfnk_direction(
+    x: jax.Array,
+    rhs: jax.Array,
+    residual_with_operator_fun: ResidualWithOperatorFn,
+    preconditioner_apply: PreconditionerApplyFn,
+    max_krylov: int,
+    restart: int,
+    rtol: float,
+) -> tuple[jax.Array, jax.Array | int]:
+  """Solves the Newton system matrix-free with preconditioned GMRES.
+
+  Args:
+    x: Current Newton iterate.
+    rhs: Right-hand side of the Newton system, i.e. -residual(x).
+    residual_with_operator_fun: Given x, returns (residual, preconditioner
+      operand).
+    preconditioner_apply: Applies M^-1 given the operand.
+    max_krylov: Maximum total Krylov iterations.
+    restart: Krylov subspace dimension between restarts.
+    rtol: Relative tolerance of the Krylov solve.
+
+  Returns:
+    A tuple of (direction, krylov_iterations).
+  """
+  # Linearise once per Newton iteration rather than calling jax.jvp per Krylov
+  # iteration: jax.linearize runs the primal (the whole transport and source
+  # model) a single time and returns a closure that replays only the tangent
+  # sweep, so each Krylov iteration costs one tangent pass instead of a full
+  # forward-plus-tangent evaluation. The aux output carries the frozen
+  # coefficient LHS assembled during that same primal pass, so the
+  # preconditioner is free.
+  _, jvp_fun, operator = jax.linearize(
+      residual_with_operator_fun, x, has_aux=True
+  )
+  return gmres_right_preconditioned(
+      matvec=jvp_fun,
+      b=rhs,
+      preconditioner=functools.partial(preconditioner_apply, operator),
+      restart=restart,
+      max_krylov=max_krylov,
+      rtol=rtol,
+  )
+
+
 def _body(
     input_state: dict[str, jax.Array],
-    jacobian_fun: Callable[[jax.Array], jax.Array],
+    direction_fun: Callable[
+        [jax.Array, jax.Array], tuple[jax.Array, jax.Array | int]
+    ],
     residual_fun: Callable[[jax.Array], jax.Array],
     log_iterations: bool,
     delta_reduction_factor: float,
@@ -211,10 +541,9 @@ def _body(
 ) -> dict[str, jax.Array]:
   """Calculates next guess in Newton-Raphson iteration."""
   dtype = input_state['x'].dtype
-  a_mat = jacobian_fun(input_state['x'])
   rhs = -input_state['residual']
 
-  direction = jnp.linalg.solve(a_mat, rhs)
+  direction, krylov_iterations = direction_fun(input_state['x'], rhs)
 
   def norm_fn(res):
     return jnp.mean(jnp.abs(res))
@@ -245,6 +574,12 @@ def _body(
       'iterations': jnp.array(input_state['iterations'][...], dtype=dtype) + 1,
       'last_tau': ls_state.step_size,
   }
+  # Only tracked by the Krylov path; the direct path has no such counter and
+  # must keep its state dict (and therefore its compiled loop) unchanged.
+  if 'krylov_iterations' in input_state:
+    output_state['krylov_iterations'] = input_state['krylov_iterations'] + (
+        jnp.array(krylov_iterations, dtype=dtype)
+    )
 
   if log_iterations:
     jax.debug.print(
@@ -253,5 +588,13 @@ def _body(
         residual=_residual_scalar(output_state['residual']),
         tau=ls_state.step_size,
     )
+    if 'krylov_iterations' in output_state:
+      jax.debug.print(
+          '  Krylov iterations this step: {k:d} (cumulative {total:d})',
+          k=jnp.array(krylov_iterations).astype(jax_utils.get_int_dtype()),
+          total=output_state['krylov_iterations'].astype(
+              jax_utils.get_int_dtype()
+          ),
+      )
 
   return output_state
