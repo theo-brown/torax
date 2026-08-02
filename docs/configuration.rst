@@ -2533,6 +2533,21 @@ specific solver are defined in the relevant section below.
 ``fixed_point_sufficient_decrease`` (float [default = 0.5])
   Sufficient decrease threshold used in the fixed point (predictor-corrector) backtracking line search.
 
+``fixed_point_acceleration`` (str [default = 'none'])
+  Acceleration scheme applied to the fixed-point (predictor-corrector) iterations.
+  Must be either 'none' (plain Picard iteration) or 'anderson' (Anderson mixing over
+  a history of previous iterates, which can accelerate the convergence of the Picard
+  iteration at the cost of one small least-squares solve per iteration and no extra
+  evaluations of the transport and source models).
+
+``anderson_depth`` (int [default = 5])
+  Number of previous iterates retained by the Anderson history. Only used if
+  ``fixed_point_acceleration`` is 'anderson'.
+
+``anderson_beta`` (float [default = 1.0])
+  Anderson damping (mixing) parameter. 1.0 is undamped. Only used if
+  ``fixed_point_acceleration`` is 'anderson'.
+
 ``delta_reduction_factor`` (float [default = 0.5])
   Factor by which the step size is reduced during backtracking.
 

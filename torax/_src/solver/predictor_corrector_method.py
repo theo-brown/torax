@@ -118,6 +118,9 @@ def predictor_corrector_method(
         use_backtracking=solver_params.fixed_point_use_backtracking,
         sufficient_decrease=solver_params.fixed_point_sufficient_decrease,
         step_size_reduction_factor=solver_params.delta_reduction_factor,
+        acceleration=solver_params.fixed_point_acceleration,
+        anderson_depth=solver_params.anderson_depth,
+        anderson_beta=solver_params.anderson_beta,
     )
   else:
     x_new = loop_body(x_new_guess)

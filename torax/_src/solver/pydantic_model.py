@@ -58,6 +58,12 @@ class BaseSolver(torax_pydantic.BaseModelFrozen, abc.ABC):
       (predictor-corrector) method.
     fixed_point_use_backtracking: Enables backtracking linesearch for the fixed
       point (predictor-corrector) method.
+    fixed_point_acceleration: Acceleration scheme for the fixed point
+      (predictor-corrector) method. 'none' is plain Picard, 'anderson' is
+      Anderson mixing over a history of previous iterates.
+    anderson_depth: Number of previous iterates retained by the Anderson
+      history. Only used if `fixed_point_acceleration` is 'anderson'.
+    anderson_beta: Anderson damping (mixing) parameter. 1.0 is undamped.
   """
 
   theta_implicit: Annotated[
@@ -89,6 +95,11 @@ class BaseSolver(torax_pydantic.BaseModelFrozen, abc.ABC):
   fixed_point_use_backtracking: Annotated[bool, torax_pydantic.JAX_STATIC] = (
       False
   )
+  fixed_point_acceleration: Annotated[
+      Literal['none', 'anderson'], torax_pydantic.JAX_STATIC
+  ] = 'none'
+  anderson_depth: Annotated[pydantic.PositiveInt, torax_pydantic.JAX_STATIC] = 5
+  anderson_beta: float = 1.0
   delta_reduction_factor: float = 0.5
 
   @property
@@ -141,6 +152,9 @@ class LinearThetaMethod(BaseSolver):
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,
         fixed_point_sufficient_decrease=self.fixed_point_sufficient_decrease,
         fixed_point_use_backtracking=self.fixed_point_use_backtracking,
+        fixed_point_acceleration=self.fixed_point_acceleration,
+        anderson_depth=self.anderson_depth,
+        anderson_beta=self.anderson_beta,
         delta_reduction_factor=self.delta_reduction_factor,
     )
 
@@ -207,6 +221,9 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,
         fixed_point_sufficient_decrease=self.fixed_point_sufficient_decrease,
         fixed_point_use_backtracking=self.fixed_point_use_backtracking,
+        fixed_point_acceleration=self.fixed_point_acceleration,
+        anderson_depth=self.anderson_depth,
+        anderson_beta=self.anderson_beta,
     )
 
   def build_solver(
@@ -259,6 +276,9 @@ class OptimizerThetaMethod(BaseSolver):
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,
         fixed_point_sufficient_decrease=self.fixed_point_sufficient_decrease,
         fixed_point_use_backtracking=self.fixed_point_use_backtracking,
+        fixed_point_acceleration=self.fixed_point_acceleration,
+        anderson_depth=self.anderson_depth,
+        anderson_beta=self.anderson_beta,
         delta_reduction_factor=self.delta_reduction_factor,
     )
 

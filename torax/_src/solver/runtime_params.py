@@ -44,4 +44,7 @@ class RuntimeParams:
   fixed_point_use_backtracking: bool = dataclasses.field(
       metadata={'static': True}
   )
+  fixed_point_acceleration: str = dataclasses.field(metadata={'static': True})
+  anderson_depth: int = dataclasses.field(metadata={'static': True})
+  anderson_beta: float
   delta_reduction_factor: float
