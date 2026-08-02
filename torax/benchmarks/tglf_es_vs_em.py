@@ -77,10 +77,14 @@ _TGLF_RHO_MAX = 0.95
 #     holding it fixed does not affect the electrostatic/electromagnetic
 #     contrast.
 #   * NS is kept at the surrogates' value of 2 (electrons + main ion). TORAX
-#     populates a third species (ZS_3, MASS_3, TAUS_3, AS_3, RLNS_3, RLTS_3)
-#     but TGLF ignores it at NS=2. Main ion dilution still reaches TGLF via
-#     AS_2 = n_i / n_e and the impurity charge via ZEFF; what is dropped is
-#     the impurity's own density and temperature gradient drive.
+#     populates a third species (ZS_3, MASS_3, TAUS_3, AS_3, RLNS_3, RLTS_3),
+#     but TGLF's species loop runs to NS, so at NS=2 those values are written
+#     into the interface and never read. Note this also leaves TGLF's species
+#     set non-quasineutral: TORAX passes the diluted AS_2 = n_i / n_e against
+#     AS_1 = 1 for electrons, and TGLF does not renormalize, so the
+#     compensating impurity charge is simply absent from both the ion charge
+#     sum and the polarization term. Pass --tglf_override=NS=3 to include the
+#     impurity species instead.
 _COMMON_TGLF_SETTINGS = {
     'UNITS': 'CGYRO',
     'USE_TRANSPORT_MODEL': True,
@@ -170,6 +174,57 @@ _N_PROCESSES = flags.DEFINE_integer(
     4,
     'Number of parallel TGLF processes, one radial face per process.',
 )
+_TGLF_OVERRIDES = flags.DEFINE_multi_string(
+    'tglf_override',
+    [],
+    'Repeatable KEY=VALUE override applied to every variant, e.g.'
+    ' --tglf_override=NS=3. Applied to all variants so the'
+    ' electrostatic/electromagnetic comparison stays controlled. NS=2 matches'
+    ' the surrogate namelists; NS=3 additionally passes TGLF the impurity'
+    ' species that TORAX already computes (TGLF only reads species up to NS).',
+)
+
+
+def _parse_overrides(overrides: list[str]) -> dict[str, Any]:
+  """Parses `KEY=VALUE` strings into a TGLF settings dict.
+
+  Values are coerced to int, then float, then to the Fortran logical strings
+  TGLF expects, and are otherwise left as strings.
+
+  Args:
+    overrides: Strings of the form `KEY=VALUE`.
+
+  Returns:
+    A dict of TGLF namelist parameters.
+
+  Raises:
+    ValueError: If an entry is not of the form `KEY=VALUE`.
+  """
+  parsed = {}
+  for override in overrides:
+    key, sep, value = override.partition('=')
+    if not sep:
+      raise ValueError(
+          f"Expected an override of the form KEY=VALUE, got '{override}'."
+      )
+    key, value = key.strip(), value.strip()
+    try:
+      parsed[key] = int(value)
+      continue
+    except ValueError:
+      pass
+    try:
+      parsed[key] = float(value)
+      continue
+    except ValueError:
+      pass
+    if value.lower() in ('true', '.true.', 't', 'yes'):
+      parsed[key] = '.true.'
+    elif value.lower() in ('false', '.false.', 'f', 'no'):
+      parsed[key] = '.false.'
+    else:
+      parsed[key] = value
+  return parsed
 
 
 def build_config(
@@ -367,12 +422,16 @@ def main(_) -> None:
   output_dir = _OUTPUT_DIR.value
   os.makedirs(output_dir, exist_ok=True)
 
+  overrides = _parse_overrides(_TGLF_OVERRIDES.value)
+  if overrides:
+    logging.info('Applying TGLF overrides to every variant: %s', overrides)
+
   summary = {}
   for case in _CASES.value:
     configs = {
         variant: build_config(
             BASE_CONFIGS[case],
-            TGLF_SETTINGS_BY_VARIANT[variant],
+            TGLF_SETTINGS_BY_VARIANT[variant] | overrides,
             n_processes=_N_PROCESSES.value,
             t_final=_T_FINAL.value,
         )
