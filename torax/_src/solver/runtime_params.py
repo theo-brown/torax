@@ -45,3 +45,5 @@ class RuntimeParams:
       metadata={'static': True}
   )
   delta_reduction_factor: float
+  split_psi: bool = dataclasses.field(metadata={'static': True})
+  split_psi_order: str = dataclasses.field(metadata={'static': True})

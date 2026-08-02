@@ -58,6 +58,17 @@ class BaseSolver(torax_pydantic.BaseModelFrozen, abc.ABC):
       (predictor-corrector) method.
     fixed_point_use_backtracking: Enables backtracking linesearch for the fixed
       point (predictor-corrector) method.
+    split_psi: If True, the psi (current diffusion) equation is removed from the
+      monolithic solve and advanced by operator splitting instead. The kinetic
+      channels are solved with psi held fixed, and psi is then advanced with a
+      single linear implicit solve. This shrinks the coupled block by one
+      channel at the cost of a first- (Lie) or second-order (Strang) splitting
+      error. Has no effect unless psi is evolved alongside at least one kinetic
+      channel.
+    split_psi_order: Splitting scheme used when `split_psi` is True. 'lie'
+      advances the kinetic block then psi. 'strang' does half a psi step, the
+      full kinetic step, then the second half psi step, which is second-order
+      accurate in the splitting error for the same number of nonlinear solves.
   """
 
   theta_implicit: Annotated[
@@ -90,6 +101,10 @@ class BaseSolver(torax_pydantic.BaseModelFrozen, abc.ABC):
       False
   )
   delta_reduction_factor: float = 0.5
+  split_psi: Annotated[bool, torax_pydantic.JAX_STATIC] = False
+  split_psi_order: Annotated[
+      Literal['lie', 'strang'], torax_pydantic.JAX_STATIC
+  ] = 'lie'
 
   @property
   @abc.abstractmethod
@@ -142,6 +157,8 @@ class LinearThetaMethod(BaseSolver):
         fixed_point_sufficient_decrease=self.fixed_point_sufficient_decrease,
         fixed_point_use_backtracking=self.fixed_point_use_backtracking,
         delta_reduction_factor=self.delta_reduction_factor,
+        split_psi=self.split_psi,
+        split_psi_order=self.split_psi_order,
     )
 
   def build_solver(
@@ -199,6 +216,8 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         residual_coarse_tol=self.residual_coarse_tol,
         n_corrector_steps=self.n_corrector_steps,
         delta_reduction_factor=self.delta_reduction_factor,
+        split_psi=self.split_psi,
+        split_psi_order=self.split_psi_order,
         tau_min=self.tau_min,
         initial_guess_mode=self.initial_guess_mode.value,  # pyrefly: ignore[bad-argument-type]
         log_iterations=self.log_iterations,
@@ -260,6 +279,8 @@ class OptimizerThetaMethod(BaseSolver):
         fixed_point_sufficient_decrease=self.fixed_point_sufficient_decrease,
         fixed_point_use_backtracking=self.fixed_point_use_backtracking,
         delta_reduction_factor=self.delta_reduction_factor,
+        split_psi=self.split_psi,
+        split_psi_order=self.split_psi_order,
     )
 
   def build_solver(

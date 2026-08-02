@@ -2563,6 +2563,31 @@ specific solver are defined in the relevant section below.
     validation or small systems, as it does not exploit sparsity and scales
     as cubicly with the number of grid cells.
 
+``split_psi`` (bool [default = False])
+  If ``True``, the ``psi`` (current diffusion) equation is removed from the
+  coupled block and advanced by operator splitting. The kinetic channels
+  (``T_i``, ``T_e``, ``n_e``) are solved first with ``psi`` held fixed, and
+  ``psi`` is then advanced by a single linear implicit solve, since the psi
+  equation has a purely geometric diffusion coefficient, no convection and no
+  implicit source matrix. This shrinks the nonlinear block by one channel,
+  which for the Newton-Raphson solver removes a quarter of the Jacobian
+  tangents when all four channels are evolved. The cost is a time-splitting
+  error, which is small because current diffusion evolves on the much slower
+  resistive timescale. Has no effect unless ``psi`` is evolved together with
+  at least one kinetic channel.
+
+``split_psi_order`` (str [default = 'lie'])
+  Splitting scheme used when ``split_psi=True``.
+
+* ``'lie'``
+    Advance the kinetic block over the full step, then ``psi``. First-order
+    accurate in the splitting error.
+
+* ``'strang'``
+    Advance ``psi`` over half a step, then the kinetic block over the full
+    step, then ``psi`` over the second half step. Second-order accurate in the
+    splitting error, at the cost of one extra linear psi solve per step.
+
 linear
 ^^^^^^
 
