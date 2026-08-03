@@ -544,9 +544,14 @@ def compute_core_domain_mask(
       runtime_params.pedestal.mode
       == pedestal_runtime_params_lib.Mode.INTERNAL_BOUNDARY_CONDITION
   ):
+    # Strict inequality: a face lying exactly on rho_norm_ped_top is the
+    # interface to the pinned pedestal region and belongs to the pedestal
+    # side. Letting a stiff core model (e.g. QLKNN) set the flux on that
+    # face, from a gradient into the boundary-condition region, destroys
+    # Newton convergence whenever rho_norm_ped_top coincides with a face.
     active_mask = active_mask & (
         jnp.logical_not(runtime_params.pedestal.set_pedestal)
-        | (geo.rho_face_norm <= pedestal_model_output.rho_norm_ped_top)
+        | (geo.rho_face_norm < pedestal_model_output.rho_norm_ped_top)
     )
 
   # Special case: if rho_min is 0, lower bound of active range is the first
