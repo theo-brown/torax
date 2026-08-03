@@ -56,6 +56,7 @@ MIN_DELTA: Final[float] = 1e-7
         'newton_linear_solver',
         'jfnk_max_krylov',
         'jfnk_restart',
+        'jfnk_forcing',
     ],
 )
 def newton_raphson_solve_block(
@@ -83,6 +84,7 @@ def newton_raphson_solve_block(
     jfnk_max_krylov: int = 30,
     jfnk_restart: int = 30,
     jfnk_rtol: float = 1e-2,
+    jfnk_forcing: str = 'fixed',
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -160,7 +162,10 @@ def newton_raphson_solve_block(
       `jax_root_finding.root_newton_raphson`.
     jfnk_max_krylov: Maximum total Krylov iterations per Newton iteration.
     jfnk_restart: Krylov subspace dimension between GMRES restarts.
-    jfnk_rtol: Relative tolerance of the Krylov solve.
+    jfnk_rtol: Relative tolerance of the Krylov solve. Under adaptive forcing,
+      the floor of the forcing term.
+    jfnk_forcing: 'fixed' or 'adaptive' (Eisenstat-Walker). See
+      `jax_root_finding.root_newton_raphson`.
 
 
   Returns:
@@ -279,6 +284,7 @@ def newton_raphson_solve_block(
         jfnk_max_krylov=jfnk_max_krylov,
         jfnk_restart=jfnk_restart,
         jfnk_rtol=jfnk_rtol,
+        jfnk_forcing=jfnk_forcing,
     )
 
   root_finder = functools.partial(

@@ -186,6 +186,12 @@ class NewtonRaphsonThetaMethod(BaseSolver):
       ~1e-5 with an identical Newton iteration count, and the Krylov solve is
       still far cheaper than forming the Jacobian.
     jfnk_restart: Krylov subspace dimension between GMRES restarts.
+    jfnk_forcing: How the Krylov tolerance is chosen per Newton iteration.
+      'fixed' uses jfnk_rtol at every iteration. 'adaptive' uses the
+      Eisenstat-Walker choice-2 forcing term, which solves loosely on early
+      Newton iterations and tightens automatically as the residual falls,
+      floored at jfnk_rtol so the final iterations are as accurate as the
+      fixed setting.
   """
 
   solver_type: Annotated[
@@ -208,6 +214,9 @@ class NewtonRaphsonThetaMethod(BaseSolver):
   ] = 30
   jfnk_restart: Annotated[pydantic.PositiveInt, torax_pydantic.JAX_STATIC] = 30
   jfnk_rtol: float = 1e-5
+  jfnk_forcing: Annotated[
+      Literal['fixed', 'adaptive'], torax_pydantic.JAX_STATIC
+  ] = 'fixed'
 
   @functools.cached_property
   def build_runtime_params(
@@ -234,6 +243,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         jfnk_max_krylov=self.jfnk_max_krylov,
         jfnk_restart=self.jfnk_restart,
         jfnk_rtol=self.jfnk_rtol,
+        jfnk_forcing=self.jfnk_forcing,
         fixed_point_atol=self.fixed_point_atol,
         fixed_point_rtol=self.fixed_point_rtol,
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,
