@@ -301,7 +301,9 @@ def _pedestal_domain_mask(
     pedestal_output: pedestal_model_output_lib.PedestalModelOutput,
 ) -> jax.Array:
   """Calculates the active domain mask for pedestal transport models."""
-  return jnp.asarray(geo.rho_face_norm > pedestal_output.rho_norm_ped_top)
+  # >= so that a face lying exactly on rho_norm_ped_top belongs to the
+  # pedestal side, complementing the strict < in the core domain mask.
+  return jnp.asarray(geo.rho_face_norm >= pedestal_output.rho_norm_ped_top)
 
 
 def _build_smoothing_matrix(
