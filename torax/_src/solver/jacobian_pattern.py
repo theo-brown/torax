@@ -56,6 +56,12 @@ _TURBULENT_CHANNELS = frozenset({'T_i', 'T_e', 'n_e'})
 # derivatives reach one further.
 _LOCAL_HALO_WIDTH = 2
 
+# Cells adjacent to the domain boundaries use one-sided and axis-regularised
+# derivative stencils (e.g. on-axis current and q from psi), which reach
+# deeper into the domain than the interior halo. Within this many cells of
+# either boundary, all-to-all coupling is declared (see `build_pattern`).
+_BOUNDARY_STENCIL_WIDTH = 5
+
 
 def build_pattern(
     num_cells: int,
@@ -92,6 +98,20 @@ def build_pattern(
   # charge states, conductivity, exchange terms) mix every channel within the
   # halo.
   local_cells = offset <= 1 + halo_width
+
+  # Boundary stencils: near the axis and the edge, derivative stencils are
+  # one-sided and reach deeper than the interior halo (measured example: the
+  # on-axis T_e equation depends on psi four cells inward through the
+  # axis-regularised current). Declare the boundary corner blocks densely;
+  # they are tiny, so the extra probes are negligible.
+  corner = _BOUNDARY_STENCIL_WIDTH + halo_width + 1
+  near_axis = cell < min(corner, num_cells)
+  near_edge = cell >= max(num_cells - corner, 0)
+  local_cells = (
+      local_cells
+      | (near_axis[:, None] & near_axis[None, :])
+      | (near_edge[:, None] & near_edge[None, :])
+  )
 
   # Path 3: row cell i reads transport coefficients at faces {i, i+1}; a
   # smoothed coefficient at face f gathers raw coefficients from every face g

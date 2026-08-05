@@ -209,6 +209,25 @@ class JacobianPatternTest(absltest.TestCase):
     )
     self.assertLess(float(error), 1e-10)
 
+  def test_boundary_corner_blocks_are_declared(self):
+    """One-sided boundary stencils reach deeper than the interior halo.
+
+    Regression check for a measured coupling of the on-axis T_e equation to
+    psi four cells inward (through the axis-regularised current), which lies
+    outside the interior band.
+    """
+    pattern = jacobian_pattern.build_pattern(
+        self.num_cells, self.evolving_names, smoothing_matrix=None
+    )
+    t_e = self.evolving_names.index('T_e')
+    psi = self.evolving_names.index('psi')
+    self.assertTrue(pattern[t_e * self.num_cells, psi * self.num_cells + 4])
+    self.assertTrue(
+        pattern[
+            (t_e + 1) * self.num_cells - 1, (psi + 1) * self.num_cells - 5
+        ]
+    )
+
   def test_verification_probe_catches_missing_smoothing_path(self):
     """A pattern that omits the smoothing coupling must fail verification."""
     banded_only = jacobian_pattern.build_pattern(
