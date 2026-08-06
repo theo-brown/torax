@@ -62,6 +62,11 @@ CONFIG = {
     'geometry': {
         'geometry_type': 'chease',
         'geometry_file': 'iterhybrid.mat2cols',
+        # 0.9 * 50 = 45: rho_norm_ped_top lies exactly on a face, which is a
+        # regression test for the pedestal-top face-alignment masks. Before
+        # those used strict inequalities, this configuration left most steps
+        # unconverged (solver_error_state == 2) with dt collapse.
+        'n_rho': 50,
         'Ip_from_parameters': True,
         'R_major': 6.2,  # major radius (R) in meters
         'a_minor': 2.0,  # minor radius (a) in meters
