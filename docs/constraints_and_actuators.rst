@@ -182,9 +182,15 @@ written as a single equation with the Fischer-Burmeister function
    \qquad a = u - u_{min}, \; b = g,
 
 which replaces the constraint row verbatim (``u_min`` on the constraint
-config enables it). The :math:`\epsilon`-smoothing keeps the row
-differentiable for the Newton solve; the enforcement error it introduces is
-:math:`O(\epsilon^2)`. Two properties make this the right formulation:
+config enables it). With both ``u_min`` and ``u_max`` the two
+Fischer-Burmeister forms nest, giving the box condition: :math:`g = 0` in
+the interior, :math:`g > 0` at the lower bound, :math:`g < 0` at the upper
+bound. Each single-bound form is the limit of the nested one as the other
+bound goes to infinity, so all three cases are one expression evaluated
+with whichever bounds are configured. The :math:`\epsilon`-smoothing keeps
+the row differentiable for the Newton solve; the enforcement error it
+introduces is :math:`O(\epsilon^2)`. Two properties make this the right
+formulation:
 at saturation the row degenerates toward the well-conditioned
 :math:`u = u_{min}` rather than toward a vanishing Schur complement, and
 the constraint violation is *reported honestly* (the density overshoots an

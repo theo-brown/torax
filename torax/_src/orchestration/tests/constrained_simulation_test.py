@@ -210,6 +210,54 @@ class ConstrainedSimulationTest(absltest.TestCase):
     # Without fuelling the density still drifts upward from other sources.
     self.assertGreater(nbars[-1], nbars[1])
 
+  def test_box_bounded_hard_constraint_visits_all_three_regimes(self):
+    """A target ramping across the free trajectory exercises both bounds.
+
+    Early the target is below what the plasma does unfuelled, so the puff
+    saturates at zero and the density sits above target; late the target
+    outruns the valve, so the puff saturates at u_max and the density sits
+    below target; in between the target is reachable and met exactly.
+    """
+    u_max = 5e22
+    torax_config = _build_config(
+        constraints=[
+            dict(
+                constraint='n_e_line_avg',
+                target={0.0: 1.02e20, 1.5: 1.45e20},
+                mode='hard',
+                u_min=0.0,
+                u_max=u_max,
+            )
+        ],
+        t_final=1.5,
+    )
+    times, nbars, actuators, errors = _run(torax_config)
+    self.assertTrue(all(e == 0 for e in errors))
+    u_max_hat = u_max / 1e22  # gas_puff S_total default is the reference
+
+    saw_low, saw_interior, saw_high = False, False, False
+    for k in range(1, len(times)):
+      target = np.interp(times[k], [0.0, 1.5], [1.02e20, 1.45e20])
+      g_hat = (nbars[k] - target) / target
+      u = actuators[k]
+      self.assertGreater(u, -1e-6, msg=f'step {k} below lower bound')
+      self.assertLess(u, u_max_hat + 1e-6, msg=f'step {k} above upper bound')
+      if abs(u) < 1e-6:
+        # Saturated low: the density can only sit above the target.
+        self.assertGreater(g_hat, 0.0, msg=f'step {k}')
+        saw_low = True
+      elif abs(u - u_max_hat) < 1e-6:
+        # Saturated high: the density can only sit below the target.
+        self.assertLess(g_hat, 0.0, msg=f'step {k}')
+        saw_high = True
+      else:
+        # Interior: the constraint is met exactly.
+        self.assertLess(abs(g_hat), 1e-6, msg=f'step {k}')
+        saw_interior = True
+    self.assertTrue(saw_low, 'lower bound never active')
+    self.assertTrue(saw_interior, 'constraint never met in the interior')
+    self.assertTrue(saw_high, 'upper bound never active')
+
   def test_constraint_on_adaptive_timestep_path(self):
     """The adaptive-dt path threads actuator state through its retry loop."""
     torax_config = _build_config(

@@ -60,12 +60,13 @@ class ConstraintRuntimeParams:
   constraint: str = dataclasses.field(metadata={'static': True})
   actuator: str = dataclasses.field(metadata={'static': True})
   mode: str = dataclasses.field(metadata={'static': True})
-  # Lower bound of the actuator in physical units, or None when unbounded.
-  # With a bound, the hard constraint becomes a complementarity condition:
-  # either the target is met with a feasible actuator, or the actuator sits
-  # at the bound and the constraint is violated in the only direction it can
-  # be. See `solver.constraints.build_augmented_residual`.
+  # Bounds of the actuator in physical units, or None when unbounded. With a
+  # bound, the hard constraint becomes a complementarity condition: either
+  # the target is met with a feasible actuator, or the actuator sits at a
+  # bound and the constraint is violated in the only direction that bound
+  # allows. See `solver.constraints.build_augmented_residual`.
   u_min: array_typing.FloatScalar | None = None
+  u_max: array_typing.FloatScalar | None = None
 
 
 class ConstraintConfig(torax_pydantic.BaseModelFrozen):
@@ -88,6 +89,8 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
       the actuator is feasible, and the actuator saturates at the bound
       (with the constraint honestly violated) when it is not. Bounded
       'relaxed' mode needs anti-windup and is not yet implemented.
+    u_max: Optional upper bound of the actuator, in the same units. Combining
+      both bounds gives a box complementarity condition.
   """
 
   constraint: Annotated[Literal['n_e_line_avg'], torax_pydantic.JAX_STATIC] = (
@@ -104,13 +107,23 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
   )
   tau: pydantic.PositiveFloat = 0.5
   u_min: float | None = None
+  u_max: float | None = None
 
   @pydantic.model_validator(mode='after')
-  def _validate_bound(self):
-    if self.u_min is not None and self.mode != 'hard':
+  def _validate_bounds(self):
+    bounded = self.u_min is not None or self.u_max is not None
+    if bounded and self.mode != 'hard':
       raise ValueError(
-          'u_min is only supported with mode="hard"; bounded relaxed mode'
-          ' (anti-windup) is not yet implemented.'
+          'actuator bounds are only supported with mode="hard"; bounded'
+          ' relaxed mode (anti-windup) is not yet implemented.'
+      )
+    if (
+        self.u_min is not None
+        and self.u_max is not None
+        and self.u_max <= self.u_min
+    ):
+      raise ValueError(
+          f'u_max ({self.u_max}) must exceed u_min ({self.u_min}).'
       )
     return self
 
@@ -126,4 +139,5 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
         actuator=self.actuator,
         mode=self.mode,
         u_min=self.u_min,
+        u_max=self.u_max,
     )

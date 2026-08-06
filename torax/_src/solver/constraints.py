@@ -147,6 +147,56 @@ def substitute_actuators(
   return runtime_params
 
 
+def _fischer_burmeister(a: jax.Array, b: jax.Array) -> jax.Array:
+  """Smoothed Fischer-Burmeister function: zero iff a, b >= 0 and a*b ~= 0."""
+  return a + b - jnp.sqrt(a**2 + b**2 + _FB_EPSILON**2)
+
+
+def _complementarity_row(
+    constraint: ConstraintRuntimeParams,
+    u_hat: jax.Array,
+    g_hat: jax.Array,
+) -> jax.Array:
+  """Returns the hard constraint's border row, honouring actuator bounds.
+
+  Unbounded, the row is simply g_hat = 0. A bound turns the constraint into
+  a complementarity condition, written with the Fischer-Burmeister function
+  phi(a, b) = a + b - sqrt(a^2 + b^2 + eps^2), which vanishes exactly when
+  a >= 0, b >= 0 and a*b = 0:
+
+  * lower bound only: phi(u_hat - u_min_hat, g_hat), so either the target is
+    met (g_hat = 0) or the actuator sits at the bound with the constraint
+    violated in the only direction that bound allows (g_hat > 0);
+  * upper bound only: -phi(u_max_hat - u_hat, -g_hat), the mirror image
+    (saturating high can only leave g_hat < 0);
+  * both: the two are nested, giving the box complementarity condition
+    u_min <= u <= u_max with g_hat = 0 in the interior, g_hat > 0 at the
+    lower bound and g_hat < 0 at the upper bound.
+
+  The composition below builds exactly that nesting, and each bound's
+  formula is the limit of the nested form as the other bound goes to
+  infinity, so the three cases are one expression evaluated with whichever
+  bounds are configured. The pairing assumes the actuator increases the
+  constrained quantity.
+
+  Args:
+    constraint: The constraint runtime params.
+    u_hat: The nondimensional actuator value.
+    g_hat: The nondimensional constraint violation.
+
+  Returns:
+    Scalar border row residual.
+  """
+  row = g_hat
+  if constraint.u_max is not None:
+    upper_slack = constraint.u_max / constraint.actuator_reference - u_hat
+    row = -_fischer_burmeister(upper_slack, -row)
+  if constraint.u_min is not None:
+    lower_slack = u_hat - constraint.u_min / constraint.actuator_reference
+    row = _fischer_burmeister(lower_slack, row)
+  return row
+
+
 def _constraint_violation(
     constraint: ConstraintRuntimeParams,
     x_vec: jax.Array,
@@ -184,15 +234,12 @@ def build_augmented_residual(
   actuators substituted into the runtime params) with one constraint row per
   pair:
 
-  * 'hard':    g_hat(x) = 0
-  * 'hard' with a lower bound u_min: the Fischer-Burmeister complementarity
-    row phi(u_hat - u_hat_min, g_hat) = 0 with
-    phi(a, b) = a + b - sqrt(a^2 + b^2 + eps^2), which enforces
-    a >= 0, b >= 0, a * b ~= 0: either the target is met (g_hat = 0) with a
-    feasible actuator, or the actuator sits at the bound and the constraint
-    is violated in the only direction it can be (g_hat > 0). At saturation
-    the row degenerates toward the well-conditioned u_hat = u_hat_min rather
-    than toward a vanishing Schur complement.
+  * 'hard':    g_hat(x) = 0, or, with actuator bounds, the Fischer-Burmeister
+    complementarity row built by `_complementarity_row`: the target is met
+    while the actuator is feasible, and the actuator saturates at a bound
+    with the constraint honestly violated when it is not. At saturation the
+    row degenerates toward the well-conditioned u_hat = bound rather than
+    toward a vanishing Schur complement.
   * 'relaxed': tau * (u_hat - u_hat_old) / dt + g_hat(x) = 0,
 
   the fully implicit discretisation of tau * du_hat/dt = -g_hat, so the
@@ -230,17 +277,7 @@ def build_augmented_residual(
           constraint, x_vec, geo, evolving_names, num_cells
       )
       if constraint.mode == 'hard':
-        if constraint.u_min is None:
-          rows.append(g_hat)
-        else:
-          # Fischer-Burmeister complementarity between the actuator's
-          # distance to its bound and the constraint violation. The pairing
-          # relies on the actuator increasing the constrained quantity, so
-          # saturation at the lower bound can only leave g_hat positive.
-          a = u_hat[j] - constraint.u_min / constraint.actuator_reference
-          rows.append(
-              a + g_hat - jnp.sqrt(a**2 + g_hat**2 + _FB_EPSILON**2)
-          )
+        rows.append(_complementarity_row(constraint, u_hat[j], g_hat))
       else:
         rows.append(
             constraint.tau * (u_hat[j] - constraint.u_hat_old) / dt + g_hat

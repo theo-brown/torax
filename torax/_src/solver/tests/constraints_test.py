@@ -147,7 +147,7 @@ class ConstraintsTest(absltest.TestCase):
         cls.runtime_params.sources['gas_puff'].S_total
     )
 
-  def _solve(self, mode, target_factor, tau=0.5, u_min=None):
+  def _solve(self, mode, target_factor, tau=0.5, u_min=None, u_max=None):
     config = constraints.ConstraintConfig.from_dict(
         dict(
             constraint='n_e_line_avg',
@@ -156,6 +156,7 @@ class ConstraintsTest(absltest.TestCase):
             mode=mode,
             tau=tau,
             u_min=u_min,
+            u_max=u_max,
         )
     )
     constraint = config.build_runtime_params(
@@ -206,6 +207,35 @@ class ConstraintsTest(absltest.TestCase):
     self.assertGreater(g_hat, 0.0)
     # Complementarity: the active branch's partner is (numerically) zero.
     self.assertLess(min(abs(u_hat), abs(g_hat)), 1e-6)
+
+  def test_box_bounded_hard_saturates_at_upper_bound(self):
+    """A target above the actuator's authority pins it at the upper bound."""
+    nbar_natural, _, _ = self._solve('relaxed', 1.0, tau=1e9)
+    # Well above what the bounded puff can deliver in one step.
+    target_factor = nbar_natural * 1.10 / self.nbar_initial
+    u_max = 2e22
+    nbar, u_hat, constraint = self._solve(
+        'hard', target_factor, u_min=0.0, u_max=u_max
+    )
+    u_max_hat = u_max / float(constraint.actuator_reference)
+    self.assertLess(abs(u_hat - u_max_hat), 1e-6)
+    g_hat = (nbar - float(constraint.target)) / float(constraint.target)
+    # Saturated high: the density can only sit below the target.
+    self.assertLess(g_hat, 0.0)
+
+  def test_box_bounds_are_inactive_when_target_is_feasible(self):
+    """Inside the box the solution matches the unbounded hard constraint."""
+    nbar_natural, _, _ = self._solve('relaxed', 1.0, tau=1e9)
+    target_factor = nbar_natural * 1.02 / self.nbar_initial
+    _, u_free, _ = self._solve('hard', target_factor)
+    nbar, u_box, constraint = self._solve(
+        'hard', target_factor, u_min=0.0, u_max=1e23
+    )
+    self.assertGreater(u_box, 0.0)
+    self.assertLess(abs(u_box - u_free) / abs(u_free), 1e-6)
+    self.assertLess(
+        abs(nbar - float(constraint.target)) / float(constraint.target), 1e-6
+    )
 
   def test_bounded_hard_matches_unbounded_when_feasible(self):
     """With a reachable target the bound is inactive and changes nothing."""
