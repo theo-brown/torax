@@ -100,5 +100,85 @@ class NewtonRaphsonSolveBlockTest(parameterized.TestCase):
       chex.assert_trees_all_close(b_grad, b_grad_diff, atol=1e-4)
 
 
+class GmresTest(parameterized.TestCase):
+  """Tests for the right-preconditioned restarted GMRES."""
+
+  def setUp(self):
+    super().setUp()
+    jax.config.update('jax_enable_x64', True)
+
+  def _system(self, size=40, seed=0):
+    rng = np.random.default_rng(seed)
+    matrix = np.eye(size) + 0.3 * rng.normal(size=(size, size)) / np.sqrt(size)
+    # Badly scaled rows, so that preconditioning has something to fix.
+    scale = np.exp(rng.normal(size=size) * 2.0)
+    matrix = matrix * scale[:, None]
+    b = jnp.asarray(rng.normal(size=size))
+    return jnp.asarray(matrix), b, jnp.asarray(scale)
+
+  @parameterized.named_parameters(
+      # Restarted GMRES is only tested with the preconditioner: with a badly
+      # scaled matrix and a subspace this small it stagnates without one, which
+      # is a known property of restarting rather than a defect here.
+      ('full_space', 40, 40, False),
+      ('restarted', 8, 80, True),
+  )
+  def test_converges_to_the_exact_solution(
+      self, restart, max_krylov, precondition
+  ):
+    matrix, b, scale = self._system()
+    preconditioner = (lambda v: v / scale) if precondition else (lambda v: v)
+    x, iterations = jax.jit(
+        functools.partial(
+            jax_root_finding.gmres_right_preconditioned,
+            lambda v: matrix @ v,
+            preconditioner=preconditioner,
+            restart=restart,
+            max_krylov=max_krylov,
+            rtol=1e-12,
+        )
+    )(b)
+    np.testing.assert_allclose(matrix @ x, b, atol=1e-8)
+    self.assertGreater(int(iterations), 0)
+    self.assertLessEqual(int(iterations), max_krylov)
+
+  def test_preconditioning_reduces_iterations(self):
+    matrix, b, scale = self._system()
+    run = lambda pre: jax.jit(
+        functools.partial(
+            jax_root_finding.gmres_right_preconditioned,
+            lambda v: matrix @ v,
+            preconditioner=pre,
+            restart=40,
+            max_krylov=40,
+            rtol=1e-10,
+        )
+    )(b)
+    _, plain_iterations = run(lambda v: v)
+    x, preconditioned_iterations = run(lambda v: v / scale)
+    np.testing.assert_allclose(matrix @ x, b, atol=1e-6)
+    self.assertLess(int(preconditioned_iterations), int(plain_iterations))
+
+  def test_loose_tolerance_stops_early(self):
+    """The inexact-Newton forcing term must actually buy fewer iterations."""
+    matrix, b, scale = self._system()
+    run = lambda rtol: jax.jit(
+        functools.partial(
+            jax_root_finding.gmres_right_preconditioned,
+            lambda v: matrix @ v,
+            preconditioner=lambda v: v / scale,
+            restart=40,
+            max_krylov=40,
+            rtol=rtol,
+        )
+    )(b)
+    x_loose, loose_iterations = run(1e-1)
+    _, tight_iterations = run(1e-10)
+    self.assertLess(int(loose_iterations), int(tight_iterations))
+    # The loose solve must still respect the tolerance it was given.
+    relative = jnp.linalg.norm(b - matrix @ x_loose) / jnp.linalg.norm(b)
+    self.assertLess(float(relative), 1e-1)
+
+
 if __name__ == '__main__':
   absltest.main()
