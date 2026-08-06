@@ -147,7 +147,7 @@ class ConstraintsTest(absltest.TestCase):
         cls.runtime_params.sources['gas_puff'].S_total
     )
 
-  def _solve(self, mode, target_factor, tau=0.5):
+  def _solve(self, mode, target_factor, tau=0.5, u_min=None):
     config = constraints.ConstraintConfig.from_dict(
         dict(
             constraint='n_e_line_avg',
@@ -155,6 +155,7 @@ class ConstraintsTest(absltest.TestCase):
             actuator='sources.gas_puff.S_total',
             mode=mode,
             tau=tau,
+            u_min=u_min,
         )
     )
     constraint = config.build_runtime_params(
@@ -192,6 +193,37 @@ class ConstraintsTest(absltest.TestCase):
     nbar, u_hat, _ = self._solve('hard', target / self.nbar_initial)
     self.assertLess(abs(nbar - target) / target, 1e-6)
     self.assertGreater(u_hat, 1.0)
+
+  def test_bounded_hard_saturates_at_unreachable_target(self):
+    """A target needing negative puff saturates the actuator at the bound."""
+    # Unbounded hard mode reaches this target only with negative fuelling.
+    _, u_unbounded, _ = self._solve('hard', 1.02)
+    self.assertLess(u_unbounded, 0.0)
+    # Bounded: the actuator sits at zero and the target is honestly missed.
+    nbar, u_hat, constraint = self._solve('hard', 1.02, u_min=0.0)
+    self.assertLess(abs(u_hat), 1e-6)
+    g_hat = (nbar - float(constraint.target)) / float(constraint.target)
+    self.assertGreater(g_hat, 0.0)
+    # Complementarity: the active branch's partner is (numerically) zero.
+    self.assertLess(min(abs(u_hat), abs(g_hat)), 1e-6)
+
+  def test_bounded_hard_matches_unbounded_when_feasible(self):
+    """With a reachable target the bound is inactive and changes nothing."""
+    # Target above the natural evolution: met with positive fuelling.
+    nbar_natural, _, _ = self._solve('relaxed', 1.0, tau=1e9)
+    target_factor = nbar_natural * 1.02 / self.nbar_initial
+    nbar_free, u_free, _ = self._solve('hard', target_factor)
+    nbar_bounded, u_bounded, constraint = self._solve(
+        'hard', target_factor, u_min=0.0
+    )
+    self.assertGreater(u_bounded, 0.0)
+    self.assertLess(abs(u_bounded - u_free) / abs(u_free), 1e-6)
+    self.assertLess(
+        abs(nbar_bounded - float(constraint.target))
+        / float(constraint.target),
+        1e-6,
+    )
+    self.assertLess(abs(nbar_bounded - nbar_free) / nbar_free, 1e-8)
 
   def test_relaxed_constraint_satisfies_discrete_relaxation(self):
     tau = 0.5

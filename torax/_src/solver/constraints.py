@@ -40,7 +40,7 @@ with the profiles, and they are returned in
 """
 
 import dataclasses
-from typing import Callable
+from typing import Callable, Final
 
 import jax
 from jax import numpy as jnp
@@ -66,6 +66,12 @@ _CONSTRAINT_CHANNELS: dict[str, str] = {
 _ACTUATOR_CHANNELS: dict[str, tuple[str, ...]] = {
     'sources.gas_puff.S_total': ('n_e',),
 }
+
+# Smoothing of the Fischer-Burmeister function at its origin. The
+# complementarity solution is perturbed by O(epsilon^2 / max(a, b)), so at
+# 1e-8 the enforcement error is at machine level while the corner of
+# sqrt(a^2 + b^2) stays differentiable for the Newton solve.
+_FB_EPSILON: Final[float] = 1e-8
 
 
 def initial_actuators(
@@ -179,6 +185,14 @@ def build_augmented_residual(
   pair:
 
   * 'hard':    g_hat(x) = 0
+  * 'hard' with a lower bound u_min: the Fischer-Burmeister complementarity
+    row phi(u_hat - u_hat_min, g_hat) = 0 with
+    phi(a, b) = a + b - sqrt(a^2 + b^2 + eps^2), which enforces
+    a >= 0, b >= 0, a * b ~= 0: either the target is met (g_hat = 0) with a
+    feasible actuator, or the actuator sits at the bound and the constraint
+    is violated in the only direction it can be (g_hat > 0). At saturation
+    the row degenerates toward the well-conditioned u_hat = u_hat_min rather
+    than toward a vanishing Schur complement.
   * 'relaxed': tau * (u_hat - u_hat_old) / dt + g_hat(x) = 0,
 
   the fully implicit discretisation of tau * du_hat/dt = -g_hat, so the
@@ -216,7 +230,17 @@ def build_augmented_residual(
           constraint, x_vec, geo, evolving_names, num_cells
       )
       if constraint.mode == 'hard':
-        rows.append(g_hat)
+        if constraint.u_min is None:
+          rows.append(g_hat)
+        else:
+          # Fischer-Burmeister complementarity between the actuator's
+          # distance to its bound and the constraint violation. The pairing
+          # relies on the actuator increasing the constrained quantity, so
+          # saturation at the lower bound can only leave g_hat positive.
+          a = u_hat[j] - constraint.u_min / constraint.actuator_reference
+          rows.append(
+              a + g_hat - jnp.sqrt(a**2 + g_hat**2 + _FB_EPSILON**2)
+          )
       else:
         rows.append(
             constraint.tau * (u_hat[j] - constraint.u_hat_old) / dt + g_hat

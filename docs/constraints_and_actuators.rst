@@ -162,6 +162,37 @@ Relaxation also composes with actuator limits: clip :math:`u` in the update
 the limit instead of making the matrix singular. An anti-windup guard (freeze
 the relaxation while clipped) is a one-line addition to the actuator row.
 
+Bounded hard constraints (complementarity)
+------------------------------------------
+
+A hard constraint with an actuator bound (e.g. a gas puff rate that cannot
+go negative) is no longer a plain equation: *either* the target is met with
+a feasible actuator, *or* the actuator sits at its bound and the target is
+missed in the only direction it can be. This is a complementarity condition,
+
+.. math::
+
+   u - u_{min} \geq 0, \qquad g \geq 0, \qquad (u - u_{min}) \, g = 0,
+
+written as a single equation with the Fischer-Burmeister function
+
+.. math::
+
+   \phi(a, b) = a + b - \sqrt{a^2 + b^2 + \epsilon^2} = 0,
+   \qquad a = u - u_{min}, \; b = g,
+
+which replaces the constraint row verbatim (``u_min`` on the constraint
+config enables it). The :math:`\epsilon`-smoothing keeps the row
+differentiable for the Newton solve; the enforcement error it introduces is
+:math:`O(\epsilon^2)`. Two properties make this the right formulation:
+at saturation the row degenerates toward the well-conditioned
+:math:`u = u_{min}` rather than toward a vanishing Schur complement, and
+the constraint violation is *reported honestly* (the density overshoots an
+unreachable target under zero fuelling) instead of being met by an
+unphysical actuator value. The pairing assumes the actuator increases the
+constrained quantity, so lower-bound saturation can only leave
+:math:`g > 0`.
+
 Practical checklist
 -------------------
 

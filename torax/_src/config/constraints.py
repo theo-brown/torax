@@ -60,6 +60,12 @@ class ConstraintRuntimeParams:
   constraint: str = dataclasses.field(metadata={'static': True})
   actuator: str = dataclasses.field(metadata={'static': True})
   mode: str = dataclasses.field(metadata={'static': True})
+  # Lower bound of the actuator in physical units, or None when unbounded.
+  # With a bound, the hard constraint becomes a complementarity condition:
+  # either the target is met with a feasible actuator, or the actuator sits
+  # at the bound and the constraint is violated in the only direction it can
+  # be. See `solver.constraints.build_augmented_residual`.
+  u_min: array_typing.FloatScalar | None = None
 
 
 class ConstraintConfig(torax_pydantic.BaseModelFrozen):
@@ -75,6 +81,13 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
       tau (implicit integral controller); 'hard' enforces the constraint as
       an algebraic equation at every step.
     tau: Relaxation time constant [s]; only used in 'relaxed' mode.
+    u_min: Optional lower bound of the actuator, in the actuated parameter's
+      physical units (e.g. 0.0 to forbid a negative gas puff rate). Only
+      supported in 'hard' mode, where the constraint row becomes a
+      Fischer-Burmeister complementarity condition: the target is met when
+      the actuator is feasible, and the actuator saturates at the bound
+      (with the constraint honestly violated) when it is not. Bounded
+      'relaxed' mode needs anti-windup and is not yet implemented.
   """
 
   constraint: Annotated[Literal['n_e_line_avg'], torax_pydantic.JAX_STATIC] = (
@@ -90,6 +103,16 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
       'relaxed'
   )
   tau: pydantic.PositiveFloat = 0.5
+  u_min: float | None = None
+
+  @pydantic.model_validator(mode='after')
+  def _validate_bound(self):
+    if self.u_min is not None and self.mode != 'hard':
+      raise ValueError(
+          'u_min is only supported with mode="hard"; bounded relaxed mode'
+          ' (anti-windup) is not yet implemented.'
+      )
+    return self
 
   def build_runtime_params(
       self, t: float, actuator_reference: float
@@ -102,4 +125,5 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
         constraint=self.constraint,
         actuator=self.actuator,
         mode=self.mode,
+        u_min=self.u_min,
     )

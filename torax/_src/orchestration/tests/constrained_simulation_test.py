@@ -178,6 +178,38 @@ class ConstrainedSimulationTest(absltest.TestCase):
       self.assertLess(abs(nbar - _TARGET) / _TARGET, 1e-6)
     self.assertIsNotNone(actuators[-1])
 
+  def test_bounded_hard_constraint_saturates_honestly(self):
+    """An unreachable target saturates the actuator instead of pumping.
+
+    The unbounded hard constraint meets this target with a large negative
+    gas puff (unphysical). With u_min=0 the Fischer-Burmeister row keeps
+    the actuator at the bound, every step still converges, and the density
+    honestly overshoots the target under zero fuelling.
+    """
+    torax_config = _build_config(
+        constraints=[
+            dict(
+                constraint='n_e_line_avg',
+                target=_TARGET,
+                mode='hard',
+                u_min=0.0,
+            )
+        ]
+    )
+    _, nbars, actuators, errors = _run(torax_config)
+    self.assertTrue(all(e == 0 for e in errors))
+    for k in range(1, len(nbars)):
+      g_hat = (nbars[k] - _TARGET) / _TARGET
+      # Actuator pinned at the bound (to the FB smoothing accuracy), never
+      # meaningfully negative.
+      self.assertGreater(actuators[k], -1e-6)
+      self.assertLess(abs(actuators[k]), 1e-3, msg=f'step {k}')
+      # Complementarity: with the actuator at the bound the violation is
+      # positive - the density sits above the unreachable target.
+      self.assertGreater(g_hat, 0.0, msg=f'step {k}')
+    # Without fuelling the density still drifts upward from other sources.
+    self.assertGreater(nbars[-1], nbars[1])
+
   def test_constraint_on_adaptive_timestep_path(self):
     """The adaptive-dt path threads actuator state through its retry loop."""
     torax_config = _build_config(
