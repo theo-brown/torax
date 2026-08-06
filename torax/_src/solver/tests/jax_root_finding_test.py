@@ -181,5 +181,113 @@ class GmresTest(parameterized.TestCase):
 
 
 
+class JfnkRootFindingTest(parameterized.TestCase):
+  """Tests the JFNK path of root_newton_raphson against the direct path."""
+
+  def setUp(self):
+    super().setUp()
+    jax.config.update('jax_enable_x64', True)
+
+  def _jfnk_kwargs(self, f_closed):
+    """Uses the identity as a (deliberately trivial) preconditioner."""
+
+    def residual_with_operator(x):
+      return f_closed(x), None
+
+    return dict(
+        linear_solver='jfnk',
+        residual_with_operator_fun=residual_with_operator,
+        preconditioner_apply=lambda _, v: v,
+        jfnk_max_krylov=8,
+        jfnk_restart=8,
+        jfnk_rtol=1e-8,
+    )
+
+  @parameterized.named_parameters(
+      ('positive_search', 0.5, 0.1, (0.0, 0.0)),
+      ('negative_search', 1.0, 1.0, (2.0, 1.0)),
+  )
+  def test_jfnk_matches_direct_solver(self, a, b, x0):
+    tol = 1e-9
+    f_closed = functools.partial(function_to_find_root, a=a, b=b)
+    x_init = np.array(x0, dtype=np.float64)
+
+    direct, direct_metadata = jax.jit(
+        functools.partial(
+            jax_root_finding.root_newton_raphson, f_closed, tol=tol
+        )
+    )(x_init)
+    jfnk, jfnk_metadata = jax.jit(
+        functools.partial(
+            jax_root_finding.root_newton_raphson,
+            f_closed,
+            tol=tol,
+            **self._jfnk_kwargs(f_closed),
+        )
+    )(x_init)
+
+    with self.subTest('same_root'):
+      chex.assert_trees_all_close(direct, jfnk, atol=1e-8)
+    with self.subTest('converged'):
+      self.assertEqual(int(jfnk_metadata.error), 0)
+    with self.subTest('same_newton_iteration_count'):
+      # A tight Krylov tolerance reproduces the exact Newton step, so the
+      # nonlinear iteration counts must agree.
+      self.assertEqual(
+          int(direct_metadata.iterations), int(jfnk_metadata.iterations)
+      )
+    with self.subTest('krylov_iterations_reported'):
+      self.assertIsNone(direct_metadata.krylov_iterations)
+      self.assertGreater(int(jfnk_metadata.krylov_iterations), 0)
+      self.assertTrue(
+          jnp.isdtype(jfnk_metadata.krylov_iterations.dtype, 'integral')
+      )
+
+  def test_jfnk_works_inside_custom_root(self):
+    """JFNK must remain differentiable via jax.lax.custom_root."""
+    tol = 1e-9
+
+    def loss(x, a, b):
+      f_closed = functools.partial(function_to_find_root, a=a, b=b)
+      root = jax_root_finding.root_newton_raphson(
+          f_closed,
+          x,
+          tol=tol,
+          use_jax_custom_root=True,
+          **self._jfnk_kwargs(f_closed),
+      )[0]
+      return jnp.sum(root**2)
+
+    def direct_loss(x, a, b):
+      root = jax_root_finding.root_newton_raphson(
+          functools.partial(function_to_find_root, a=a, b=b), x, tol=tol
+      )[0]
+      return jnp.sum(root**2)
+
+    x_init = np.array([0.0, 0.0], dtype=np.float64)
+    a, b = 0.5, 0.1
+    chex.assert_trees_all_close(
+        loss(x_init, a, b), direct_loss(x_init, a, b), atol=1e-8
+    )
+    jfnk_grads = jax.grad(loss, argnums=(1, 2))(x_init, a, b)
+    direct_grads = jax.grad(direct_loss, argnums=(1, 2))(x_init, a, b)
+    chex.assert_trees_all_close(jfnk_grads, direct_grads, atol=1e-6)
+
+  def test_jfnk_requires_preconditioner(self):
+    f_closed = functools.partial(function_to_find_root, a=0.5, b=0.1)
+    with self.assertRaisesRegex(ValueError, 'requires'):
+      jax_root_finding.root_newton_raphson(
+          f_closed, np.zeros(2), linear_solver='jfnk'
+      )
+
+  def test_unknown_linear_solver_raises(self):
+    f_closed = functools.partial(function_to_find_root, a=0.5, b=0.1)
+    with self.assertRaisesRegex(ValueError, 'Unknown linear_solver'):
+      jax_root_finding.root_newton_raphson(
+          f_closed, np.zeros(2), linear_solver='nope'
+      )
+
+
+
 if __name__ == '__main__':
   absltest.main()
