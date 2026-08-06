@@ -55,16 +55,25 @@ from torax._src.geometry import geometry as geometry_lib
 ConstraintConfig = constraints_config.ConstraintConfig
 ConstraintRuntimeParams = constraints_config.ConstraintRuntimeParams
 
-# Constraint quantities: the evolving channel each constraint reads. Used for
-# both the constraint evaluation and the declared border-row pattern.
+# Constraint quantities: the evolving channel each constraint reads and how
+# it reduces that channel to a scalar. Used for both the constraint
+# evaluation and the declared border-row pattern.
+#   'line_average': integral over rho_norm.
+#   'point': value at the constraint's rho_norm, linearly interpolated.
 _CONSTRAINT_CHANNELS: dict[str, str] = {
     'n_e_line_avg': 'n_e',
+    'T_e_ped': 'T_e',
+}
+_CONSTRAINT_REDUCTIONS: dict[str, str] = {
+    'n_e_line_avg': 'line_average',
+    'T_e_ped': 'point',
 }
 
-# Actuators: dotted runtime-params path -> the evolving channels its source
-# deposits into. Used for the declared border-column pattern.
+# Actuators: dotted runtime-params path -> the evolving channels it acts on.
+# Used for the declared border-column pattern.
 _ACTUATOR_CHANNELS: dict[str, tuple[str, ...]] = {
     'sources.gas_puff.S_total': ('n_e',),
+    'transport.pedestal_suppression': ('T_i', 'T_e', 'n_e'),
 }
 
 # Smoothing of the Fischer-Burmeister function at its origin. The
@@ -209,11 +218,14 @@ def _constraint_violation(
   index = evolving_names.index(channel)
   solver_values = x_vec[index * num_cells : (index + 1) * num_cells]
   physical_values = solver_values * convertors.SCALING_FACTORS[channel]
-  # Line average = cell integration over rho_norm in [0, 1], written with an
-  # explicit quadrature rather than math_utils.line_average: the latter goes
-  # through geo.drho_norm, a cached property whose first evaluation inside
-  # the Newton trace would cache (and leak) a tracer on the grid object.
-  value = jnp.sum(physical_values * jnp.diff(geo.rho_face_norm))
+  if _CONSTRAINT_REDUCTIONS[constraint.constraint] == 'point':
+    value = jnp.interp(constraint.rho_norm, geo.rho_norm, physical_values)
+  else:
+    # Line average = cell integration over rho_norm in [0, 1], written with
+    # an explicit quadrature rather than math_utils.line_average: the latter
+    # goes through geo.drho_norm, a cached property whose first evaluation
+    # inside the Newton trace would cache (and leak) a tracer on the grid.
+    value = jnp.sum(physical_values * jnp.diff(geo.rho_face_norm))
   return (value - constraint.target) / constraint.target
 
 

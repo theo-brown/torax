@@ -258,6 +258,89 @@ class ConstrainedSimulationTest(absltest.TestCase):
     self.assertTrue(saw_interior, 'constraint never met in the interior')
     self.assertTrue(saw_high, 'upper bound never active')
 
+  def test_pedestal_height_constraint_with_transport_suppression(self):
+    """The pedestal-top temperature is held by the transport suppression.
+
+    Exercises the second constraint quantity (a point value rather than an
+    integral) and the second actuator (a transport parameter rather than a
+    source amplitude), including its bounds.
+    """
+    rho_ped = 0.85
+    u_max = 3.0
+    torax_config = model_config.ToraxConfig.from_dict(
+        dict(
+            numerics=dict(
+                evolve_ion_heat=True,
+                evolve_electron_heat=True,
+                evolve_density=True,
+                evolve_current=True,
+                t_final=0.5,
+                fixed_dt=0.1,
+                exact_t_final=False,
+            ),
+            plasma_composition=dict(),
+            profile_conditions=dict(),
+            geometry=dict(geometry_type='circular', n_rho=25),
+            pedestal=dict(),
+            sources=default_sources.get_default_source_config(),
+            solver=dict(
+                solver_type='newton_raphson',
+                use_predictor_corrector=False,
+                theta_implicit=1.0,
+                residual_tol=1e-9,
+            ),
+            transport=dict(
+                model_name='combined',
+                transport_models=[
+                    dict(model_name='constant', chi_i=1.0, chi_e=1.0, D_e=0.5)
+                ],
+                chi_min=0,
+                pedestal_suppression=1.0,
+                pedestal_suppression_rho_min=rho_ped,
+            ),
+            time_step_calculator=dict(calculator_type='fixed'),
+            constraints=[
+                dict(
+                    constraint='T_e_ped',
+                    target={0.0: 2.2, 1.5: 6.6},
+                    actuator='transport.pedestal_suppression',
+                    rho_norm=rho_ped,
+                    mode='hard',
+                    u_min=0.0,
+                    u_max=u_max,
+                )
+            ],
+        )
+    )
+    _, history = run_simulation.run_simulation(
+        torax_config, progress_bar=False
+    )
+    for t, cp, geo, sno in list(
+        zip(
+            history.times,
+            history.core_profiles,
+            history.geometries,
+            history.solver_numeric_outputs,
+        )
+    )[1:]:
+      self.assertEqual(int(sno.solver_error_state), 0)
+      u = float(sno.actuators[0])
+      self.assertGreater(u, -1e-6)
+      self.assertLess(u, u_max + 1e-6)
+      t_ped = float(
+          np.interp(
+              rho_ped, np.asarray(geo.rho_norm), np.asarray(cp.T_e.value)
+          )
+      )
+      target = np.interp(float(t), [0.0, 1.5], [2.2, 6.6])
+      g_hat = (t_ped - target) / target
+      if abs(u) < 1e-6:
+        self.assertGreater(g_hat, 0.0)  # floored: pedestal above target
+      elif abs(u - u_max) < 1e-6:
+        self.assertLess(g_hat, 0.0)  # capped: pedestal below target
+      else:
+        self.assertLess(abs(g_hat), 1e-6)  # interior: met exactly
+
   def test_constraint_on_adaptive_timestep_path(self):
     """The adaptive-dt path threads actuator state through its retry loop."""
     torax_config = _build_config(

@@ -116,9 +116,11 @@ class RuntimeParamsProvider:
       *parents, leaf = constraint.actuator.split('.')
       for part in parents:
         node = getattr(node, part)
-      actuator_references.append(
-          float(getattr(node, leaf).get_value(config.numerics.t_initial))
-      )
+      reference = float(getattr(node, leaf).get_value(config.numerics.t_initial))
+      # The reference only sets the actuator's nondimensionalisation, so a
+      # parameter configured at zero (a natural default for an off-by-default
+      # actuator) falls back to unity rather than dividing by zero.
+      actuator_references.append(reference if reference != 0.0 else 1.0)
     return cls(
         sources=config.sources,
         numerics=config.numerics,

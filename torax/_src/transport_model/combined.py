@@ -54,6 +54,13 @@ class RuntimeParams(transport_runtime_params_lib.RuntimeParams):
       transport_runtime_params_lib.RuntimeParams, ...
   ]
   smoothing_zones: Tuple[SmoothingZoneParams, ...]
+  # Suppression of turbulent transport in the pedestal region, in e-folds:
+  # coefficients there are multiplied by exp(-pedestal_suppression). Zero
+  # leaves transport untouched; larger values steepen the edge gradients and
+  # so raise the pedestal. Kept as a plain scalar so it can be actuated by a
+  # constraint (see torax._src.solver.constraints).
+  pedestal_suppression: array_typing.FloatScalar = 0.0
+  pedestal_suppression_rho_min: array_typing.FloatScalar = 0.9
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -106,7 +113,52 @@ class CombinedTransportModel(transport_model_lib.TransportModel):
         pedestal_model_output,
     )
 
+    # Applied after smoothing so the suppression zone keeps a crisp edge.
+    transport_coeffs = self._suppress_pedestal_transport(
+        transport_runtime_params,
+        geo,
+        transport_coeffs,
+    )
+
     return transport_coeffs
+
+  def _suppress_pedestal_transport(
+      self,
+      transport_runtime_params: transport_runtime_params_lib.RuntimeParams,
+      geo: geometry.Geometry,
+      transport_coeffs: transport_model_lib.TurbulentTransport,
+  ) -> transport_model_lib.TurbulentTransport:
+    """Scales turbulent transport in the pedestal region.
+
+    Transport barrier formation is represented as a multiplicative
+    suppression of the turbulent coefficients over the outer region
+    rho_norm >= pedestal_suppression_rho_min. The suppression is
+    parameterised in e-folds, coefficients being scaled by
+    exp(-pedestal_suppression), which keeps the coefficients strictly
+    positive for any real suppression level (including negative values,
+    which enhance transport). That matters when the level is solved for as
+    a constraint actuator: an unbounded solve can explore the whole real
+    line without driving a coefficient through zero.
+
+    Args:
+      transport_runtime_params: Runtime params of the combined model.
+      geo: Geometry at the current time.
+      transport_coeffs: Smoothed turbulent transport coefficients.
+
+    Returns:
+      The coefficients with the pedestal region scaled.
+    """
+    assert isinstance(transport_runtime_params, RuntimeParams)
+    multiplier = jnp.where(
+        geo.rho_face_norm >= transport_runtime_params.pedestal_suppression_rho_min,
+        jnp.exp(-transport_runtime_params.pedestal_suppression),
+        1.0,
+    )
+
+    def scale(coeff):
+      return None if coeff is None else coeff * multiplier
+
+    return jax.tree_util.tree_map(scale, transport_coeffs)
 
   def call_implementation(
       self,

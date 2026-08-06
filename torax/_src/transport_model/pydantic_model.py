@@ -473,6 +473,14 @@ class CombinedTransportModel(pydantic_model_base.TransportBase):
       If empty, falls back to the legacy smoothing_width. Setting a value of
       0.0 means that both no smoothing will be applied in that zone but also
       means that zone will not be used for the smoothing of other zones.
+    pedestal_suppression: Suppression of turbulent transport in the pedestal
+      region, in e-folds: coefficients for rho_norm >=
+      pedestal_suppression_rho_min are multiplied by
+      exp(-pedestal_suppression). Zero leaves transport untouched, larger
+      values steepen the edge gradients and so raise the pedestal, and
+      negative values enhance transport. Can be solved for as a constraint
+      actuator (see docs/constraints_and_actuators.rst).
+    pedestal_suppression_rho_min: Inner edge of the suppression region.
   """
 
   # TODO(b/434175938) V2: rename `transport_models` to `core_transport_models`
@@ -487,6 +495,10 @@ class CombinedTransportModel(pydantic_model_base.TransportBase):
   smoothing_zones: Sequence[SmoothingZone] = pydantic.Field(
       default_factory=list
   )
+  pedestal_suppression: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
+  pedestal_suppression_rho_min: torax_pydantic.UnitInterval = 0.9
   model_name: Annotated[Literal['combined'], torax_pydantic.JAX_STATIC] = (
       'combined'
   )
@@ -528,6 +540,8 @@ class CombinedTransportModel(pydantic_model_base.TransportBase):
         transport_model_params=transport_model_params,
         pedestal_transport_model_params=pedestal_transport_model_params,
         smoothing_zones=tuple(smoothing_zones),
+        pedestal_suppression=self.pedestal_suppression.get_value(t),
+        pedestal_suppression_rho_min=self.pedestal_suppression_rho_min,
         **base_kwargs,
     )
 

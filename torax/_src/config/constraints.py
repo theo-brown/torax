@@ -67,6 +67,9 @@ class ConstraintRuntimeParams:
   # allows. See `solver.constraints.build_augmented_residual`.
   u_min: array_typing.FloatScalar | None = None
   u_max: array_typing.FloatScalar | None = None
+  # Radial location of point-valued constraints (e.g. the pedestal top).
+  # Unused by integral constraints.
+  rho_norm: array_typing.FloatScalar = 0.0
 
 
 class ConstraintConfig(torax_pydantic.BaseModelFrozen):
@@ -91,16 +94,22 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
       'relaxed' mode needs anti-windup and is not yet implemented.
     u_max: Optional upper bound of the actuator, in the same units. Combining
       both bounds gives a box complementarity condition.
+    rho_norm: Radial location of point-valued constraints such as 'T_e_ped'
+      (the pedestal-top temperature). Ignored by integral constraints.
   """
 
-  constraint: Annotated[Literal['n_e_line_avg'], torax_pydantic.JAX_STATIC] = (
-      'n_e_line_avg'
-  )
+  constraint: Annotated[
+      Literal['n_e_line_avg', 'T_e_ped'], torax_pydantic.JAX_STATIC
+  ] = 'n_e_line_avg'
   target: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
       1e20
   )
   actuator: Annotated[
-      Literal['sources.gas_puff.S_total'], torax_pydantic.JAX_STATIC
+      Literal[
+          'sources.gas_puff.S_total',
+          'transport.pedestal_suppression',
+      ],
+      torax_pydantic.JAX_STATIC,
   ] = 'sources.gas_puff.S_total'
   mode: Annotated[Literal['relaxed', 'hard'], torax_pydantic.JAX_STATIC] = (
       'relaxed'
@@ -108,6 +117,7 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
   tau: pydantic.PositiveFloat = 0.5
   u_min: float | None = None
   u_max: float | None = None
+  rho_norm: torax_pydantic.UnitInterval = 0.9
 
   @pydantic.model_validator(mode='after')
   def _validate_bounds(self):
@@ -140,4 +150,5 @@ class ConstraintConfig(torax_pydantic.BaseModelFrozen):
         mode=self.mode,
         u_min=self.u_min,
         u_max=self.u_max,
+        rho_norm=self.rho_norm,
     )

@@ -138,6 +138,50 @@ class CombinedTransportModelTest(absltest.TestCase):
     target = jnp.where(geo.rho_face_norm <= 0.5, 1.0, target)
     np.testing.assert_allclose(transport_coeffs.chi_face_ion, target)
 
+  def test_pedestal_suppression_scales_only_the_outer_region(self):
+    """Suppression scales chi by exp(-u) for rho >= rho_min, and only there."""
+    suppression = 1.5
+    rho_min = 0.7
+    config = default_configs.get_default_config_dict()
+    config['transport'] = {
+        'model_name': 'combined',
+        'transport_models': [{'model_name': 'constant', 'chi_i': 2.0}],
+        'chi_min': 0.0,
+        'pedestal_suppression': suppression,
+        'pedestal_suppression_rho_min': rho_min,
+    }
+    config['pedestal'] = {'set_pedestal': False}
+    torax_config = model_config.ToraxConfig.from_dict(config)
+    model = torax_config.transport.build_transport_model()
+    geo = torax_config.geometry.build_provider(
+        t=torax_config.numerics.t_initial
+    )
+    runtime_params = build_runtime_params.RuntimeParamsProvider.from_config(
+        torax_config
+    )(t=torax_config.numerics.t_initial)
+    core_profiles = initialization.initial_core_profiles(
+        runtime_params,
+        geo,
+        torax_config.sources.build_models(),
+        torax_config.neoclassical.build_models(),
+    )
+    mock_pedestal_outputs = mock.create_autospec(
+        pedestal_model_output_lib.PedestalModelOutput,
+        instance=True,
+        rho_norm_ped_top=0.91,
+    )
+
+    transport_coeffs = model(
+        runtime_params,
+        geo,
+        core_profiles,
+        mock_pedestal_outputs,
+    )
+    target = jnp.where(
+        geo.rho_face_norm >= rho_min, 2.0 * jnp.exp(-suppression), 2.0
+    )
+    np.testing.assert_allclose(transport_coeffs.chi_face_ion, target)
+
   def test_build_smoothing_matrix_zero_width_is_identity(self):
     """Tests that a zero smoothing width produces an identity matrix."""
     config = {
