@@ -29,6 +29,9 @@ from torax._src.solver import linesearch
 # cases with bad numerics.
 MIN_DELTA: Final[float] = 1e-7
 
+# Guard against dividing by a vanishing norm during a lucky GMRES breakdown.
+_GMRES_EPS: Final[float] = 1e-30
+
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass
@@ -37,6 +40,209 @@ class RootMetadata:
   residual: jax.Array
   last_tau: jax.Array
   error: jax.Array
+
+
+def _gmres_cycle(
+    matvec: Callable[[jax.Array], jax.Array],
+    preconditioner: Callable[[jax.Array], jax.Array],
+    target_norm: jax.Array,
+    x: jax.Array,
+    residual: jax.Array,
+    residual_norm: jax.Array,
+    restart: int,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+  """Runs one restart cycle of right-preconditioned GMRES.
+
+  Builds an Arnoldi basis for the Krylov space of `matvec . preconditioner`,
+  keeps the least-squares problem in triangular form with Givens rotations, and
+  stops as soon as the (exactly tracked) residual norm drops below
+  `target_norm`. Right preconditioning is used rather than left so that the
+  quantity being driven below the tolerance is the true residual `|b - A x|`
+  and not a preconditioned surrogate; that is what makes the inexact-Newton
+  forcing term meaningful.
+
+  Args:
+    matvec: Applies the (linear) system matrix A.
+    preconditioner: Applies the approximate inverse M^-1.
+    target_norm: Stop once the residual norm is at or below this.
+    x: Current iterate.
+    residual: b - A x at the current iterate.
+    residual_norm: Norm of `residual`.
+    restart: Maximum Krylov dimension of this cycle. Static; it sizes the
+      Arnoldi buffers.
+
+  Returns:
+    A tuple of (x, residual_norm, num_iterations) after the cycle.
+  """
+  size = x.shape[0]
+  dtype = x.dtype
+  # Arnoldi basis, one row per vector. `hessenberg` stores the triangularised
+  # least-squares factor column by column (row k is column k), so the upper
+  # triangular factor is its transpose.
+  basis = jnp.zeros((restart + 1, size), dtype=dtype).at[0].set(
+      residual / jnp.where(residual_norm > _GMRES_EPS, residual_norm, 1.0)
+  )
+  hessenberg = jnp.zeros((restart, restart), dtype=dtype)
+  cos = jnp.zeros((restart,), dtype=dtype)
+  sin = jnp.zeros((restart,), dtype=dtype)
+  # Right-hand side of the triangular least-squares problem. Its trailing entry
+  # is the exact residual norm of the current best iterate.
+  givens_rhs = jnp.zeros((restart + 1,), dtype=dtype).at[0].set(residual_norm)
+  basis_index = jnp.arange(restart + 1)
+
+  def cond_fun(carry):
+    iteration, _, _, _, _, _, norm = carry
+    return (iteration < restart) & (norm > target_norm)
+
+  def body_fun(carry):
+    iteration, basis, hessenberg, cos, sin, givens_rhs, _ = carry
+    w = matvec(preconditioner(basis[iteration]))
+
+    # Only the first `iteration + 1` basis vectors are populated; the rest of
+    # the buffer is stale, so mask their projections out.
+    active = basis_index <= iteration
+
+    def orthogonalise(w):
+      coeffs = jnp.where(active, basis @ w, 0.0)
+      return w - coeffs @ basis, coeffs
+
+    # Classical Gram-Schmidt applied twice. One pass vectorises into a single
+    # (restart+1, size) matmul, which is negligible next to a JVP through the
+    # physics, but loses orthogonality; a second pass restores it to the same
+    # accuracy as modified Gram-Schmidt without serialising over the basis.
+    w, coeffs_first = orthogonalise(w)
+    w, coeffs_second = orthogonalise(w)
+    column = (coeffs_first + coeffs_second).at[iteration + 1].set(
+        jnp.linalg.norm(w)
+    )
+    next_norm = column[iteration + 1]
+    basis = basis.at[iteration + 1].set(
+        w / jnp.where(next_norm > _GMRES_EPS, next_norm, 1.0)
+    )
+
+    # Apply the rotations accumulated by previous iterations, then eliminate
+    # the new subdiagonal entry with a fresh rotation.
+    def rotate(i, column):
+      rotated = cos[i] * column[i] + sin[i] * column[i + 1]
+      column = column.at[i + 1].set(
+          -sin[i] * column[i] + cos[i] * column[i + 1]
+      )
+      return column.at[i].set(rotated)
+
+    column = jax.lax.fori_loop(0, iteration, rotate, column)
+    hypot = jnp.sqrt(column[iteration] ** 2 + column[iteration + 1] ** 2)
+    hypot = jnp.where(hypot > _GMRES_EPS, hypot, 1.0)
+    cos_k = column[iteration] / hypot
+    sin_k = column[iteration + 1] / hypot
+    column = column.at[iteration].set(
+        cos_k * column[iteration] + sin_k * column[iteration + 1]
+    ).at[iteration + 1].set(0.0)
+
+    rhs_k = givens_rhs[iteration]
+    givens_rhs = givens_rhs.at[iteration].set(cos_k * rhs_k).at[
+        iteration + 1
+    ].set(-sin_k * rhs_k)
+
+    return (
+        iteration + 1,
+        basis,
+        hessenberg.at[iteration].set(column[:restart]),
+        cos.at[iteration].set(cos_k),
+        sin.at[iteration].set(sin_k),
+        givens_rhs,
+        jnp.abs(givens_rhs[iteration + 1]),
+    )
+
+  iteration, basis, hessenberg, _, _, givens_rhs, norm = jax.lax.while_loop(
+      cond_fun,
+      body_fun,
+      (0, basis, hessenberg, cos, sin, givens_rhs, residual_norm),
+  )
+
+  # Solve the triangular system over the columns that were actually built.
+  # Unused columns are replaced by the identity and their right-hand side by
+  # zero so the fixed-size solve returns zero for them.
+  active = jnp.arange(restart) < iteration
+  upper = jnp.where(
+      active[None, :], hessenberg.T, jnp.eye(restart, dtype=dtype)
+  )
+  y = jax.scipy.linalg.solve_triangular(
+      upper, jnp.where(active, givens_rhs[:restart], 0.0), lower=False
+  )
+  # Right preconditioning solves A M^-1 u = b, so the correction has to be
+  # pulled back through M^-1 once at the end of the cycle.
+  return x + preconditioner(y @ basis[:restart]), norm, iteration
+
+
+def gmres_right_preconditioned(
+    matvec: Callable[[jax.Array], jax.Array],
+    b: jax.Array,
+    preconditioner: Callable[[jax.Array], jax.Array],
+    restart: int,
+    max_krylov: int,
+    rtol: float,
+) -> tuple[jax.Array, jax.Array]:
+  """Solves A x = b with restarted, right-preconditioned GMRES.
+
+  Args:
+    matvec: Applies the system matrix A.
+    b: Right-hand side.
+    preconditioner: Applies the approximate inverse M^-1.
+    restart: Krylov dimension per cycle. Static.
+    max_krylov: Maximum total Arnoldi iterations across all cycles.
+    rtol: Relative tolerance; the solve stops once |b - A x| <= rtol * |b|.
+
+  Returns:
+    A tuple of (x, total_krylov_iterations).
+  """
+  b_norm = jnp.linalg.norm(b)
+  target_norm = rtol * b_norm
+
+  if restart >= max_krylov:
+    # A cycle stops either because it converged, or because it used its full
+    # Krylov dimension. When `restart >= max_krylov` the second case exhausts
+    # the total budget too, so a second cycle is unreachable. Emitting the
+    # restart loop anyway would put a second instantiation of `matvec` -- a JVP
+    # through the whole physics model -- into the graph for a branch that never
+    # runs, which is a large fraction of the compiled program. Since `restart`
+    # and `max_krylov` are static, resolve it here instead.
+    x, norm, iterations = _gmres_cycle(
+        matvec, preconditioner, target_norm, jnp.zeros_like(b), b, b_norm,
+        restart,
+    )
+    return x, iterations
+
+  def cond_fun(carry):
+    _, _, norm, total = carry
+    return (norm > target_norm) & (total < max_krylov)
+
+  def body_fun(carry):
+    x, residual, _, total = carry
+    x, norm, iterations = _gmres_cycle(
+        matvec,
+        preconditioner,
+        target_norm,
+        x,
+        residual,
+        jnp.linalg.norm(residual),
+        restart,
+    )
+    total += iterations
+    # Recomputing the residual costs a matvec, so only pay for it when another
+    # cycle will actually consume it. In the common single-cycle case this
+    # saves one JVP through the whole physics model per Newton iteration.
+    residual = jax.lax.cond(
+        (norm > target_norm) & (total < max_krylov),
+        lambda: b - matvec(x),
+        lambda: residual,
+    )
+    return x, residual, norm, total
+
+  x, _, _, total = jax.lax.while_loop(
+      cond_fun, body_fun, (jnp.zeros_like(b), b, b_norm, 0)
+  )
+  return x, total
+
 
 
 def root_newton_raphson(
