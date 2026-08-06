@@ -116,6 +116,34 @@ class JfnkSolverTest(parameterized.TestCase):
     )
     self.assertEqual(int(np.asarray(jfnk_outputs.solver_error_state).max()), 0)
 
+  def test_adaptive_forcing_reproduces_the_fixed_forcing_trajectory(self):
+    """Loose early Krylov solves must not move the converged trajectory.
+
+    Eisenstat-Walker forcing is floored at `jfnk_rtol`, so the final Newton
+    iteration of each step is solved to the same tolerance as under fixed
+    forcing; only the early iterations are cheapened.
+    """
+    fixed = _run(newton_linear_solver='jfnk', jfnk_rtol=1e-8)
+    adaptive = _run(
+        newton_linear_solver='jfnk', jfnk_rtol=1e-8, jfnk_forcing='adaptive'
+    )
+
+    for name in ('T_i', 'T_e', 'n_e', 'psi'):
+      with self.subTest(name):
+        np.testing.assert_allclose(
+            getattr(fixed._stacked_core_profiles, name).value,
+            getattr(adaptive._stacked_core_profiles, name).value,
+            rtol=1e-6,
+        )
+    self.assertEqual(
+        int(
+            np.asarray(
+                adaptive._stacked_solver_numeric_outputs.solver_error_state
+            ).max()
+        ),
+        0,
+    )
+
 
 if __name__ == '__main__':
   absltest.main()
