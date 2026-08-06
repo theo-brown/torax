@@ -167,6 +167,25 @@ class NewtonRaphsonThetaMethod(BaseSolver):
     delta_reduction_factor: The delta reduction factor for the Newton-Raphson
       solver.
     tau_min: The minimum value of tau for the Newton-Raphson solver.
+    newton_linear_solver: How the Newton step direction is computed. 'direct'
+      materialises the Jacobian with forward-mode AD (one tangent through the
+      full physics model per unknown) and does a dense LU solve. 'jfnk' is
+      Jacobian-free Newton-Krylov: the step is found with preconditioned GMRES
+      using only Jacobian-vector products, preconditioned by the
+      frozen-coefficient linearisation the residual already assembles. The cost
+      of 'jfnk' scales with the Krylov iteration count instead of the number of
+      unknowns, so it wins as the radial grid is refined.
+    jfnk_max_krylov: Maximum total Krylov iterations per Newton iteration.
+    jfnk_rtol: Relative tolerance of the Krylov solve (the inexact-Newton
+      forcing term). Loose values make early Newton steps cheap, but the
+      default is deliberately tight: a few time steps in a typical run exit
+      Newton at the coarse tolerance rather than the fine one, and at those
+      steps an inexact step direction changes which under-converged point the
+      solver lands on, which shows up as a ~1e-3 trajectory difference against
+      the direct solver. At 1e-5 the trajectory matches the direct solver to
+      ~1e-5 with an identical Newton iteration count, and the Krylov solve is
+      still far cheaper than forming the Jacobian.
+    jfnk_restart: Krylov subspace dimension between GMRES restarts.
   """
 
   solver_type: Annotated[
@@ -180,6 +199,15 @@ class NewtonRaphsonThetaMethod(BaseSolver):
   residual_tol: float = 1e-5
   residual_coarse_tol: float = 1e-2
   tau_min: float = 0.01
+  newton_linear_solver: Annotated[
+      Literal['direct', 'jfnk'], torax_pydantic.JAX_STATIC
+  ] = 'direct'
+  # Static, since they size the Arnoldi buffers and Krylov loop bounds.
+  jfnk_max_krylov: Annotated[
+      pydantic.PositiveInt, torax_pydantic.JAX_STATIC
+  ] = 30
+  jfnk_restart: Annotated[pydantic.PositiveInt, torax_pydantic.JAX_STATIC] = 30
+  jfnk_rtol: float = 1e-5
 
   @functools.cached_property
   def build_runtime_params(
@@ -202,6 +230,10 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         tau_min=self.tau_min,
         initial_guess_mode=self.initial_guess_mode.value,  # pyrefly: ignore[bad-argument-type]
         log_iterations=self.log_iterations,
+        newton_linear_solver=self.newton_linear_solver,
+        jfnk_max_krylov=self.jfnk_max_krylov,
+        jfnk_restart=self.jfnk_restart,
+        jfnk_rtol=self.jfnk_rtol,
         fixed_point_atol=self.fixed_point_atol,
         fixed_point_rtol=self.fixed_point_rtol,
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,

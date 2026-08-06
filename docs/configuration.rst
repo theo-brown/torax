@@ -2662,6 +2662,35 @@ newton_raphson
   will still be accepted if ``residual < coarse_tol``, otherwise dt backtracking
   will take place if enabled.
 
+``newton_linear_solver`` (str [default = 'direct'])
+  How the Newton step direction is computed.
+
+* ``direct``
+    Materialise the Jacobian with forward-mode AD, which costs one tangent
+    sweep through the full physics model per unknown, and solve the dense
+    system with an LU factorisation.
+
+* ``jfnk``
+    Jacobian-free Newton-Krylov. The step direction is found with restarted,
+    right-preconditioned GMRES using only Jacobian-vector products, so the
+    cost scales with the number of Krylov iterations rather than the number of
+    unknowns. The preconditioner is the frozen-coefficient (Picard)
+    linearisation that the residual evaluation already assembles, inverted in
+    :math:`O(n_{\rho})` with the block-tridiagonal Thomas algorithm.
+
+``jfnk_rtol`` (float [default = 1e-5])
+  Relative tolerance of the Krylov solve, i.e. the inexact-Newton forcing
+  term. Because the Krylov right-hand side is the current nonlinear residual,
+  a fixed relative tolerance automatically solves loosely far from the root
+  and tightly near it. Loosening it below the default saves Krylov iterations
+  but perturbs the time steps that exit Newton at ``residual_coarse_tol``.
+
+``jfnk_max_krylov`` (int [default = 30])
+  Maximum total Krylov iterations per Newton iteration.
+
+``jfnk_restart`` (int [default = 30])
+  Krylov subspace dimension between GMRES restarts. Sizes the Arnoldi buffers.
+
 optimizer
 ^^^^^^^^^
 
