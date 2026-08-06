@@ -41,6 +41,7 @@ import dataclasses
 
 import jax
 from torax._src import array_typing
+from torax._src.config import constraints as constraints_lib
 from torax._src.config import numerics
 from torax._src.core_profiles import profile_conditions
 from torax._src.core_profiles.plasma_composition import plasma_composition
@@ -88,6 +89,9 @@ class RuntimeParams:
   sources: Mapping[str, sources_params.RuntimeParams]
   transport: transport_model_params.RuntimeParams
   time_step_calculator: time_step_calculator_runtime_params.RuntimeParams
+  # Constraint/actuator pairs solved as a bordered extension of the Newton
+  # system; empty when no constraints are configured.
+  constraints: tuple[constraints_lib.ConstraintRuntimeParams, ...] = ()
 
 
 def make_ip_consistent(

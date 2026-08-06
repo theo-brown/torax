@@ -18,7 +18,8 @@ density = Y) and frees a scalar actuator (e.g. the gas puff rate) as an
 extra unknown that the nonlinear solver finds. Each pair appends one border
 column (how the actuator enters the PDE) and one border row (the constraint
 equation) to the Newton system; see docs/constraints_and_actuators.rst for
-the design rationale.
+the design rationale and `torax._src.config.constraints` for the config
+model.
 
 Two constraint modes are supported:
 
@@ -30,30 +31,32 @@ Two constraint modes are supported:
   system against actuator saturation and inconsistent initial conditions.
   As tau -> 0 the hard constraint is recovered.
 
-This module provides the solver-level machinery: the config model, the
-augmented residual (actuator substitution + constraint rows), and the
-declared-pattern extension for the probe coloring. Wiring the actuator state
-through the orchestration loop and outputs is follow-up work; the tests
-exercise the augmented system directly through the Newton root finder.
+The actuator state u_hat travels through the step as follows: the previous
+step's converged values are injected into
+``runtime_params_t_plus_dt.constraints[j].u_hat_old`` by the orchestration
+(`inject_actuator_state`), the Newton solve finds the new values jointly
+with the profiles, and they are returned in
+``SolverNumericOutputs.actuators`` which persists in the ``SimState``.
 """
 
 import dataclasses
-from typing import Annotated, Callable, Literal
+from typing import Callable
 
 import jax
 from jax import numpy as jnp
 import numpy as np
-import pydantic
-from torax._src import array_typing
 from torax._src import math_utils
+from torax._src.config import constraints as constraints_config
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import convertors
 from torax._src.geometry import geometry as geometry_lib
-from torax._src.torax_pydantic import torax_pydantic
 
-# Constraint quantities: how the scalar g reads the solver state vector. Each
-# entry maps a name to (channel read, reduction). The reduction acts on the
-# channel's physical-units cell values.
+# Re-exported for convenience: the config-side models.
+ConstraintConfig = constraints_config.ConstraintConfig
+ConstraintRuntimeParams = constraints_config.ConstraintRuntimeParams
+
+# Constraint quantities: the evolving channel each constraint reads. Used for
+# both the constraint evaluation and the declared border-row pattern.
 _CONSTRAINT_CHANNELS: dict[str, str] = {
     'n_e_line_avg': 'n_e',
 }
@@ -65,71 +68,38 @@ _ACTUATOR_CHANNELS: dict[str, tuple[str, ...]] = {
 }
 
 
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
-class ConstraintRuntimeParams:
-  """Runtime parameters for one constraint/actuator pair at a time slice.
+def initial_actuators(
+    constraints: tuple[ConstraintRuntimeParams, ...],
+) -> jax.Array | None:
+  """Returns the initial nondimensional actuator vector, or None if empty."""
+  if not constraints:
+    return None
+  return jnp.ones(len(constraints))
 
-  Attributes:
-    target: The constraint target Y(t), in the constraint quantity's physical
-      units.
-    tau: Relaxation time constant [s]. Unused in 'hard' mode.
-    actuator_reference: Reference magnitude of the actuator, used to
-      nondimensionalise the border unknown so it is O(1) alongside the
-      scaled profile unknowns.
-    constraint: Name of the constraint quantity.
-    actuator: Dotted runtime-params path of the actuated parameter.
-    mode: 'hard' or 'relaxed'.
+
+def inject_actuator_state(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    actuators: jax.Array | None,
+) -> runtime_params_lib.RuntimeParams:
+  """Writes the previous step's actuator values into the runtime params.
+
+  Args:
+    runtime_params: Runtime params at t + dt, whose constraints carry the
+      provider-default u_hat_old.
+    actuators: Nondimensional actuator values from the previous step's
+      SolverNumericOutputs, or None to keep the provider defaults (used at
+      the first step, where the actuator starts at its reference magnitude).
+
+  Returns:
+    Runtime params with u_hat_old replaced per constraint.
   """
-
-  target: array_typing.FloatScalar
-  tau: array_typing.FloatScalar
-  actuator_reference: array_typing.FloatScalar
-  constraint: str = dataclasses.field(metadata={'static': True})
-  actuator: str = dataclasses.field(metadata={'static': True})
-  mode: str = dataclasses.field(metadata={'static': True})
-
-
-class ConstraintConfig(torax_pydantic.BaseModelFrozen):
-  """Configuration for one constraint/actuator pair.
-
-  Attributes:
-    constraint: The physics quantity to hold at the target.
-    target: The target value Y(t), in the quantity's physical units.
-    actuator: Dotted config path of the parameter freed as an unknown. The
-      configured value of that parameter becomes the actuator's reference
-      magnitude and initial condition.
-    mode: 'relaxed' integrates the constraint violation with time constant
-      tau (implicit integral controller); 'hard' enforces the constraint as
-      an algebraic equation at every step.
-    tau: Relaxation time constant [s]; only used in 'relaxed' mode.
-  """
-
-  constraint: Annotated[Literal['n_e_line_avg'], torax_pydantic.JAX_STATIC] = (
-      'n_e_line_avg'
+  if actuators is None or not runtime_params.constraints:
+    return runtime_params
+  new_constraints = tuple(
+      dataclasses.replace(constraint, u_hat_old=actuators[j])
+      for j, constraint in enumerate(runtime_params.constraints)
   )
-  target: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
-      1e20
-  )
-  actuator: Annotated[
-      Literal['sources.gas_puff.S_total'], torax_pydantic.JAX_STATIC
-  ] = 'sources.gas_puff.S_total'
-  mode: Annotated[Literal['relaxed', 'hard'], torax_pydantic.JAX_STATIC] = (
-      'relaxed'
-  )
-  tau: pydantic.PositiveFloat = 0.5
-
-  def build_runtime_params(
-      self, t: float, actuator_reference: float
-  ) -> ConstraintRuntimeParams:
-    return ConstraintRuntimeParams(
-        target=self.target.get_value(t),
-        tau=self.tau,
-        actuator_reference=actuator_reference,
-        constraint=self.constraint,
-        actuator=self.actuator,
-        mode=self.mode,
-    )
+  return dataclasses.replace(runtime_params, constraints=new_constraints)
 
 
 def _replace_path(obj, parts: list[str], value):
@@ -183,7 +153,11 @@ def _constraint_violation(
   index = evolving_names.index(channel)
   solver_values = x_vec[index * num_cells : (index + 1) * num_cells]
   physical_values = solver_values * convertors.SCALING_FACTORS[channel]
-  value = math_utils.line_average(physical_values, geo)
+  # Line average = cell integration over rho_norm in [0, 1], written with an
+  # explicit quadrature rather than math_utils.line_average: the latter goes
+  # through geo.drho_norm, a cached property whose first evaluation inside
+  # the Newton trace would cache (and leak) a tracer on the grid object.
+  value = jnp.sum(physical_values * jnp.diff(geo.rho_face_norm))
   return (value - constraint.target) / constraint.target
 
 
@@ -197,7 +171,6 @@ def build_augmented_residual(
     evolving_names: tuple[str, ...],
     num_cells: int,
     dt: jax.Array,
-    u_hat_old: jax.Array,
 ) -> Callable[[jax.Array], jax.Array]:
   """Builds the bordered residual over the augmented vector [x, u_hat].
 
@@ -211,7 +184,8 @@ def build_augmented_residual(
   the fully implicit discretisation of tau * du_hat/dt = -g_hat, so the
   actuator rises while the quantity is below target (assuming the actuator
   increases the quantity). Constraint rows are dimensionless and O(1),
-  matching the scaled PDE residual.
+  matching the scaled PDE residual. The start-of-step actuator values are
+  read from each constraint's u_hat_old field.
 
   Args:
     pde_residual_fun: The theta-method residual as a function of the profile
@@ -222,7 +196,6 @@ def build_augmented_residual(
     evolving_names: Evolving channel names, in solver order.
     num_cells: Number of radial cells.
     dt: Timestep duration.
-    u_hat_old: Nondimensional actuator values at the start of the step.
 
   Returns:
     A function mapping the augmented vector of size
@@ -246,7 +219,7 @@ def build_augmented_residual(
         rows.append(g_hat)
       else:
         rows.append(
-            constraint.tau * (u_hat[j] - u_hat_old[j]) / dt + g_hat
+            constraint.tau * (u_hat[j] - constraint.u_hat_old) / dt + g_hat
         )
     return jnp.concatenate([pde_residual, jnp.stack(rows)])
 

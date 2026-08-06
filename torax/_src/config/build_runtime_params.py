@@ -30,6 +30,7 @@ import jax
 from jax import numpy as jnp
 from torax._src import jax_utils
 from torax._src import state as state_lib
+from torax._src.config import constraints as constraints_lib
 from torax._src.config import numerics as numerics_lib
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import getters as getters_lib
@@ -92,6 +93,14 @@ class RuntimeParamsProvider:
   edge: edge_base.EdgeModelConfig | None
   neoclassical: neoclassical_pydantic_model.Neoclassical
   time_step_calculator: time_step_calculator_pydantic_model.TimeStepCalculator
+  # Constraint/actuator pairs, with each actuator's reference magnitude
+  # (its configured value at t_initial) resolved at construction time.
+  constraints: tuple[constraints_lib.ConstraintConfig, ...] = dataclasses.field(
+      default=(), metadata={'static': True}
+  )
+  constraint_actuator_references: tuple[float, ...] = dataclasses.field(
+      default=(), metadata={'static': True}
+  )
 
   @classmethod
   def from_config(
@@ -99,6 +108,17 @@ class RuntimeParamsProvider:
       config: model_config.ToraxConfig,
   ) -> typing_extensions.Self:
     """Constructs a RuntimeParamsProvider from a ToraxConfig."""
+    actuator_references = []
+    for constraint in config.constraints:
+      # Resolve the dotted actuator path against the config to obtain the
+      # reference magnitude used to nondimensionalise the border unknown.
+      node = config
+      *parents, leaf = constraint.actuator.split('.')
+      for part in parents:
+        node = getattr(node, part)
+      actuator_references.append(
+          float(getattr(node, leaf).get_value(config.numerics.t_initial))
+      )
     return cls(
         sources=config.sources,
         numerics=config.numerics,
@@ -111,6 +131,8 @@ class RuntimeParamsProvider:
         edge=config.edge,
         neoclassical=config.neoclassical,
         time_step_calculator=config.time_step_calculator,
+        constraints=tuple(config.constraints),
+        constraint_actuator_references=tuple(actuator_references),
     )
 
   # TODO(b/460347309): investigate effect of jit here on overall compile time.
@@ -136,6 +158,12 @@ class RuntimeParamsProvider:
         mhd=self.mhd.build_runtime_params(t),
         time_step_calculator=self.time_step_calculator.build_runtime_params(),
         edge=None if self.edge is None else self.edge.build_runtime_params(t),
+        constraints=tuple(
+            constraint.build_runtime_params(t, reference)
+            for constraint, reference in zip(
+                self.constraints, self.constraint_actuator_references
+            )
+        ),
     )
 
   def update_provider(

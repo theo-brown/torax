@@ -492,12 +492,17 @@ class SolverNumericOutputs:
       across all iterations of the solver.
     sawtooth_crash: True if a sawtooth model is active and the solver step
       corresponds to a sawtooth crash step.
+    actuators: Nondimensional actuator values of configured constraint /
+      actuator pairs, solved jointly with the profiles as a bordered Newton
+      system. None when no constraints are configured. Carried in the
+      SimState so each step relaxes from the previous step's values.
   """
 
   outer_solver_iterations: array_typing.IntScalar
   solver_error_state: array_typing.IntScalar
   inner_solver_iterations: array_typing.IntScalar
   sawtooth_crash: array_typing.BoolScalar
+  actuators: jax.Array | None = None
 
 
 # TODO(b/434175938): change to StrEnum

@@ -160,7 +160,6 @@ class ConstraintsTest(absltest.TestCase):
     constraint = config.build_runtime_params(
         t=0.0, actuator_reference=self.s_total_reference
     )
-    u_hat_old = jnp.array([1.0])
     augmented = constraints.build_augmented_residual(
         pde_residual_fun=self.pde_residual,
         runtime_params_t_plus_dt=self.runtime_params,
@@ -169,9 +168,8 @@ class ConstraintsTest(absltest.TestCase):
         evolving_names=self.evolving_names,
         num_cells=_NUM_CELLS,
         dt=jnp.array(_DT),
-        u_hat_old=u_hat_old,
     )
-    z0 = jnp.concatenate([self.x_vec, u_hat_old])
+    z0 = jnp.concatenate([self.x_vec, jnp.array([constraint.u_hat_old])])
     z_root, metadata = jax_root_finding.root_newton_raphson(
         augmented, z0, tol=1e-8, use_jax_custom_root=False
     )
@@ -228,7 +226,6 @@ class ConstraintsTest(absltest.TestCase):
     constraint = config.build_runtime_params(
         t=0.0, actuator_reference=self.s_total_reference
     )
-    u_hat_old = jnp.array([1.0])
     augmented = constraints.build_augmented_residual(
         pde_residual_fun=self.pde_residual,
         runtime_params_t_plus_dt=self.runtime_params,
@@ -237,9 +234,8 @@ class ConstraintsTest(absltest.TestCase):
         evolving_names=self.evolving_names,
         num_cells=_NUM_CELLS,
         dt=jnp.array(_DT),
-        u_hat_old=u_hat_old,
     )
-    z0 = jnp.concatenate([self.x_vec, u_hat_old])
+    z0 = jnp.concatenate([self.x_vec, jnp.array([constraint.u_hat_old])])
     jacobian = np.asarray(jax.jacfwd(augmented)(z0))
 
     pde_pattern = jacobian_pattern.build_pattern(

@@ -30,6 +30,7 @@ from torax._src.geometry import geometry
 from torax._src.geometry import geometry_provider as geometry_provider_lib
 from torax._src.orchestration import sim_state
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
+from torax._src.solver import constraints as solver_constraints
 from torax._src.solver import solver as solver_lib
 from torax._src.sources import source_profiles as source_profiles_lib
 
@@ -63,6 +64,9 @@ def create_initial_state(
       outer_solver_iterations=jnp.array(0, jax_utils.get_int_dtype()),
       inner_solver_iterations=jnp.array(0, jax_utils.get_int_dtype()),
       sawtooth_crash=False,
+      # Keeps the loop carry structure consistent with the solver output,
+      # which returns updated actuator values when constraints are active.
+      actuators=input_state.solver_numeric_outputs.actuators,
   )
   return AdaptiveStepState(
       x_new=initial_x_new,
@@ -100,6 +104,12 @@ def compute_state(
           edge_outputs=edge_outputs,
           core_profiles=input_state.core_profiles,
       )
+  )
+  # Each retry relaxes the constraints' actuators from the same start-of-step
+  # values, taken from the previous completed step.
+  runtime_params_t_plus_dt = solver_constraints.inject_actuator_state(
+      runtime_params_t_plus_dt,
+      input_state.solver_numeric_outputs.actuators,
   )
   core_profiles_t_plus_dt = updaters.provide_core_profiles_t_plus_dt(
       dt=dt,  # pyrefly: ignore[bad-argument-type]

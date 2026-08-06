@@ -23,6 +23,7 @@ from torax._src import state
 from torax._src.config import build_runtime_params
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import initialization
+from torax._src.solver import constraints as solver_constraints
 from torax._src.geometry import geometry
 from torax._src.geometry import geometry_provider as geometry_provider_lib
 from torax._src.neoclassical.conductivity import base as conductivity_base
@@ -183,6 +184,10 @@ def _get_initial_state(
           outer_solver_iterations=jnp.zeros((), jax_utils.get_int_dtype()),
           inner_solver_iterations=jnp.zeros((), jax_utils.get_int_dtype()),
           sawtooth_crash=False,
+          # Actuators start at their reference magnitude (u_hat = 1).
+          actuators=solver_constraints.initial_actuators(
+              runtime_params.constraints
+          ),
       ),
       geometry=geo,
       edge_outputs=edge_outputs,
@@ -327,6 +332,9 @@ def get_initial_state_and_post_processed_outputs_from_file(
               inner_solver_iterations=jnp.asarray(
                   inner_solver_iterations, jax_utils.get_int_dtype()
               ),
+              # Restart files do not carry actuator state; restart from the
+              # reference magnitude like a fresh run.
+              actuators=initial_state.solver_numeric_outputs.actuators,
           ),
       ),
       post_processed_outputs,

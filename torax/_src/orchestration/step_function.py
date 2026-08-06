@@ -37,6 +37,7 @@ from torax._src.orchestration import step_function_processing
 from torax._src.orchestration import whilei_loop
 from torax._src.output_tools import post_processing
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
+from torax._src.solver import constraints as solver_constraints
 from torax._src.solver import solver as solver_lib
 from torax._src.sources import source_profiles as source_profiles_lib
 from torax._src.time_step_calculator import time_step_calculator as ts
@@ -505,6 +506,7 @@ class SimulationStepFn:
             jax_utils.get_int_dtype(),
         ),
         sawtooth_crash=False,
+        actuators=result.state.solver_numeric_outputs.actuators,
     )
     output_state, post_processed_outputs = (
         step_function_processing.finalize_outputs(
@@ -560,6 +562,11 @@ class SimulationStepFn:
             edge_outputs=edge_outputs,
             core_profiles=input_state.core_profiles,
         )
+    )
+    # Constraints relax their actuators from the previous step's values.
+    runtime_params_t_plus_dt = solver_constraints.inject_actuator_state(
+        runtime_params_t_plus_dt,
+        input_state.solver_numeric_outputs.actuators,
     )
     core_profiles_t_plus_dt = updaters.provide_core_profiles_t_plus_dt(
         dt=dt,

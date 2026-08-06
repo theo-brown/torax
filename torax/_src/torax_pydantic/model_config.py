@@ -22,6 +22,7 @@ import numpy as np
 import pydantic
 from torax._src import models
 from torax._src import version
+from torax._src.config import constraints as constraints_lib
 from torax._src.config import numerics as numerics_lib
 from torax._src.core_profiles import profile_conditions as profile_conditions_lib
 from torax._src.core_profiles.plasma_composition import electron_density_ratios
@@ -40,6 +41,7 @@ from torax._src.sources import pydantic_model as sources_pydantic_model
 from torax._src.sources.ion_cyclotron_source import toric_nn
 from torax._src.time_step_calculator import pydantic_model as time_step_calculator_pydantic_model
 from torax._src.torax_pydantic import file_restart as file_restart_pydantic_model
+import typing_extensions
 from torax._src.torax_pydantic import torax_pydantic
 from torax._src.transport_model import pydantic_model as transport_model_pydantic_model
 import typing_extensions
@@ -67,6 +69,11 @@ class ToraxConfig(torax_pydantic.BaseModelFrozen):
       provided the default chi time step calculator is used.
     restart: Optional config for file restart. If None, no file restart is
       performed.
+    constraints: Optional list of constraint/actuator pairs solved as a
+      bordered extension of the Newton system (e.g. line-averaged density
+      held at a target by an unknown gas puff rate). Requires the
+      newton_raphson solver with the direct linear solver, a fully implicit
+      theta method, and an implicit actuated source.
   """
 
   profile_conditions: profile_conditions_lib.ProfileConditions
@@ -94,6 +101,51 @@ class ToraxConfig(torax_pydantic.BaseModelFrozen):
   restart: file_restart_pydantic_model.FileRestart | None = pydantic.Field(
       default=None
   )
+  constraints: tuple[constraints_lib.ConstraintConfig, ...] = ()
+
+  @pydantic.model_validator(mode='after')
+  def _validate_constraints(self) -> typing_extensions.Self:
+    """Checks solver and source compatibility of configured constraints."""
+    if not self.constraints:
+      return self
+    solver = self.solver
+    if solver.solver_type != 'newton_raphson':
+      raise ValueError(
+          'constraints require solver_type="newton_raphson", got'
+          f' "{solver.solver_type}".'
+      )
+    if solver.newton_linear_solver != 'direct':
+      raise ValueError(
+          'constraints require newton_linear_solver="direct"; the JFNK'
+          ' preconditioner does not yet handle the bordered system.'
+      )
+    if solver.theta_implicit != 1.0:
+      raise ValueError(
+          'constraints require theta_implicit=1.0: the explicit part of the'
+          ' theta method would use the configured actuator value rather than'
+          ' the solved one.'
+      )
+    for constraint in self.constraints:
+      node = self
+      *parents, leaf = constraint.actuator.split('.')
+      for part in parents:
+        node = getattr(node, part, None)
+        if node is None:
+          raise ValueError(
+              f'constraint actuator "{constraint.actuator}": source is not'
+              ' configured.'
+          )
+      if getattr(node, leaf, None) is None:
+        raise ValueError(
+            f'constraint actuator "{constraint.actuator}": parameter not'
+            ' found on the configured source.'
+        )
+      if getattr(node, 'is_explicit', False):
+        raise ValueError(
+            f'constraint actuator "{constraint.actuator}": the actuated'
+            ' source must be implicit so the solver sees the substitution.'
+        )
+    return self
 
   def build_models(self):
     edge_model = self.edge.build_edge_model() if self.edge else None

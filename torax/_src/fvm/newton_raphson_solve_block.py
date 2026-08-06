@@ -36,6 +36,7 @@ from torax._src.fvm import fvm_conversions
 from torax._src.fvm import residual_and_loss
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
+from torax._src.solver import constraints as solver_constraints
 from torax._src.solver import jax_root_finding
 from torax._src.solver import predictor_corrector_method
 from torax._src.sources import source_profiles
@@ -253,6 +254,42 @@ def newton_raphson_solve_block(
       residual_and_loss.theta_method_block_residual, **residual_kwargs
   )
 
+  constraints = runtime_params_t_plus_dt.constraints
+  if constraints:
+    # Constraint/actuator pairs: solve the bordered system over [x, u_hat].
+    # The residual needs the runtime params as an argument so the actuators
+    # can be substituted per Newton iterate.
+    if newton_linear_solver != 'direct':
+      raise ValueError(
+          'constraints require the direct Newton linear solver.'
+      )
+    pde_kwargs = {
+        k: v
+        for k, v in residual_kwargs.items()
+        if k != 'runtime_params_t_plus_dt'
+    }
+
+    def pde_residual_fun(x_vec, runtime_params):
+      return residual_and_loss.theta_method_block_residual(
+          x_new_guess_vec=x_vec,
+          runtime_params_t_plus_dt=runtime_params,
+          **pde_kwargs,
+      )
+
+    residual_fun = solver_constraints.build_augmented_residual(
+        pde_residual_fun=pde_residual_fun,
+        runtime_params_t_plus_dt=runtime_params_t_plus_dt,
+        geo=geo_t_plus_dt,
+        constraints=constraints,
+        evolving_names=evolving_names,
+        num_cells=x_old[0].value.shape[0],
+        dt=dt,
+    )
+    init_x_new_vec = jnp.concatenate([
+        init_x_new_vec,
+        jnp.stack([c.u_hat_old for c in constraints]),
+    ])
+
   jfnk_kwargs = {}
   if newton_linear_solver == 'jfnk':
     num_channels = len(evolving_names)
@@ -305,6 +342,11 @@ def newton_raphson_solve_block(
 
   x_root, metadata = root_finder(x0=init_x_new_vec)
 
+  actuators = None
+  if constraints:
+    actuators = x_root[-len(constraints):]
+    x_root = x_root[: -len(constraints)]
+
   # Create updated CellVariable instances based on state_plus_dt which has
   # updated boundary conditions and prescribed profiles.
   x_new = fvm_conversions.vec_to_cell_variable_tuple(
@@ -317,6 +359,7 @@ def newton_raphson_solve_block(
       solver_error_state=jnp.array(metadata.error, jax_utils.get_int_dtype()),
       outer_solver_iterations=jnp.array(1, jax_utils.get_int_dtype()),
       sawtooth_crash=False,
+      actuators=actuators,
   )
 
   return x_new, solver_numeric_outputs
