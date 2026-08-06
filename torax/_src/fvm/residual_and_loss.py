@@ -310,6 +310,45 @@ def apply_internal_boundary_conditions(
   )
 
 
+def residual_vec_to_cell_channel_array(
+    residual_vec: jax.Array,
+    num_channels: int,
+) -> jax.Array:
+  """Unflattens a solver vector into the (num_cells, num_channels) layout.
+
+  The solver-facing vector concatenates the channels one after another (all
+  cells of channel 0, then all cells of channel 1, ...), which is the layout
+  produced by `(num_cells, num_channels) -> .T -> .reshape(-1)`. The
+  tridiagonal matvec and solve routines instead work on (num_cells,
+  num_channels) arrays, so anything that hands a solver vector to them has to
+  go through this conversion first.
+
+  Args:
+    residual_vec: Flat array of size num_cells * num_channels.
+    num_channels: Number of evolving channels.
+
+  Returns:
+    Array of shape (num_cells, num_channels).
+  """
+  return residual_vec.reshape(num_channels, -1).T
+
+
+def cell_channel_array_to_residual_vec(
+    cell_channel_array: jax.Array,
+) -> jax.Array:
+  """Flattens a (num_cells, num_channels) array into a solver vector.
+
+  Inverse of `residual_vec_to_cell_channel_array`.
+
+  Args:
+    cell_channel_array: Array of shape (num_cells, num_channels).
+
+  Returns:
+    Flat array of size num_cells * num_channels.
+  """
+  return cell_channel_array.T.reshape(-1)
+
+
 @jax.jit(
     static_argnames=[
         'evolving_names',
@@ -412,13 +451,15 @@ def theta_method_block_residual(
   # Reshape x_new_guess_vec to a 2D array with shape (num_channels, num_cells)
   # then transpose it to (num_cells, num_channels) to allow for block
   # tridiagonal matvec multiplication with lhs and rhs.
-  num_cells, num_channels = x_old_array.shape
-  x_new_array = x_new_guess_vec.reshape(num_channels, num_cells).T
+  _, num_channels = x_old_array.shape
+  x_new_array = residual_vec_to_cell_channel_array(
+      x_new_guess_vec, num_channels
+  )
 
   lhs_result = lhs.matvec(x_new_array) + lhs_vec
   rhs_result = rhs.matvec(x_old_array) + rhs_vec
 
-  return (lhs_result - rhs_result).T.reshape(-1)
+  return cell_channel_array_to_residual_vec(lhs_result - rhs_result)
 
 
 @jax.jit(
