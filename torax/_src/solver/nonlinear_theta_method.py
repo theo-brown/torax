@@ -47,8 +47,17 @@ class NewtonRaphsonRuntimeParams(solver_runtime_params_lib.RuntimeParams):
   residual_tol: float
   residual_coarse_tol: float
   tau_min: float
+  jfnk_rtol: float
   initial_guess_mode: int = dataclasses.field(metadata={'static': True})
   log_iterations: bool = dataclasses.field(metadata={'static': True})
+  newton_linear_solver: str = dataclasses.field(metadata={'static': True})
+  # Static: these size the Arnoldi buffers and the Krylov loop bounds.
+  jfnk_max_krylov: int = dataclasses.field(metadata={'static': True})
+  jfnk_restart: int = dataclasses.field(metadata={'static': True})
+  # Static: selects whether the Newton state carries an adaptive forcing term.
+  jfnk_forcing: str = dataclasses.field(
+      default='fixed', metadata={'static': True}
+  )
 
 
 class NonlinearThetaMethod(solver.Solver):
@@ -260,6 +269,11 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         delta_reduction_factor=solver_params.delta_reduction_factor,
         tau_min=solver_params.tau_min,
         pedestal_transition_state=pedestal_transition_state,
+        newton_linear_solver=solver_params.newton_linear_solver,
+        jfnk_max_krylov=solver_params.jfnk_max_krylov,
+        jfnk_restart=solver_params.jfnk_restart,
+        jfnk_rtol=solver_params.jfnk_rtol,
+        jfnk_forcing=solver_params.jfnk_forcing,
     )
     return (
         x_new,
