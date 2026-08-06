@@ -15,3 +15,4 @@ underlying libraries, and API.
    jax_classes
    jitted_simulation
    explicit_geometry
+   constraints_and_actuators
