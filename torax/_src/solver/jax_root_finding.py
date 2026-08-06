@@ -302,6 +302,9 @@ def root_newton_raphson(
       jacobian_fun = jax_utils.xla_metadata_call(
           jax.jit(jacobian_fun), compilation_unit='jacobian_fun_block'
       )
+    direction_fun = functools.partial(
+        _direct_direction, jacobian_fun=jacobian_fun
+    )
 
     # initialize state dict being passed around Newton-Raphson iterations
     residual_vec_init_x_new = residual_fun(init_x_new_vec)
@@ -320,7 +323,7 @@ def root_newton_raphson(
     )
     body_fun = functools.partial(
         _body,
-        jacobian_fun=jacobian_fun,
+        direction_fun=direction_fun,
         residual_fun=residual_fun,
         log_iterations=log_iterations,
         delta_reduction_factor=delta_reduction_factor,
@@ -407,9 +410,18 @@ def _cond(
   )
 
 
+def _direct_direction(
+    x: jax.Array,
+    rhs: jax.Array,
+    jacobian_fun: Callable[[jax.Array], jax.Array],
+) -> jax.Array:
+  """Solves the Newton system with a materialised Jacobian and a dense LU."""
+  return jnp.linalg.solve(jacobian_fun(x), rhs)
+
+
 def _body(
     input_state: dict[str, jax.Array],
-    jacobian_fun: Callable[[jax.Array], jax.Array],
+    direction_fun: Callable[[jax.Array, jax.Array], jax.Array],
     residual_fun: Callable[[jax.Array], jax.Array],
     log_iterations: bool,
     delta_reduction_factor: float,
@@ -417,10 +429,9 @@ def _body(
 ) -> dict[str, jax.Array]:
   """Calculates next guess in Newton-Raphson iteration."""
   dtype = input_state['x'].dtype
-  a_mat = jacobian_fun(input_state['x'])
   rhs = -input_state['residual']
 
-  direction = jnp.linalg.solve(a_mat, rhs)
+  direction = direction_fun(input_state['x'], rhs)
 
   def norm_fn(res):
     return jnp.mean(jnp.abs(res))
