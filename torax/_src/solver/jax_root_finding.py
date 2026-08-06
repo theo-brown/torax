@@ -32,6 +32,12 @@ MIN_DELTA: Final[float] = 1e-7
 # Guard against dividing by a vanishing norm during a lucky GMRES breakdown.
 _GMRES_EPS: Final[float] = 1e-30
 
+# Eisenstat-Walker (choice 2) forcing constants: eta_k = GAMMA * ratio**2,
+# started at and capped by ETA_MAX. See Eisenstat & Walker, SIAM J. Sci.
+# Comput. 17(1), 1996. GAMMA=0.9, alpha=2 keeps quadratic Newton convergence.
+_EW_GAMMA: Final[float] = 0.9
+_EW_ETA_MAX: Final[float] = 0.1
+
 # Type of a callable that, given x, returns (residual, preconditioner_operand).
 # The operand is an arbitrary pytree consumed by the preconditioner apply.
 ResidualWithOperatorFn = Callable[[jax.Array], tuple[jax.Array, Any]]
@@ -272,6 +278,7 @@ def root_newton_raphson(
     jfnk_max_krylov: int = 30,
     jfnk_restart: int = 30,
     jfnk_rtol: float = 1e-2,
+    jfnk_forcing: str = 'fixed',
 ) -> tuple[jax.Array, RootMetadata]:
   """A differentiable Newton-Raphson root finder.
 
@@ -316,13 +323,25 @@ def root_newton_raphson(
     jfnk_rtol: Only for 'jfnk'. Relative tolerance of the Krylov solve. This is
       the inexact-Newton forcing term: since the Krylov right-hand side is the
       current nonlinear residual, a fixed relative tolerance automatically
-      solves loosely when far from the root and tightly when close to it.
+      solves loosely when far from the root and tightly when close to it. With
+      jfnk_forcing='adaptive' it is instead the floor of the adaptive forcing
+      term, i.e. the tightest Krylov solve the adaptation is allowed to
+      request.
+    jfnk_forcing: Only for 'jfnk'. 'fixed' uses jfnk_rtol at every Newton
+      iteration. 'adaptive' uses the Eisenstat-Walker choice-2 forcing term:
+      eta_k = 0.9 * (|R_k| / |R_{k-1}|)^2, safeguarded against premature
+      tightening, capped at 0.1 and floored at jfnk_rtol. Early Newton
+      iterations then use cheap loose Krylov solves while the final iterations
+      are as tight as the fixed setting, preserving both the convergence rate
+      and the converged answer.
 
   Returns:
     A tuple `(x_root, RootMetadata(...))`.
   """
   if linear_solver not in ('direct', 'jfnk'):
     raise ValueError(f'Unknown linear_solver: {linear_solver}')
+  if jfnk_forcing not in ('fixed', 'adaptive'):
+    raise ValueError(f'Unknown jfnk_forcing: {jfnk_forcing}')
   if linear_solver == 'jfnk' and (
       residual_with_operator_fun is None or preconditioner_apply is None
   ):
@@ -346,8 +365,11 @@ def root_newton_raphson(
           preconditioner_apply=preconditioner_apply,
           max_krylov=jfnk_max_krylov,
           restart=jfnk_restart,
-          rtol=jfnk_rtol,
       )
+      if jfnk_forcing == 'fixed':
+        # Bind the forcing term now; with adaptive forcing it is instead
+        # carried in the Newton state and supplied per iteration by `_body`.
+        direction_fun = functools.partial(direction_fun, rtol=jfnk_rtol)
     else:
       if jacobian_fun is None:
         jacobian_fun = jax.jacfwd(f)
@@ -373,6 +395,13 @@ def root_newton_raphson(
       initial_state['krylov_iterations'] = jnp.array(
           0, dtype=jax_utils.get_dtype()
       )
+      if jfnk_forcing == 'adaptive':
+        # The Eisenstat-Walker forcing term for the *next* Krylov solve.
+        # Present in the state dict only under adaptive forcing, so the fixed
+        # and direct paths keep their compiled loops unchanged.
+        initial_state['gmres_rtol'] = jnp.array(
+            _EW_ETA_MAX, dtype=jax_utils.get_dtype()
+        )
 
     # carry out iterations.
     cond_fun = functools.partial(
@@ -385,6 +414,7 @@ def root_newton_raphson(
         log_iterations=log_iterations,
         delta_reduction_factor=delta_reduction_factor,
         sufficient_decrease=sufficient_decrease,
+        jfnk_eta_min=jfnk_rtol,
     )
     output_state = jax.lax.while_loop(cond_fun, body_fun, initial_state)
     x_out = output_state.pop('x')
@@ -429,6 +459,8 @@ def root_newton_raphson(
   error = _error_cond(
       residual=metadata['residual'], coarse_tol=coarse_tol, tol=tol
   )
+  # The forcing term is loop-carried state, not a result.
+  metadata.pop('gmres_rtol', None)
   # Workaround for https://github.com/google/jax/issues/24295: cast iterations
   # to the correct int dtype.
   metadata['iterations'] = metadata['iterations'].astype(
@@ -531,19 +563,25 @@ def _jfnk_direction(
 
 def _body(
     input_state: dict[str, jax.Array],
-    direction_fun: Callable[
-        [jax.Array, jax.Array], tuple[jax.Array, jax.Array | int]
-    ],
+    direction_fun: Callable[..., tuple[jax.Array, jax.Array | int]],
     residual_fun: Callable[[jax.Array], jax.Array],
     log_iterations: bool,
     delta_reduction_factor: float,
     sufficient_decrease: float,
+    jfnk_eta_min: float = 0.0,
 ) -> dict[str, jax.Array]:
   """Calculates next guess in Newton-Raphson iteration."""
   dtype = input_state['x'].dtype
   rhs = -input_state['residual']
 
-  direction, krylov_iterations = direction_fun(input_state['x'], rhs)
+  if 'gmres_rtol' in input_state:
+    # Adaptive (Eisenstat-Walker) forcing: the Krylov tolerance for this
+    # iteration was computed from the previous iteration's residual reduction.
+    direction, krylov_iterations = direction_fun(
+        input_state['x'], rhs, rtol=input_state['gmres_rtol']
+    )
+  else:
+    direction, krylov_iterations = direction_fun(input_state['x'], rhs)
 
   def norm_fn(res):
     return jnp.mean(jnp.abs(res))
@@ -581,6 +619,19 @@ def _body(
         jnp.array(krylov_iterations, dtype=dtype)
     )
 
+  if 'gmres_rtol' in input_state:
+    # Eisenstat-Walker choice 2: eta from the achieved residual reduction,
+    # with the standard safeguard so eta cannot collapse before the previous
+    # loose solve's information has been used up. A failed line search leaves
+    # the ratio at ~1, which correctly keeps the next solve loose.
+    ratio = ls_state.residual_norm / jnp.maximum(init_norm, _GMRES_EPS)
+    eta_raw = _EW_GAMMA * ratio**2
+    safeguard = _EW_GAMMA * input_state['gmres_rtol'] ** 2
+    eta = jnp.where(
+        safeguard > _EW_ETA_MAX, jnp.maximum(eta_raw, safeguard), eta_raw
+    )
+    output_state['gmres_rtol'] = jnp.clip(eta, jfnk_eta_min, _EW_ETA_MAX)
+
   if log_iterations:
     jax.debug.print(
         'Iteration: {iteration:d}. Residual: {residual:.16f}. tau = {tau:.6f}',
@@ -595,6 +646,11 @@ def _body(
           total=output_state['krylov_iterations'].astype(
               jax_utils.get_int_dtype()
           ),
+      )
+    if 'gmres_rtol' in output_state:
+      jax.debug.print(
+          '  next GMRES rtol (Eisenstat-Walker): {eta:.3e}',
+          eta=output_state['gmres_rtol'],
       )
 
   return output_state

@@ -180,7 +180,6 @@ class GmresTest(parameterized.TestCase):
     self.assertLess(float(relative), 1e-1)
 
 
-
 class JfnkRootFindingTest(parameterized.TestCase):
   """Tests the JFNK path of root_newton_raphson against the direct path."""
 
@@ -287,6 +286,50 @@ class JfnkRootFindingTest(parameterized.TestCase):
           f_closed, np.zeros(2), linear_solver='nope'
       )
 
+  def test_adaptive_forcing_finds_the_same_root(self):
+    """Eisenstat-Walker forcing must converge to the same root.
+
+    The loose early solves change the Newton path, so iteration counts may
+    differ from the fixed-forcing path; the converged root and error code
+    must not.
+    """
+    tol = 1e-9
+    f_closed = functools.partial(function_to_find_root, a=0.5, b=0.1)
+    x_init = np.array([0.0, 0.0], dtype=np.float64)
+
+    fixed, fixed_metadata = jax.jit(
+        functools.partial(
+            jax_root_finding.root_newton_raphson,
+            f_closed,
+            tol=tol,
+            **self._jfnk_kwargs(f_closed),
+        )
+    )(x_init)
+    kwargs = self._jfnk_kwargs(f_closed)
+    kwargs['jfnk_forcing'] = 'adaptive'
+    adaptive, adaptive_metadata = jax.jit(
+        functools.partial(
+            jax_root_finding.root_newton_raphson,
+            f_closed,
+            tol=tol,
+            **kwargs,
+        )
+    )(x_init)
+
+    with self.subTest('same_root'):
+      chex.assert_trees_all_close(fixed, adaptive, atol=1e-8)
+    with self.subTest('both_converged'):
+      self.assertEqual(int(fixed_metadata.error), 0)
+      self.assertEqual(int(adaptive_metadata.error), 0)
+    with self.subTest('krylov_iterations_reported'):
+      self.assertGreater(int(adaptive_metadata.krylov_iterations), 0)
+
+  def test_unknown_jfnk_forcing_raises(self):
+    f_closed = functools.partial(function_to_find_root, a=0.5, b=0.1)
+    kwargs = self._jfnk_kwargs(f_closed)
+    kwargs['jfnk_forcing'] = 'nope'
+    with self.assertRaisesRegex(ValueError, 'Unknown jfnk_forcing'):
+      jax_root_finding.root_newton_raphson(f_closed, np.zeros(2), **kwargs)
 
 
 if __name__ == '__main__':
