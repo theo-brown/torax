@@ -38,6 +38,16 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
     D_e_max: maximum electron density diffusivity.
     V_e_min: minimum electron density convection.
     V_e_max: minimum electron density convection.
+    clip_mode: How the above min/max bounds are imposed. 'hard' (default) uses
+      `jnp.clip`, which makes the derivative of a saturated coefficient with
+      respect to any upstream quantity exactly zero. 'soft' uses a smooth
+      saturation which still respects the bounds but keeps a small non-zero
+      derivative, which is useful for gradient-based optimisation and
+      sensitivity analysis.
+    clip_softness: Only used for clip_mode='soft'. Width of the transition
+      region around each bound, as a fraction of the magnitude of that bound.
+      Larger values give larger gradients in the saturated region, at the cost
+      of a larger deviation from the hard clip near the bound.
     rho_min: normalized radius above which this model is applied.
     rho_max: normalized radius below which this model is applied.
     apply_inner_patch: set inner core transport coefficients (ad-hoc MHD/EM
@@ -76,6 +86,14 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
   D_e_max: torax_pydantic.MeterSquaredPerSecond = 100.0
   V_e_min: torax_pydantic.MeterPerSecond = -50.0
   V_e_max: torax_pydantic.MeterPerSecond = 50.0
+  clip_mode: Annotated[enums.ClipMode, torax_pydantic.JAX_STATIC] = (
+      enums.ClipMode.HARD
+  )
+  # The soft clip composes a smooth lower bound with a smooth upper bound. For
+  # softness <= 0.2 the smooth upper bound undershoots the lower bound by at
+  # most ~1.4e-3 of the range, which is negligible; wider transitions would
+  # make the bounds meaningfully inconsistent, hence the upper limit here.
+  clip_softness: Annotated[float, pydantic.Field(gt=0.0, le=0.2)] = 0.05
   rho_min: torax_pydantic.UnitIntervalTimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
@@ -201,6 +219,8 @@ class TransportBase(torax_pydantic.BaseModelFrozen, abc.ABC):
         D_e_max=self.D_e_max,
         V_e_min=self.V_e_min,
         V_e_max=self.V_e_max,
+        clip_mode=self.clip_mode,
+        clip_softness=self.clip_softness,
         rho_min=self.rho_min.get_value(t),
         rho_max=self.rho_max.get_value(t),
         apply_inner_patch=self.apply_inner_patch.get_value(t),

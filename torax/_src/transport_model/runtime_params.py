@@ -36,6 +36,8 @@ class RuntimeParams:
   D_e_max: float
   V_e_min: float
   V_e_max: float
+  clip_mode: enums.ClipMode = dataclasses.field(metadata={'static': True})
+  clip_softness: float
   rho_min: array_typing.FloatScalar
   rho_max: array_typing.FloatScalar
   apply_inner_patch: array_typing.BoolScalar
