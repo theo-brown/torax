@@ -31,3 +31,28 @@ class MergeMode(enum.StrEnum):
   """
   ADD = 'add'
   OVERWRITE = 'overwrite'
+
+
+class ClipMode(enum.StrEnum):
+  """Defines how transport coefficients are constrained to their bounds.
+
+  The min/max bounds on the transport coefficients exist for PDE stability.
+  However, the way the bounds are imposed matters for gradient-based workflows
+  (optimisation, sensitivity analysis, surrogate training), because it
+  determines the derivative of the transport model output with respect to its
+  inputs once a bound is active.
+
+  Attributes:
+    HARD: Bounds are imposed with `jnp.clip`. Saturated points are exactly
+      constant, so their derivative with respect to any upstream quantity is
+      exactly zero. This is the default and reproduces historical TORAX
+      behaviour.
+    SOFT: Bounds are imposed with a smooth (softplus-based) saturation. The
+      bounds are still respected, but the output is a strictly monotonic,
+      infinitely differentiable function of the unclipped value, so saturated
+      points retain a small non-zero derivative instead of a zero one. The
+      width of the transition region is set by `clip_softness`.
+  """
+
+  HARD = 'hard'
+  SOFT = 'soft'

@@ -1465,6 +1465,35 @@ transport model.
   Upper allowed bound for particle convection :math:`V`, in units of
   :math:`m^2/s`.
 
+``clip_mode`` (str [default = 'hard'])
+  How the ``chi``, ``D_e`` and ``V_e`` bounds above are imposed.
+
+  * ``'hard'``: the bounds are imposed with ``jnp.clip``. A coefficient that
+    has saturated at a bound is exactly constant, so its derivative with
+    respect to any upstream quantity is exactly zero. Any gradient of a
+    simulation output that reaches the solver only through a saturated
+    transport channel is therefore identically zero.
+  * ``'soft'``: the bounds are imposed with a smooth (softplus-based)
+    saturation. The bounds are still respected, but the coefficient is a
+    strictly increasing, infinitely differentiable function of the unclipped
+    value, so saturated points retain a small non-zero derivative. Useful for
+    gradient-based optimisation, sensitivity analysis and surrogate training,
+    where a zero gradient carries no information about how to leave the
+    saturated region.
+
+  Note that the residual gradient under ``'soft'`` decays like
+  ``exp(-depth/width)`` with the saturation depth, so it is only useful within
+  roughly ten transition widths of the bound (see ``clip_softness``). Deeper
+  saturation is a sign that the bound itself should be revisited.
+
+``clip_softness`` (float [default = 0.05])
+  Only used when ``clip_mode='soft'``. Width of the transition region around
+  each bound, as a fraction of the magnitude of that bound; e.g. with
+  ``chi_max=100`` and ``clip_softness=0.05``, :math:`\chi` transitions to its
+  bound over a scale of :math:`5~m^2/s`. Must be in :math:`(0, 0.2]`. Larger
+  values keep usable gradients further into the saturated region, at the cost
+  of a larger deviation from the hard clip near the bound.
+
 ``smoothing_width`` (float [default = 0.0])
   Width of HWHM Gaussian smoothing kernel operating on transport model outputs.
   If using the ``QLKNN_7_11`` transport model, the default is set to 0.1.

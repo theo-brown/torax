@@ -20,6 +20,7 @@ coefficients.
 
 import abc
 import dataclasses
+import functools
 from typing import Final, Mapping, Sequence
 
 import immutabledict
@@ -32,6 +33,7 @@ from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_model_output as pedestal_model_output_lib
 from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_lib
+from torax._src.transport_model import enums
 from torax._src.transport_model import runtime_params as transport_runtime_params_lib
 
 # pylint: disable=invalid-name
@@ -69,6 +71,137 @@ CHANNEL_CONFIG_STRUCT: Final[Mapping[str, dict[str, Sequence[str] | str]]] = (
         },
     })
 )
+
+
+def _softplus(x: jax.Array, width: jax.Array | float) -> jax.Array:
+  """Numerically stable `width * log(1 + exp(x / width))`.
+
+  This is a smooth approximation to `max(x, 0)` which converges to it as
+  `width -> 0`. It is strictly positive and strictly increasing everywhere, so
+  its derivative (a sigmoid) is never exactly zero.
+
+  Args:
+    x: Input array.
+    width: Scale over which the transition from 0 to `x` takes place. Must be
+      strictly positive.
+
+  Returns:
+    The smoothed `max(x, 0)`.
+  """
+  return width * jax.nn.softplus(x / width)
+
+
+def soft_clip(
+    x: jax.Array,
+    lower: jax.Array | float,
+    upper: jax.Array | float,
+    lower_width: jax.Array | float,
+    upper_width: jax.Array | float,
+) -> jax.Array:
+  """Smooth, strictly monotonic version of `jnp.clip`.
+
+  Unlike `jnp.clip`, the output is an infinitely differentiable and strictly
+  increasing function of `x`, so `d(output)/dx` is never exactly zero. Instead
+  of collapsing to zero at the bound, the derivative decays smoothly like a
+  sigmoid over the width of the respective transition region. This keeps a
+  usable (if small) gradient signal for saturated points, which matters for
+  gradient-based optimisation and sensitivity analysis.
+
+  The bounds are still respected: the output is strictly within
+  `(lower, upper)` provided the widths are small compared to `upper - lower`.
+  See `soft_clip_widths` for how the widths are chosen from a single
+  dimensionless softness parameter.
+
+  Args:
+    x: Input array.
+    lower: Lower bound.
+    upper: Upper bound.
+    lower_width: Width of the transition region around `lower`. Must be
+      strictly positive.
+    upper_width: Width of the transition region around `upper`. Must be
+      strictly positive.
+
+  Returns:
+    The softly clipped array. Converges to `jnp.clip(x, lower, upper)` as both
+    widths go to zero.
+  """
+  # Smooth `max(x, lower)`, then smooth `min(., upper)`. This matches the
+  # ordering of `jnp.clip`, which applies the lower bound first.
+  x = lower + _softplus(x - lower, lower_width)
+  return upper - _softplus(upper - x, upper_width)
+
+
+# Relative floor on the soft-clip transition widths. Only relevant for the
+# degenerate case of a bound at exactly zero, where it makes that bound behave
+# as a hard bound instead of producing a division by zero.
+_MIN_CLIP_WIDTH_FRACTION: Final[float] = 1e-9
+
+
+def soft_clip_widths(
+    lower: jax.Array | float,
+    upper: jax.Array | float,
+    softness: float,
+) -> tuple[jax.Array, jax.Array]:
+  """Derives soft clip transition widths from a dimensionless softness.
+
+  The width of each transition region is `softness * |bound|`, i.e. relative to
+  the magnitude of the bound it applies to. This makes `softness` a single
+  dimensionless knob which behaves sensibly across the chi, D_e and V_e
+  channels, which have different units and very different magnitudes, and it
+  keeps a soft bound near zero from leaking a large offset into the
+  unsaturated region.
+
+  The width is additionally capped at `softness * (upper - lower)` so that a
+  bound with a large magnitude but a narrow permitted range (e.g.
+  `chi_min=99, chi_max=100`) cannot produce a transition wider than the range
+  itself, which would make the two bounds mutually inconsistent.
+
+  Args:
+    lower: Lower bound.
+    upper: Upper bound.
+    softness: Transition width as a fraction of the bound magnitude.
+
+  Returns:
+    A tuple of (lower_width, upper_width).
+  """
+  span = upper - lower
+
+  def width(bound):
+    return jnp.maximum(
+        softness * jnp.minimum(jnp.abs(bound), span),
+        _MIN_CLIP_WIDTH_FRACTION * span,
+    )
+
+  return width(lower), width(upper)
+
+
+def apply_bounds(
+    x: jax.Array,
+    lower: jax.Array | float,
+    upper: jax.Array | float,
+    clip_mode: enums.ClipMode,
+    softness: float,
+) -> jax.Array:
+  """Constrains `x` to `[lower, upper]` using the configured clipping mode.
+
+  Args:
+    x: Input array.
+    lower: Lower bound.
+    upper: Upper bound.
+    clip_mode: Whether to use a hard (`jnp.clip`) or soft (smooth) bound.
+    softness: Only used for `ClipMode.SOFT`. See `soft_clip_widths`.
+
+  Returns:
+    The bounded array.
+  """
+  match clip_mode:
+    case enums.ClipMode.HARD:
+      return jnp.clip(x, lower, upper)
+    case enums.ClipMode.SOFT:
+      lower_width, upper_width = soft_clip_widths(lower, upper, softness)
+      return soft_clip(x, lower, upper, lower_width, upper_width)
+    case _:
+      raise ValueError(f'Unknown clip mode: {clip_mode}')
 
 
 @jax.tree_util.register_dataclass
@@ -247,22 +380,27 @@ class TransportModel(static_dataclass.StaticDataclass, abc.ABC):
       transport_coeffs: TurbulentTransport,
   ) -> TurbulentTransport:
     """Applies min/max clipping to transport coefficients for PDE stability."""
-    chi_face_ion = jnp.clip(
+    clip = functools.partial(
+        apply_bounds,
+        clip_mode=transport_runtime_params.clip_mode,
+        softness=transport_runtime_params.clip_softness,
+    )
+    chi_face_ion = clip(
         transport_coeffs.chi_face_ion,
         transport_runtime_params.chi_min,
         transport_runtime_params.chi_max,
     )
-    chi_face_el = jnp.clip(
+    chi_face_el = clip(
         transport_coeffs.chi_face_el,
         transport_runtime_params.chi_min,
         transport_runtime_params.chi_max,
     )
-    d_face_el = jnp.clip(
+    d_face_el = clip(
         transport_coeffs.d_face_el,
         transport_runtime_params.D_e_min,
         transport_runtime_params.D_e_max,
     )
-    v_face_el = jnp.clip(
+    v_face_el = clip(
         transport_coeffs.v_face_el,
         transport_runtime_params.V_e_min,
         transport_runtime_params.V_e_max,
