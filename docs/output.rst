@@ -112,6 +112,16 @@ The ``numerics`` dataset contains the following data variables.
   indicating whether the state at that timestep corresponds to a
   post-sawtooth-crash state.
 
+``solver_tau`` (time, newton_step)
+  The Newton-Raphson line search parameter ``tau``, i.e. the ratio of the
+  accepted step to the full Newton step, at each Newton step of the solver
+  step that led to that timestep. ``newton_step`` is the 0-based index of the
+  Newton step, and is positional only, so it carries no coordinate values.
+  Zero for Newton steps that were not taken, and for solvers with no Newton
+  line search. If an adaptive (dt-backtracking) step was taken, this is the
+  ``tau`` of the final, accepted, attempt. Newton steps beyond the length of
+  the ``newton_step`` dimension are not recorded.
+
 ``sim_status`` ()
   String indicating if the simulation completed successfully:
 

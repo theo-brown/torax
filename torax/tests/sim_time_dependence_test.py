@@ -23,6 +23,7 @@ from absl.testing import parameterized
 import jax
 import jax.numpy as jnp
 import numpy as np
+from torax._src import jax_utils
 from torax._src import models as models_lib
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
@@ -145,6 +146,13 @@ class SimWithTimeDependenceTest(parameterized.TestCase):
       np.testing.assert_allclose(
           output_state.core_profiles.T_i.value[0], expected_combined_value
       )
+      # tau is reported for the accepted attempt of the step only. FakeSolver
+      # tags tau with the dt of the attempt it came from, which for the
+      # accepted attempt is the dt of the output state.
+      np.testing.assert_allclose(
+          output_state.solver_numeric_outputs.solver_tau,
+          np.full(state.MAX_RECORDED_NEWTON_STEPS, output_state.dt),
+      )
       sim_error = step_fn.check_for_errors(
           output_state,
           post_processed_outputs,
@@ -257,6 +265,13 @@ class FakeSolver(linear_theta_method.LinearThetaMethod):
           solver_error_state=error_code,
           inner_solver_iterations=current_inner_solver_iterations,
           sawtooth_crash=False,
+          # Tag tau with dt, so that tests can identify which attempt of an
+          # adaptive step the reported tau came from.
+          solver_tau=jnp.full(
+              (state.MAX_RECORDED_NEWTON_STEPS,),
+              dt,
+              dtype=jax_utils.get_dtype(),
+          ),
       )
       return (x_new,), solver_numeric_outputs
 

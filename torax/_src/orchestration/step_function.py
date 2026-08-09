@@ -505,6 +505,8 @@ class SimulationStepFn:
             jax_utils.get_int_dtype(),
         ),
         sawtooth_crash=False,
+        # tau of the final (accepted) attempt of the adaptive step.
+        solver_tau=result.state.solver_numeric_outputs.solver_tau,
     )
     output_state, post_processed_outputs = (
         step_function_processing.finalize_outputs(

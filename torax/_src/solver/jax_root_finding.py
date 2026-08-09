@@ -33,10 +33,26 @@ MIN_DELTA: Final[float] = 1e-7
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass
 class RootMetadata:
+  """Diagnostic outputs of the Newton-Raphson root finder.
+
+  Attributes:
+    iterations: Number of Newton iterations taken.
+    residual: Residual vector at the returned root.
+    last_tau: Line search step size (tau) of the last Newton iteration taken.
+    error: Convergence error state. See `root_newton_raphson`.
+    tau_history: Line search step size (tau) of each Newton iteration, in a
+      buffer of length `tau_history_length`. Zero for iterations that were not
+      taken; iterations beyond the buffer length are not recorded. Empty by
+      default, i.e. no history is recorded unless it is asked for.
+  """
+
   iterations: jax.Array
   residual: jax.Array
   last_tau: jax.Array
   error: jax.Array
+  tau_history: jax.Array = dataclasses.field(
+      default_factory=lambda: jnp.zeros(0)
+  )
 
 
 def root_newton_raphson(
@@ -52,6 +68,7 @@ def root_newton_raphson(
     log_iterations: bool = False,
     use_jax_custom_root: bool = True,
     custom_jac: Callable[[jax.Array], jax.Array] | None = None,
+    tau_history_length: int = 0,
 ) -> tuple[jax.Array, RootMetadata]:
   """A differentiable Newton-Raphson root finder.
 
@@ -78,6 +95,9 @@ def root_newton_raphson(
       derivatives are requested.
     custom_jac: If provided, use this function to compute the Jacobian of `fun`
       instead of jax.jacfwd.
+    tau_history_length: Length of the buffer used to record the line search step
+      size (tau) of each Newton iteration, see `RootMetadata.tau_history`. Must
+      be a static Python int since it sets an array shape.
 
   Returns:
     A tuple `(x_root, RootMetadata(...))`.
@@ -106,6 +126,11 @@ def root_newton_raphson(
         'iterations': jnp.array(0, dtype=jax_utils.get_dtype()),
         'residual': residual_vec_init_x_new,
         'last_tau': jnp.array(1.0, dtype=jax_utils.get_dtype()),
+        # jax indexing rejects a zero-size axis, so always keep at least one
+        # slot here and trim to the requested length on the way out.
+        'tau_history': jnp.zeros(
+            max(tau_history_length, 1), dtype=jax_utils.get_dtype()
+        ),
     }
 
     # carry out iterations.
@@ -164,6 +189,7 @@ def root_newton_raphson(
   metadata['iterations'] = metadata['iterations'].astype(
       jax_utils.get_int_dtype()
   )
+  metadata['tau_history'] = metadata['tau_history'][:tau_history_length]
   return x_out, RootMetadata(**metadata, error=error)  # pytype: disable=bad-return-type
 
 
@@ -245,6 +271,15 @@ def _body(
       'iterations': jnp.array(input_state['iterations'][...], dtype=dtype) + 1,
       'last_tau': ls_state.step_size,
   }
+
+  # `iterations` is the number of iterations already taken, so it is the 0-based
+  # index of the iteration being taken here. Out of bounds writes, i.e.
+  # iterations beyond the buffer length, are dropped.
+  output_state['tau_history'] = (
+      input_state['tau_history']
+      .at[input_state['iterations'][...].astype(jax_utils.get_int_dtype())]
+      .set(ls_state.step_size, mode='drop')
+  )
 
   if log_iterations:
     jax.debug.print(

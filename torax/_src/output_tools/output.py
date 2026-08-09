@@ -391,6 +391,12 @@ class StateHistory:
             dims=[output_keys.TIME],
             name=output_keys.INNER_SOLVER_ITERATIONS,
         ),
+        output_keys.SOLVER_TAU: xr.DataArray(
+            self._stacked_solver_numeric_outputs.solver_tau,
+            dims=[output_keys.TIME, output_keys.NEWTON_STEP],
+            name=output_keys.SOLVER_TAU,
+            attrs=output_keys.get_units(output_keys.SOLVER_TAU),
+        ),
     }
     numerics = xr.Dataset(numerics_dict)
 

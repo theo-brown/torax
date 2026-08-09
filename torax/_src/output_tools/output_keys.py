@@ -264,6 +264,9 @@ RHO_NORM = OutputKey("rho_norm", units=Units.DIMENSIONLESS)
 RHO_FACE = OutputKey("rho_face", units=Units.METER)
 RHO_CELL = OutputKey("rho_cell", units=Units.METER)
 TIME = OutputKey("time", units=Units.SECOND)
+# Dimension name for the 0-based index of a Newton-Raphson iteration within a
+# solver step. Positional only, so it carries no coordinate values.
+NEWTON_STEP = OutputKey("newton_step", units=Units.NOT_APPLICABLE)
 
 # ---------------------------------------------------------------------------
 # Post-processed outputs: profiles.
@@ -471,6 +474,8 @@ INNER_SOLVER_ITERATIONS = OutputKey(
 # Boolean array indicating whether the state corresponds to a
 # post-sawtooth-crash state.
 SAWTOOTH_CRASH = OutputKey("sawtooth_crash", units=Units.NOT_APPLICABLE)
+# Newton-Raphson line search parameter at each Newton step of a solver step.
+SOLVER_TAU = OutputKey("solver_tau", units=Units.DIMENSIONLESS)
 
 # ---------------------------------------------------------------------------
 # ToraxConfig.
