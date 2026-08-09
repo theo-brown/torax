@@ -241,6 +241,7 @@ def newton_raphson_solve_block(
       delta_reduction_factor=delta_reduction_factor,
       tau_min=tau_min,
       log_iterations=log_iterations,
+      tau_history_length=state_module.MAX_RECORDED_NEWTON_STEPS,
   )
   root_finder = jax_utils.xla_metadata_call(
       jax.jit(root_finder), compilation_unit='newton_raphson_root_finder'
@@ -260,6 +261,7 @@ def newton_raphson_solve_block(
       solver_error_state=jnp.array(metadata.error, jax_utils.get_int_dtype()),
       outer_solver_iterations=jnp.array(1, jax_utils.get_int_dtype()),
       sawtooth_crash=False,
+      solver_tau=metadata.tau_history,
   )
 
   return x_new, solver_numeric_outputs

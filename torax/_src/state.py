@@ -17,7 +17,7 @@
 import dataclasses
 import enum
 import functools
-from typing import Mapping
+from typing import Final, Mapping
 
 from absl import logging
 import jax
@@ -25,6 +25,7 @@ from jax import numpy as jnp
 import numpy as np
 from torax._src import array_typing
 from torax._src import constants
+from torax._src import jax_utils
 from torax._src.fvm import cell_variable
 from torax._src.geometry import geometry
 from torax._src.physics import charge_states
@@ -476,6 +477,13 @@ class CoreTransport:
     )
 
 
+# Number of Newton-Raphson iterations for which the line search step size (tau)
+# is recorded in SolverNumericOutputs.solver_tau. This is a fixed buffer length
+# since it sets an array shape, and matches the default solver
+# `n_max_iterations`. Iterations beyond this are not recorded.
+MAX_RECORDED_NEWTON_STEPS: Final[int] = 30
+
+
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class SolverNumericOutputs:
@@ -492,12 +500,21 @@ class SolverNumericOutputs:
       across all iterations of the solver.
     sawtooth_crash: True if a sawtooth model is active and the solver step
       corresponds to a sawtooth crash step.
+    solver_tau: The Newton-Raphson line search parameter tau (the ratio of the
+      accepted step to the full Newton step) of each Newton iteration of this
+      step. Length `MAX_RECORDED_NEWTON_STEPS`, and zero for Newton iterations
+      that were not taken. All zero for solvers without a Newton line search.
   """
 
   outer_solver_iterations: array_typing.IntScalar
   solver_error_state: array_typing.IntScalar
   inner_solver_iterations: array_typing.IntScalar
   sawtooth_crash: array_typing.BoolScalar
+  solver_tau: array_typing.FloatVector = dataclasses.field(
+      default_factory=lambda: jnp.zeros(
+          MAX_RECORDED_NEWTON_STEPS, jax_utils.get_dtype()
+      )
+  )
 
 
 # TODO(b/434175938): change to StrEnum

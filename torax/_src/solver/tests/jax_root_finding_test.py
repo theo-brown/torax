@@ -99,6 +99,48 @@ class NewtonRaphsonSolveBlockTest(parameterized.TestCase):
       chex.assert_trees_all_close(a_grad, a_grad_diff, atol=1e-4)
       chex.assert_trees_all_close(b_grad, b_grad_diff, atol=1e-4)
 
+  def test_tau_history(self):
+    """tau of every Newton step is recorded, zero-padded."""
+    # arctan is a classic case where a full Newton step from a large enough x0
+    # overshoots the root and increases the residual, so the line search must
+    # backtrack, and tau varies from step to step.
+    history_length = 10
+    delta_reduction_factor = 0.5
+    root = functools.partial(
+        jax_root_finding.root_newton_raphson,
+        jnp.arctan,
+        np.array([2.0], dtype=np.float64),
+        tol=1e-9,
+        maxiter=100,
+        delta_reduction_factor=delta_reduction_factor,
+    )
+
+    with self.subTest('history_not_recorded_by_default'):
+      self.assertEmpty(root()[1].tau_history)
+
+    _, metadata = root(tau_history_length=history_length)
+    iterations = int(metadata.iterations)
+    tau_history = np.asarray(metadata.tau_history)
+    self.assertLess(iterations, history_length)
+
+    with self.subTest('one_tau_recorded_per_iteration'):
+      self.assertEqual(tau_history.shape, (history_length,))
+      # The first step overshoots and is backtracked; by the last step the
+      # iterate is close enough to the root for a full step to be accepted.
+      self.assertEqual(tau_history[0], delta_reduction_factor)
+      self.assertEqual(tau_history[iterations - 1], float(metadata.last_tau))
+      self.assertEqual(tau_history[iterations - 1], 1.0)
+
+    with self.subTest('untaken_iterations_are_zero'):
+      np.testing.assert_array_equal(tau_history[iterations:], 0.0)
+
+    with self.subTest('iterations_beyond_buffer_are_dropped'):
+      # A buffer shorter than the number of iterations taken is fully
+      # populated, and the extra iterations are silently not recorded.
+      _, metadata = root(tau_history_length=1)
+      self.assertEqual(int(metadata.iterations), iterations)
+      np.testing.assert_array_equal(metadata.tau_history, tau_history[:1])
+
 
 if __name__ == '__main__':
   absltest.main()
