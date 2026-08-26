@@ -229,6 +229,80 @@ class BeamDepositionTest(parameterized.TestCase):
     np.testing.assert_allclose(pitch, 0.0)
 
 
+class BeamExtentTest(parameterized.TestCase):
+  """Tests for the finite-beam-extent deposition (METIS zicd0.m:611-673)."""
+
+  def setUp(self):
+    super().setUp()
+    _, self.geo, _, _, self.core_profiles = _build_test_inputs(
+        {'injectors': [_INJECTOR_CONFIG]}
+    )
+    self.n_e_face = self.core_profiles.n_e.face_value()
+    self.sigma_face = metis_nbi_source.suzuki_beam_stopping_cross_section(
+        beam_energy=500.0,
+        beam_mass=2.0,
+        n_e=self.n_e_face,
+        T_e=self.core_profiles.T_e.face_value(),
+        n_impurity=self.core_profiles.n_impurity.face_value(),
+        Z_impurity=self.core_profiles.Z_impurity_face,
+    )
+
+  def _deposition(self, horizontal, vertical, offset=0.0, tangency=5.0):
+    return metis_nbi_source.calc_beam_deposition_with_extent(
+        self.geo,
+        self.n_e_face,
+        self.sigma_face,
+        tangency_radius=tangency,
+        horizontal_half_width=horizontal,
+        vertical_half_width=vertical,
+        vertical_offset=offset,
+    )
+
+  def test_conserves_absorbed_fraction(self):
+    birth, _, shine = self._deposition(1.0 / 6.0, 0.05)
+    absorbed = math_utils.volume_integration(birth, self.geo)
+    np.testing.assert_allclose(absorbed, 1.0 - shine, rtol=1e-9)
+
+  def test_zero_widths_recover_pencil_beam(self):
+    birth_extent, pitch_extent, shine_extent = self._deposition(0.0, 0.0)
+    birth_pencil, pitch_pencil, shine_pencil = (
+        metis_nbi_source.calc_beam_deposition(
+            self.geo, self.n_e_face, self.sigma_face, tangency_radius=5.0
+        )
+    )
+    np.testing.assert_allclose(birth_extent, birth_pencil, rtol=1e-9)
+    np.testing.assert_allclose(pitch_extent, pitch_pencil, rtol=1e-9)
+    np.testing.assert_allclose(shine_extent, shine_pencil, rtol=1e-9)
+
+  def test_beam_extent_reduces_on_axis_peaking(self):
+    birth_pencil, _, _ = self._deposition(0.0, 0.0)
+    birth_extent, _, _ = self._deposition(1.0 / 6.0, 0.05)
+    self.assertLess(float(birth_extent[0]), float(birth_pencil[0]))
+
+  def test_perpendicular_beam_has_zero_net_pitch(self):
+    # The signed pitch of the two side chords cancels for a beam aimed at
+    # the machine axis.
+    _, pitch, _ = self._deposition(1.0 / 6.0, 0.05, tangency=0.0)
+    np.testing.assert_allclose(pitch, 0.0, atol=1e-12)
+
+  def test_vertical_offset_shifts_deposition_off_axis(self):
+    birth, _, _ = self._deposition(0.0, 0.0, offset=0.3)
+    # No deposition inside the chord's minimum normalized radius.
+    inside = self.geo.rho_norm < 0.28
+    np.testing.assert_allclose(birth[inside], 0.0, atol=1e-12)
+
+  def test_orbit_width_smoothing_reduces_peaking(self):
+    birth, _, _ = self._deposition(1.0 / 6.0, 0.05)
+    smoothed = metis_nbi_source._orbit_width_smoothing(  # pylint: disable=protected-access
+        birth, 500.0, 2.0, self.geo, self.core_profiles
+    )
+    self.assertLess(float(jnp.max(smoothed)), float(jnp.max(birth)))
+    self.assertGreaterEqual(float(jnp.min(smoothed)), 0.0)
+    # The diffusion passes only lose content through the pinned outer
+    # boundary (callers renormalize the volume integral afterwards).
+    self.assertLessEqual(float(jnp.sum(smoothed)), float(jnp.sum(birth)))
+
+
 class NBISourceValuesTest(parameterized.TestCase):
 
   def setUp(self):
@@ -249,11 +323,14 @@ class NBISourceValuesTest(parameterized.TestCase):
         n_impurity=self.core_profiles.n_impurity.face_value(),
         Z_impurity=self.core_profiles.Z_impurity_face,
     )
-    _, _, shine = metis_nbi_source.calc_beam_deposition(
+    _, _, shine = metis_nbi_source.calc_beam_deposition_with_extent(
         self.geo,
         self.core_profiles.n_e.face_value(),
         sigma_face,
         tangency_radius=5.0,
+        horizontal_half_width=1.0 / 6.0,
+        vertical_half_width=0.05,
+        vertical_offset=0.0,
     )
     total_absorbed = math_utils.volume_integration(
         self.p_ion + self.p_el, self.geo

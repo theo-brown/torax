@@ -23,9 +23,13 @@ of the METIS integrated tokamak simulator [J.F. Artaud et al., Nucl. Fusion 58
 (2018) 105001], following the METIS source code (zerod/zicd0.m,
 zerod/z0nbipath.m, zerod/z0suzuki_crx.m, zerod/zfract0.m). Per injector, the
 model consists of:
-  * A pencil-beam attenuation calculation along a tangential midplane chord
+  * A pencil-beam attenuation calculation along tangential midplane chords
     through the flux surfaces, giving the fast-ion birth profile and the
-    shine-through fraction.
+    shine-through fraction. The finite beam extent is modeled by averaging
+    over three chords across the horizontal beam width and three vertical
+    positions across the vertical beam width (plus an optional vertical
+    offset), and the birth profile is smoothed over the fast-ion drift-orbit
+    width.
   * The Suzuki beam-stopping cross-section [S. Suzuki et al., Plasma Phys.
     Control. Fusion 40 (1998) 2097], including the impurity correction.
   * The Wesson/Stix critical-energy formula for the ion/electron split of the
@@ -34,12 +38,10 @@ model consists of:
     average, with Lin-Liu & Hilton electron shielding [Phys. Plasmas 4 (1997)
     4179] and trapped-ion suppression.
 
-Simplifications relative to full METIS: a zero-width pencil beam (no
-horizontal/vertical beam extent sampling and no vertical offset); no
-first-orbit losses; no fast-ion accumulation correction to the stopping
-cross-section; steady-state slowing down (deposited power is thermalized
-instantaneously); no Doppler shift of the injection energy from plasma
-rotation.
+Simplifications relative to full METIS: no first-orbit losses; no fast-ion
+accumulation correction to the stopping cross-section; steady-state slowing
+down (deposited power is thermalized instantaneously); no Doppler shift of
+the injection energy from plasma rotation.
 """
 
 import dataclasses
@@ -51,6 +53,7 @@ from jax import numpy as jnp
 import numpy as np
 from torax._src import array_typing
 from torax._src import constants
+from torax._src import math_utils
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
@@ -75,6 +78,11 @@ _NBCD_INTEGRAL_POINTS: int = 101
 
 # Floor on the critical energies [keV] (METIS zicd0.m: max(30, ...) in eV).
 _MIN_CRITICAL_ENERGY_KEV: float = 0.03
+
+# Bounds on the number of orbit-width smoothing passes
+# (METIS zicd0.m:736: nbo = max(3, min(21, ...))).
+_MIN_ORBIT_SMOOTHING_PASSES: int = 3
+_MAX_ORBIT_SMOOTHING_PASSES: int = 21
 
 # Suzuki 1998 beam-stopping fit coefficients, transcribed from METIS
 # zerod/z0suzuki_crx.m. Columns are the beam species [H, D, T].
@@ -425,6 +433,186 @@ def calc_beam_deposition(
   return birth_density, pitch, shine_through
 
 
+def _vertical_shift_remap(
+    profile: array_typing.FloatVectorCell,
+    z_offset: array_typing.FloatScalar,
+    geo: geometry.Geometry,
+) -> array_typing.FloatVectorCell:
+  """Remaps a midplane deposition profile to a vertically shifted chord.
+
+  A chord passing at normalized height z above the magnetic axis has minimum
+  normalized radius z, so its deposition is the midplane profile remapped by
+  x -> z + x * (1 - z), done volume-conservatively (METIS zicd0.m:628-636).
+
+  Args:
+    profile: Deposition density on the cell grid.
+    z_offset: Normalized vertical position of the chord.
+    geo: Torus geometry.
+
+  Returns:
+    The remapped deposition density on the cell grid.
+  """
+  x = geo.rho_norm
+  shell_volume = geo.vpr * geo.drho_norm
+  x_shifted = z_offset + x * (1.0 - z_offset)
+  return (
+      jnp.interp(x, x_shifted, profile * shell_volume, left=0.0, right=0.0)
+      / shell_volume
+  )
+
+
+def calc_beam_deposition_with_extent(
+    geo: geometry.Geometry,
+    n_e_face: array_typing.FloatVectorFace,
+    sigma_stop_face: array_typing.FloatVectorFace,
+    tangency_radius: array_typing.FloatScalar,
+    horizontal_half_width: array_typing.FloatScalar,
+    vertical_half_width: array_typing.FloatScalar,
+    vertical_offset: array_typing.FloatScalar,
+) -> tuple[
+    array_typing.FloatVectorCell,
+    array_typing.FloatVectorCell,
+    array_typing.FloatScalar,
+]:
+  """Beam deposition averaged over the finite beam extent.
+
+  Follows METIS zicd0.m:611-673: the pencil-beam deposition is evaluated for
+  three parallel chords offset horizontally by +/- the horizontal half-width
+  (which shifts the effective tangency radius), and each chord is averaged
+  over three vertical positions (the vertical offset and +/- the vertical
+  half-width) via the volume-conserving radial remap. This removes the
+  unphysical on-axis dP/dV peak of a single axis-piercing pencil chord.
+
+  Args:
+    geo: Torus geometry.
+    n_e_face: Electron density on the face grid [m^-3].
+    sigma_stop_face: Beam-stopping cross-section on the face grid [m^2].
+    tangency_radius: Beam centerline tangency radius [m].
+    horizontal_half_width: Horizontal beam half-width in units of the minor
+      radius (METIS drs).
+    vertical_half_width: Vertical beam half-width in normalized radius
+      (METIS dzs).
+    vertical_offset: Vertical position of the beam centerline in normalized
+      radius (METIS zext).
+
+  Returns:
+    birth_density: Beam-averaged fast-ion birth profile on the cell grid,
+      normalized such that its volume integral is (1 - shine_through) [m^-3].
+    pitch: Birth-averaged signed beam pitch v_par/v on the cell grid. The
+      sign of a side chord whose tangency point crosses to the other side of
+      the magnetic axis flips, so a perpendicular beam has zero net pitch.
+    shine_through: Beam-averaged shine-through fraction [dimensionless].
+  """
+  # The lateral chord offset shifts the tangency radius by its component
+  # perpendicular to the chord: R_t -> R_t + offset * cos(v), with
+  # sin(v) = R_t / R_entry (METIS z0nbipath dext offset).
+  R_entry = geo.R_out_face[-1]
+  cos_v = jnp.sqrt(jnp.clip(1.0 - (tangency_radius / R_entry) ** 2, 0.0))
+  lateral_shift = horizontal_half_width * geo.a_minor * cos_v
+  z_offsets = (
+      vertical_offset,
+      vertical_offset + vertical_half_width,
+      jnp.abs(vertical_offset - vertical_half_width),
+  )
+
+  birth_sum = jnp.zeros_like(geo.rho_norm)
+  pitch_sum = jnp.zeros_like(geo.rho_norm)
+  shine_sum = 0.0
+  for chord_offset in (-1.0, 0.0, 1.0):
+    signed_tangency = tangency_radius + chord_offset * lateral_shift
+    birth, pitch, shine = calc_beam_deposition(
+        geo, n_e_face, sigma_stop_face, jnp.abs(signed_tangency)
+    )
+    # A chord whose tangency point is on the far side of the magnetic axis
+    # drives current in the opposite toroidal direction.
+    pitch = jnp.sign(signed_tangency) * pitch
+    birth = sum(_vertical_shift_remap(birth, z, geo) for z in z_offsets) / 3.0
+    # METIS remaps the pitch with the centerline vertical offset only.
+    x_shifted = z_offsets[0] + geo.rho_norm * (1.0 - z_offsets[0])
+    pitch = jnp.interp(geo.rho_norm, x_shifted, pitch, left=0.0, right=0.0)
+    birth_sum += birth
+    pitch_sum += pitch * birth
+    shine_sum += shine
+
+  shine_through = shine_sum / 3.0
+  pitch = pitch_sum / jnp.clip(birth_sum, constants.CONSTANTS.eps)
+  # Renormalize the absorbed fraction, which the radial remaps only conserve
+  # approximately (METIS zicd0.m:673 renormalizes to the coupled power).
+  absorbed = math_utils.volume_integration(birth_sum, geo)
+  birth_density = birth_sum * jnp.where(
+      absorbed > constants.CONSTANTS.eps,
+      (1.0 - shine_through) / jnp.clip(absorbed, constants.CONSTANTS.eps),
+      0.0,
+  )
+  return birth_density, pitch, shine_through
+
+
+def _orbit_width_smoothing(
+    birth_density: array_typing.FloatVectorCell,
+    beam_energy: array_typing.FloatScalar,
+    beam_mass: array_typing.FloatScalar,
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+) -> array_typing.FloatVectorCell:
+  """Smooths the birth profile over the fast-ion orbit width.
+
+  Follows METIS zicd0.m:735-753: an iterative nearest-neighbour diffusion
+  (each pass exchanges one third of the difference between adjacent cells,
+  with the profile pinned to zero at the outer boundary) whose number of
+  passes scales with the fast-ion orbit width (banana or potato width plus
+  Larmor radius) relative to the minor radius. Physically, fast ions are
+  born onto drift orbits of finite width, so the source is spread over that
+  width; this is largest near the axis, where it removes the residual
+  pencil-beam peaking.
+
+  Args:
+    birth_density: Fast-ion birth profile on the cell grid [m^-3].
+    beam_energy: Beam injection energy [keV].
+    beam_mass: Beam species mass [amu].
+    geo: Torus geometry.
+    core_profiles: Core plasma profiles.
+
+  Returns:
+    The smoothed birth profile on the cell grid, with the same sum over
+    cells as the input (callers renormalize the volume integral).
+  """
+  x = geo.rho_norm
+  R_local = geo.R_major_profile
+  # Fast-ion Larmor radius [m] with B = B_0 R_0 / R (METIS zicd0.m:705).
+  B_local = geo.B_0 * geo.R_major / R_local
+  larmor_radius = 4.576e-3 * jnp.sqrt(beam_mass * beam_energy) / B_local
+  # Banana width, or potato width where the banana width exceeds the local
+  # minor radius (METIS zicd0.m:707-712).
+  q_cell = geometry.face_to_cell(core_profiles.q_face)
+  q_capped = jnp.minimum(q_cell, core_profiles.q_face[-1])
+  potato_width = R_local * (2.0 * q_capped * larmor_radius / R_local) ** (
+      2.0 / 3.0
+  )
+  banana_width = jnp.sqrt(geo.a_minor * x / R_local) * larmor_radius * q_capped
+  orbit_width = jnp.where(
+      banana_width < geo.a_minor * x, banana_width, potato_width
+  )
+  num_passes = jnp.clip(
+      jnp.round(
+          jnp.max((orbit_width + larmor_radius) / geo.a_minor)
+          * _MAX_ORBIT_SMOOTHING_PASSES
+      ),
+      _MIN_ORBIT_SMOOTHING_PASSES,
+      _MAX_ORBIT_SMOOTHING_PASSES,
+  )
+
+  # Diffusion passes, unrolled to the maximum count with inactive passes
+  # masked out (the pass count is a traced quantity).
+  p = jnp.concatenate([birth_density, jnp.zeros(1)])
+  for k in range(_MAX_ORBIT_SMOOTHING_PASSES):
+    active = (k < num_passes).astype(p.dtype)
+    delta = jnp.diff(p)
+    p = p.at[1:].add(-active * delta / 3.0)
+    p = p.at[:-1].add(active * delta / 3.0)
+    p = p.at[-1].set(0.0)
+  return p[:-1]
+
+
 def wesson_ion_heating_fraction(
     beam_energy: array_typing.FloatScalar,
     critical_energy: array_typing.FloatVector,
@@ -505,6 +693,9 @@ def _single_injector_profiles(
     beam_energy: array_typing.FloatScalar,
     beam_mass: array_typing.FloatScalar,
     tangency_radius: array_typing.FloatScalar,
+    horizontal_half_width: array_typing.FloatScalar,
+    vertical_half_width: array_typing.FloatScalar,
+    vertical_offset: array_typing.FloatScalar,
     current_drive_multiplier: array_typing.FloatScalar,
     current_drive_sign: array_typing.FloatScalar,
     geo: geometry.Geometry,
@@ -522,6 +713,11 @@ def _single_injector_profiles(
     beam_energy: Beam injection energy [keV].
     beam_mass: Beam species mass [amu].
     tangency_radius: Beam tangency radius [m].
+    horizontal_half_width: Horizontal beam half-width in units of the minor
+      radius.
+    vertical_half_width: Vertical beam half-width in normalized radius.
+    vertical_offset: Vertical position of the beam centerline in normalized
+      radius.
     current_drive_multiplier: Multiplier on the NBCD efficiency.
     current_drive_sign: +1 for co-current injection, -1 for counter-current.
     geo: Torus geometry.
@@ -540,11 +736,25 @@ def _single_injector_profiles(
       core_profiles.n_impurity.face_value(),
       core_profiles.Z_impurity_face,
   )
-  birth_density, pitch, _ = calc_beam_deposition(
+  birth_density, pitch, shine_through = calc_beam_deposition_with_extent(
       geo,
       core_profiles.n_e.face_value(),
       sigma_stop_face,
       tangency_radius,
+      horizontal_half_width,
+      vertical_half_width,
+      vertical_offset,
+  )
+  birth_density = _orbit_width_smoothing(
+      birth_density, beam_energy, beam_mass, geo, core_profiles
+  )
+  # Renormalize after smoothing so the absorbed power is exactly
+  # (1 - shine_through) * P_total (METIS zicd0.m:753 equivalent).
+  absorbed = math_utils.volume_integration(birth_density, geo)
+  birth_density = birth_density * jnp.where(
+      absorbed > constants.CONSTANTS.eps,
+      (1.0 - shine_through) / jnp.clip(absorbed, constants.CONSTANTS.eps),
+      0.0,
   )
   p_dep = P_total * birth_density  # Absorbed power density [W/m^3].
 
@@ -611,7 +821,7 @@ def _single_injector_profiles(
   # Trapped fast-ion suppression (zicd0.m): the driven current vanishes
   # where the birth pitch is inside the trapped cone mu_trap.
   mu_trap = jnp.sqrt(2.0 * geo.epsilon / (1.0 + geo.epsilon))
-  fi_trap = jnp.minimum(1.0, 1.0 + jnp.tanh(10.0 * (pitch - mu_trap)))
+  fi_trap = jnp.minimum(1.0, 1.0 + jnp.tanh(10.0 * (jnp.abs(pitch) - mu_trap)))
 
   j_cd = (
       current_drive_sign
@@ -642,13 +852,16 @@ def calc_metis_nbi(
   assert isinstance(source_params, RuntimeParams)
   per_injector = jax.vmap(
       _single_injector_profiles,
-      in_axes=(0, 0, 0, 0, 0, 0, None, None),
+      in_axes=(0, 0, 0, 0, 0, 0, 0, 0, 0, None, None),
   )
   p_ion, p_el, j_cd, S_birth = per_injector(
       source_params.P_total,
       source_params.beam_energy,
       source_params.beam_mass,
       source_params.tangency_radius,
+      source_params.horizontal_half_width,
+      source_params.vertical_half_width,
+      source_params.vertical_offset,
       source_params.current_drive_multiplier,
       source_params.current_drive_sign,
       geo,
@@ -694,6 +907,9 @@ class RuntimeParams(sources_runtime_params_lib.RuntimeParams):
   beam_energy: array_typing.FloatVector
   beam_mass: array_typing.FloatVector
   tangency_radius: array_typing.FloatVector
+  horizontal_half_width: array_typing.FloatVector
+  vertical_half_width: array_typing.FloatVector
+  vertical_offset: array_typing.FloatVector
   current_drive_multiplier: array_typing.FloatVector
   current_drive_sign: array_typing.FloatVector
 
@@ -708,6 +924,15 @@ class MetisNBIInjector(torax_pydantic.BaseModelFrozen):
     beam_mass: Beam species mass [amu], in [1, 3] (hydrogenic beams).
     tangency_radius: Beam tangency radius [m] (METIS option.rtang). Zero
       corresponds to perpendicular injection aimed at the machine axis.
+    horizontal_half_width: Horizontal beam half-width in units of the minor
+      radius (METIS option.drs, default 1/6). The deposition is averaged
+      over three chords at lateral offsets 0 and +/- this width. Zero
+      recovers a single pencil chord.
+    vertical_half_width: Vertical beam half-width in normalized radius
+      (METIS option.dzs, default 0.05). Each chord is averaged over the
+      vertical offset and +/- this width. Zero recovers a midplane chord.
+    vertical_offset: Vertical position of the beam centerline in normalized
+      radius (METIS option.zext). Nonzero values model off-axis injection.
     current_drive_multiplier: Multiplier on the NBCD efficiency (METIS
       option.nbicdmul).
     counter_injection: If True, the beam is injected counter to the plasma
@@ -724,6 +949,15 @@ class MetisNBIInjector(torax_pydantic.BaseModelFrozen):
       torax_pydantic.ValidatedDefault(2.0)
   )
   tangency_radius: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
+  horizontal_half_width: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0 / 6.0)
+  )
+  vertical_half_width: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.05)
+  )
+  vertical_offset: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
   current_drive_multiplier: torax_pydantic.PositiveTimeVaryingScalar = (
@@ -776,6 +1010,15 @@ class MetisNBISourceConfig(base.SourceModelBase):
         ),
         tangency_radius=jnp.asarray(
             [inj.tangency_radius.get_value(t) for inj in self.injectors]
+        ),
+        horizontal_half_width=jnp.asarray(
+            [inj.horizontal_half_width.get_value(t) for inj in self.injectors]
+        ),
+        vertical_half_width=jnp.asarray(
+            [inj.vertical_half_width.get_value(t) for inj in self.injectors]
+        ),
+        vertical_offset=jnp.asarray(
+            [inj.vertical_offset.get_value(t) for inj in self.injectors]
         ),
         current_drive_multiplier=jnp.asarray([
             inj.current_drive_multiplier.get_value(t) for inj in self.injectors
