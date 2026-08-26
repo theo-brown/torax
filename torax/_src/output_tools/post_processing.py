@@ -104,6 +104,11 @@ class PostProcessedOutputs:
     P_icrh_e: Ion cyclotron resonance heating to electrons [W]
     P_icrh_i: Ion cyclotron resonance heating to ions [W]
     P_icrh_total: Total ion cyclotron resonance heating power [W]
+    P_nbi_i: Neutral beam heating power to ions [W]
+    P_nbi_e: Neutral beam heating power to electrons [W]
+    P_nbi_total: Total neutral beam heating power absorbed by the plasma [W]
+    I_nbi: Total neutral beam driven current [A]
+    S_nbi: Integrated neutral beam particle source [s^-1]
     P_LH_high_density: H-mode transition power from the Martin scaling law for
       high density branch [W]
     P_LH_min: Minimum H-mode transition power from the Martin scaling law at
@@ -183,6 +188,8 @@ class PostProcessedOutputs:
       source [Am^-2]
     j_ecrh: Toroidal current density from electron cyclotron heating and current
       source [Am^-2]
+    j_nbi: Toroidal current density from the neutral beam injection source
+      [Am^-2]
     j_parallel_ecrh: Toroidal current density from electron cyclotron heating
       and current source [Am^-2]
     j_non_inductive: Total toroidal non-inductive current density [Am^-2]
@@ -251,6 +258,11 @@ class PostProcessedOutputs:
   P_icrh_e: array_typing.FloatScalar
   P_icrh_i: array_typing.FloatScalar
   P_icrh_total: array_typing.FloatScalar
+  P_nbi_i: array_typing.FloatScalar
+  P_nbi_e: array_typing.FloatScalar
+  P_nbi_total: array_typing.FloatScalar
+  I_nbi: array_typing.FloatScalar
+  S_nbi: array_typing.FloatScalar
   # TODO(b/434175938) Rename to P_LH_martin_high_density etc
   P_LH_high_density: array_typing.FloatScalar
   P_LH_min: array_typing.FloatScalar
@@ -303,6 +315,7 @@ class PostProcessedOutputs:
   j_bootstrap_face: array_typing.FloatVector
   j_generic_current: array_typing.FloatVector
   j_ecrh: array_typing.FloatVector
+  j_nbi: array_typing.FloatVector
   j_non_inductive: array_typing.FloatVector
   j_parallel_non_inductive: array_typing.FloatVector
   I_external: array_typing.FloatScalar
@@ -368,6 +381,11 @@ class PostProcessedOutputs:
         P_icrh_i=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         P_icrh_e=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         P_icrh_total=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        P_nbi_i=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        P_nbi_e=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        P_nbi_total=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        I_nbi=jnp.array(0.0, dtype=jax_utils.get_dtype()),
+        S_nbi=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         P_LH_high_density=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         P_LH_min=jnp.array(0.0, dtype=jax_utils.get_dtype()),
         P_LH_low_density=jnp.array(0.0, dtype=jax_utils.get_dtype()),
@@ -415,6 +433,7 @@ class PostProcessedOutputs:
         j_external=jnp.zeros(geo.rho_face.shape),
         j_generic_current=jnp.zeros(geo.rho_face.shape),
         j_ecrh=jnp.zeros(geo.rho_face.shape),
+        j_nbi=jnp.zeros(geo.rho_face.shape),
         j_non_inductive=jnp.zeros(geo.rho_face.shape),
         j_parallel_external=jnp.zeros(geo.rho_face.shape),
         j_parallel_non_inductive=jnp.zeros(geo.rho_face.shape),
@@ -454,6 +473,7 @@ ION_EL_HEAT_SOURCE_TRANSFORMATIONS = {
     'generic_heat': 'P_aux_generic',
     'fusion': 'P_alpha',
     'icrh': 'P_icrh',
+    'nbi': 'P_nbi',
 }
 EL_HEAT_SOURCE_TRANSFORMATIONS = {
     'ohmic': 'P_ohmic_e',
@@ -466,15 +486,18 @@ EXTERNAL_HEATING_SOURCES = [
     'generic_heat',
     'ecrh',
     'icrh',
+    'nbi',
 ]
 CURRENT_SOURCE_TRANSFORMATIONS = {
     'generic_current': 'I_aux_generic',
     'ecrh': 'I_ecrh',
+    'nbi': 'I_nbi',
 }
 PARTICLE_SOURCE_TRANSFORMATIONS = {
     'gas_puff': 'S_gas_puff',
     'pellet': 'S_pellet',
     'generic_particle': 'S_generic_particle',
+    'nbi': 'S_nbi',
 }
 
 
@@ -527,7 +550,8 @@ def _calculate_integrated_sources(
   # electron-ion heat exchange always exists, and is not in
   # core_sources.profiles, so we calculate it here.
   qei = core_sources.qei.qei_coef * (
-      core_profiles.T_e.value - core_profiles.T_i.value  # pyrefly: ignore[unsupported-operation]
+      core_profiles.T_e.value
+      - core_profiles.T_i.value  # pyrefly: ignore[unsupported-operation]
   )
   integrated['P_ei_exchange_i'] = math_utils.volume_integration(qei, geo)
   integrated['P_ei_exchange_e'] = -integrated['P_ei_exchange_i']
@@ -551,10 +575,16 @@ def _calculate_integrated_sources(
           f' Found in T_i: {is_in_T_i}, Found in T_e: {is_in_T_e}.'
       )
     integrated[f'{value}_i'] = _get_integrated_source_value(
-        core_sources.T_i, key, geo, math_utils.volume_integration  # pyrefly: ignore[bad-argument-type]
+        core_sources.T_i,
+        key,
+        geo,
+        math_utils.volume_integration,  # pyrefly: ignore[bad-argument-type]
     )
     integrated[f'{value}_e'] = _get_integrated_source_value(
-        core_sources.T_e, key, geo, math_utils.volume_integration  # pyrefly: ignore[bad-argument-type]
+        core_sources.T_e,
+        key,
+        geo,
+        math_utils.volume_integration,  # pyrefly: ignore[bad-argument-type]
     )
     integrated[f'{value}_total'] = (
         integrated[f'{value}_i'] + integrated[f'{value}_e']
@@ -585,7 +615,10 @@ def _calculate_integrated_sources(
           ' (core_sources.T_i).'
       )
     integrated[f'{value}'] = _get_integrated_source_value(
-        core_sources.T_e, key, geo, math_utils.volume_integration  # pyrefly: ignore[bad-argument-type]
+        core_sources.T_e,
+        key,
+        geo,
+        math_utils.volume_integration,  # pyrefly: ignore[bad-argument-type]
     )
     if key in EXTERNAL_HEATING_SOURCES:
       integrated['P_aux_e'] += integrated[f'{value}']
@@ -607,7 +640,10 @@ def _calculate_integrated_sources(
 
   for key, value in PARTICLE_SOURCE_TRANSFORMATIONS.items():
     integrated[f'{value}'] = _get_integrated_source_value(
-        core_sources.n_e, key, geo, math_utils.volume_integration  # pyrefly: ignore[bad-argument-type]
+        core_sources.n_e,
+        key,
+        geo,
+        math_utils.volume_integration,  # pyrefly: ignore[bad-argument-type]
     )
     integrated['S_total'] += integrated[f'{value}']
 
@@ -676,7 +712,9 @@ def make_post_processed_outputs(
   )
   # Calculate normalized poloidal flux.
   psi_face = sim_state.core_profiles.psi.face_value()
-  psi_norm_face = (psi_face - psi_face[0]) / (psi_face[-1] - psi_face[0])  # pyrefly: ignore[bad-index]
+  psi_norm_face = (psi_face - psi_face[0]) / (
+      psi_face[-1] - psi_face[0]
+  )  # pyrefly: ignore[bad-index]
   integrated_sources = _calculate_integrated_sources(
       sim_state.geometry,
       sim_state.core_profiles,
@@ -818,24 +856,30 @@ def make_post_processed_outputs(
 
   # Calculate te and ti volume average [keV]
   te_volume_avg = math_utils.volume_average(
-      sim_state.core_profiles.T_e.value, sim_state.geometry  # pyrefly: ignore[bad-argument-type]
+      sim_state.core_profiles.T_e.value,
+      sim_state.geometry,  # pyrefly: ignore[bad-argument-type]
   )
   ti_volume_avg = math_utils.volume_average(
-      sim_state.core_profiles.T_i.value, sim_state.geometry  # pyrefly: ignore[bad-argument-type]
+      sim_state.core_profiles.T_i.value,
+      sim_state.geometry,  # pyrefly: ignore[bad-argument-type]
   )
 
   # Calculate n_e and n_i (main ion) volume and line averages in m^-3
   n_e_volume_avg = math_utils.volume_average(
-      sim_state.core_profiles.n_e.value, sim_state.geometry  # pyrefly: ignore[bad-argument-type]
+      sim_state.core_profiles.n_e.value,
+      sim_state.geometry,  # pyrefly: ignore[bad-argument-type]
   )
   n_i_volume_avg = math_utils.volume_average(
-      sim_state.core_profiles.n_i.value, sim_state.geometry  # pyrefly: ignore[bad-argument-type]
+      sim_state.core_profiles.n_i.value,
+      sim_state.geometry,  # pyrefly: ignore[bad-argument-type]
   )
   n_e_line_avg = math_utils.line_average(
-      sim_state.core_profiles.n_e.value, sim_state.geometry  # pyrefly: ignore[bad-argument-type]
+      sim_state.core_profiles.n_e.value,
+      sim_state.geometry,  # pyrefly: ignore[bad-argument-type]
   )
   n_i_line_avg = math_utils.line_average(
-      sim_state.core_profiles.n_i.value, sim_state.geometry  # pyrefly: ignore[bad-argument-type]
+      sim_state.core_profiles.n_i.value,
+      sim_state.geometry,  # pyrefly: ignore[bad-argument-type]
   )
   fgw_n_e_volume_avg = formulas.calculate_greenwald_fraction(
       n_e_volume_avg, sim_state.core_profiles, sim_state.geometry
@@ -904,7 +948,7 @@ def make_post_processed_outputs(
       runtime_params.numerics.min_rho_norm,
   )
   j_toroidal_sources = {}
-  for source_name in ['ecrh', 'generic_current']:
+  for source_name in ['ecrh', 'generic_current', 'nbi']:
     if source_name in sim_state.core_sources.psi.keys():
       # TODO(b/434175938): rename j_* to j_toroidal_* for clarity
       j_toroidal_sources[f'j_{source_name}'] = (
@@ -927,8 +971,10 @@ def make_post_processed_outputs(
   )
   I_non_inductive = I_bootstrap + I_external
 
-  beta_tor, beta_pol, beta_N = formulas.calculate_betas(  # pyrefly: ignore[not-iterable]
-      sim_state.core_profiles, sim_state.geometry
+  beta_tor, beta_pol, beta_N = (
+      formulas.calculate_betas(  # pyrefly: ignore[not-iterable]
+          sim_state.core_profiles, sim_state.geometry
+      )
   )
 
   rotation_output = rotation.calculate_rotation(
@@ -1004,6 +1050,7 @@ def make_post_processed_outputs(
       j_external=j_toroidal_external,
       j_ecrh=j_toroidal_sources['j_ecrh'],
       j_generic_current=j_toroidal_sources['j_generic_current'],
+      j_nbi=j_toroidal_sources['j_nbi'],
       j_non_inductive=j_toroidal_bootstrap + j_toroidal_external,
       j_parallel_external=j_parallel_external,  # pyrefly: ignore[bad-argument-type]
       j_parallel_non_inductive=j_parallel_bootstrap + j_parallel_external,

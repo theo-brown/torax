@@ -28,6 +28,7 @@ from torax._src.sources import gas_puff_source as gas_puff_source_lib
 from torax._src.sources import generic_current_source as generic_current_source_lib
 from torax._src.sources import generic_ion_el_heat_source as generic_ion_el_heat_source_lib
 from torax._src.sources import generic_particle_source as generic_particle_source_lib
+from torax._src.sources import metis_nbi_source as metis_nbi_source_lib
 from torax._src.sources import ohmic_heat_source as ohmic_heat_source_lib
 from torax._src.sources import pellet_source as pellet_source_lib
 from torax._src.sources import qei_source as qei_source_lib
@@ -98,17 +99,19 @@ class Sources(torax_pydantic.BaseModelFrozen):
       toric_nn.ToricNNIonCyclotronSourceConfig
       | scaled_profile.ScaledProfileIonCyclotronSourceConfig
       | None
-  ) = (
-      pydantic.Field(
-          discriminator='model_name',
-          default=None,
-      )
+  ) = pydantic.Field(
+      discriminator='model_name',
+      default=None,
   )
   impurity_radiation: (
       impurity_radiation_mavrin_fit.ImpurityRadiationHeatSinkMavrinFitConfig
       | impurity_radiation_constant_fraction.ImpurityRadiationHeatSinkConstantFractionConfig
       | None
   ) = pydantic.Field(
+      discriminator='model_name',
+      default=None,
+  )
+  nbi: metis_nbi_source_lib.MetisNBISourceConfig | None = pydantic.Field(
       discriminator='model_name',
       default=None,
   )
@@ -181,6 +184,11 @@ class Sources(torax_pydantic.BaseModelFrozen):
             constructor_data[k][
                 'model_name'
             ] = icrh_base.DEFAULT_MODEL_FUNCTION_NAME
+        case 'nbi':
+          if 'model_name' not in v:
+            constructor_data[k][
+                'model_name'
+            ] = metis_nbi_source_lib.DEFAULT_MODEL_FUNCTION_NAME
         case 'ohmic':
           if 'model_name' not in v:
             constructor_data[k][

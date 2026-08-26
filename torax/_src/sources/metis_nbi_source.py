@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""METIS neutral beam injection (NBI) source models.
+"""Neutral beam injection (NBI) source, with the METIS NBI model.
 
-Standalone reimplementation of the NBI model of the METIS integrated tokamak
-simulator [J.F. Artaud et al., Nucl. Fusion 58 (2018) 105001], following the
-METIS source code (zerod/zicd0.m, zerod/z0nbipath.m, zerod/z0suzuki_crx.m,
-zerod/zfract0.m).
+The `nbi` source is a single combined source computing the NBI ion and
+electron heating, the neutral beam driven current, and the beam fueling
+particle source, for one or more injectors.
 
-The model consists of:
+The default (and currently only) model is a reimplementation of the NBI model
+of the METIS integrated tokamak simulator [J.F. Artaud et al., Nucl. Fusion 58
+(2018) 105001], following the METIS source code (zerod/zicd0.m,
+zerod/z0nbipath.m, zerod/z0suzuki_crx.m, zerod/zfract0.m). Per injector, the
+model consists of:
   * A pencil-beam attenuation calculation along a tangential midplane chord
     through the flux surfaces, giving the fast-ion birth profile and the
     shine-through fraction.
@@ -31,13 +34,8 @@ The model consists of:
     average, with Lin-Liu & Hilton electron shielding [Phys. Plasmas 4 (1997)
     4179] and trapped-ion suppression.
 
-This module is not part of the default TORAX source schema. To use it, call
-`register_metis_nbi_sources()` before building a `ToraxConfig`, then select
-the model by setting `model_name='metis_nbi'` in the `generic_heat`,
-`generic_current` and/or `generic_particle` source configs.
-
-Simplifications relative to full METIS: a single injector; a zero-width pencil
-beam (no horizontal/vertical beam extent sampling and no vertical offset); no
+Simplifications relative to full METIS: a zero-width pencil beam (no
+horizontal/vertical beam extent sampling and no vertical offset); no
 first-orbit losses; no fast-ion accumulation correction to the stopping
 cross-section; steady-state slowing down (deposited power is thermalized
 instantaneously); no Doppler shift of the injection energy from plasma
@@ -45,7 +43,7 @@ rotation.
 """
 
 import dataclasses
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal
 
 import chex
 import jax
@@ -59,10 +57,6 @@ from torax._src.geometry import geometry
 from torax._src.neoclassical.conductivity import base as conductivity_base
 from torax._src.neoclassical.formulas import formulas as neoclassical_formulas
 from torax._src.sources import base
-from torax._src.sources import generic_current_source
-from torax._src.sources import generic_ion_el_heat_source
-from torax._src.sources import generic_particle_source
-from torax._src.sources import register_model
 from torax._src.sources import runtime_params as sources_runtime_params_lib
 from torax._src.sources import source
 from torax._src.sources import source_profiles
@@ -70,7 +64,10 @@ from torax._src.torax_pydantic import torax_pydantic
 
 # pylint: disable=invalid-name
 
-MODEL_FUNCTION_NAME: str = 'metis_nbi'
+# Default value for the model function to be used for the NBI source. This is
+# also used as an identifier for the model function in the default source
+# config for Pydantic to "discriminate" against.
+DEFAULT_MODEL_FUNCTION_NAME: str = 'metis_nbi'
 
 # Number of points for the numerical integral in the NBCD slowing-down
 # average (zicd0.m uses linspace(0,1,101)).
@@ -503,15 +500,41 @@ def _critical_energies_and_slowing_time(
   return E_c_slow, E_gamma, tau_s
 
 
-def _absorbed_power_density(
-    source_params: 'RuntimeParams',
+def _single_injector_profiles(
+    P_total: array_typing.FloatScalar,
+    beam_energy: array_typing.FloatScalar,
+    beam_mass: array_typing.FloatScalar,
+    tangency_radius: array_typing.FloatScalar,
+    current_drive_multiplier: array_typing.FloatScalar,
+    current_drive_sign: array_typing.FloatScalar,
     geo: geometry.Geometry,
     core_profiles: state.CoreProfiles,
-) -> tuple[array_typing.FloatVectorCell, array_typing.FloatVectorCell]:
-  """Absorbed NBI power density [W/m^3] and birth pitch on the cell grid."""
+) -> tuple[
+    array_typing.FloatVectorCell,
+    array_typing.FloatVectorCell,
+    array_typing.FloatVectorCell,
+    array_typing.FloatVectorCell,
+]:
+  """METIS NBI profiles for a single injector.
+
+  Args:
+    P_total: Injected neutral beam power [W].
+    beam_energy: Beam injection energy [keV].
+    beam_mass: Beam species mass [amu].
+    tangency_radius: Beam tangency radius [m].
+    current_drive_multiplier: Multiplier on the NBCD efficiency.
+    current_drive_sign: +1 for co-current injection, -1 for counter-current.
+    geo: Torus geometry.
+    core_profiles: Core plasma profiles.
+
+  Returns:
+    Tuple of (ion heating [W/m^3], electron heating [W/m^3], driven parallel
+    current density <j.B>/B_0 [A/m^2], particle source [1/(m^3 s)]) profiles
+    on the cell grid.
+  """
   sigma_stop_face = suzuki_beam_stopping_cross_section(
-      source_params.beam_energy,
-      source_params.beam_mass,
+      beam_energy,
+      beam_mass,
       core_profiles.n_e.face_value(),
       core_profiles.T_e.face_value(),
       core_profiles.n_impurity.face_value(),
@@ -521,85 +544,36 @@ def _absorbed_power_density(
       geo,
       core_profiles.n_e.face_value(),
       sigma_stop_face,
-      source_params.tangency_radius,
+      tangency_radius,
   )
-  return source_params.P_total * birth_density, pitch
+  p_dep = P_total * birth_density  # Absorbed power density [W/m^3].
 
-
-def calc_nbi_heating(
-    runtime_params: runtime_params_lib.RuntimeParams,
-    geo: geometry.Geometry,
-    source_name: str,
-    core_profiles: state.CoreProfiles,
-    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
-    unused_conductivity: conductivity_base.Conductivity | None,
-) -> tuple[array_typing.FloatVectorCell, array_typing.FloatVectorCell]:
-  """Returns the METIS NBI (ion, electron) heating power densities [W/m^3]."""
-  source_params = runtime_params.sources[source_name]
-  assert isinstance(source_params, RuntimeParams)
-  p_dep, _ = _absorbed_power_density(source_params, geo, core_profiles)
-  E_c_slow, _, _ = _critical_energies_and_slowing_time(
-      core_profiles, source_params.beam_mass
-  )
-  frac_ion = wesson_ion_heating_fraction(source_params.beam_energy, E_c_slow)
-  return p_dep * frac_ion, p_dep * (1.0 - frac_ion)
-
-
-def calc_nbi_particle_source(
-    runtime_params: runtime_params_lib.RuntimeParams,
-    geo: geometry.Geometry,
-    source_name: str,
-    core_profiles: state.CoreProfiles,
-    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
-    unused_conductivity: conductivity_base.Conductivity | None,
-) -> tuple[array_typing.FloatVectorCell, ...]:
-  """Returns the METIS NBI fueling source [particles/(m^3 s)]."""
-  source_params = runtime_params.sources[source_name]
-  assert isinstance(source_params, RuntimeParams)
-  p_dep, _ = _absorbed_power_density(source_params, geo, core_profiles)
-  beam_energy_J = source_params.beam_energy * constants.CONSTANTS.keV_to_J
-  return (p_dep / beam_energy_J,)
-
-
-def calc_nbi_current(
-    runtime_params: runtime_params_lib.RuntimeParams,
-    geo: geometry.Geometry,
-    source_name: str,
-    core_profiles: state.CoreProfiles,
-    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
-    unused_conductivity: conductivity_base.Conductivity | None,
-) -> tuple[array_typing.FloatVectorCell, ...]:
-  """Returns the METIS neutral beam driven current density [A/m^2].
-
-  Follows zicd0.m: the fast-ion current is j = e * S * tau_s * <v_par>, with
-  the slowing-down averaged velocity from L.-G. Eriksson, reduced by the
-  Lin-Liu & Hilton electron shielding factor and by a trapped-ion
-  suppression factor. The result approximates the flux-surface averaged
-  parallel current density <j.B>/B_0 used by the psi equation.
-  """
-  source_params = runtime_params.sources[source_name]
-  assert isinstance(source_params, CurrentDriveRuntimeParams)
-  p_dep, pitch = _absorbed_power_density(source_params, geo, core_profiles)
   E_c_slow, E_gamma, tau_s = _critical_energies_and_slowing_time(
-      core_profiles, source_params.beam_mass
+      core_profiles, beam_mass
   )
 
-  # Fast-ion birth rate [m^-3 s^-1].
-  beam_energy_J = source_params.beam_energy * constants.CONSTANTS.keV_to_J
+  # Ion/electron split of the deposited power.
+  frac_ion = wesson_ion_heating_fraction(beam_energy, E_c_slow)
+  p_ion = p_dep * frac_ion
+  p_el = p_dep * (1.0 - frac_ion)
+
+  # Fast-ion birth rate [m^-3 s^-1]; also the electron particle source.
+  beam_energy_J = beam_energy * constants.CONSTANTS.keV_to_J
   S_birth = p_dep / beam_energy_J
 
-  # Velocities associated with the injection and critical energies. METIS
-  # uses the proton mass; m_amu differs by < 1%.
-  beam_mass_kg = source_params.beam_mass * constants.CONSTANTS.m_amu
+  # Neutral beam current drive (zicd0.m): the fast-ion current is
+  # j = e * S * tau_s * <v_par>, with the slowing-down averaged velocity from
+  # L.-G. Eriksson. Velocities associated with the injection and critical
+  # energies (METIS uses the proton mass; m_amu differs by < 1%):
+  beam_mass_kg = beam_mass * constants.CONSTANTS.m_amu
   v0 = jnp.sqrt(2.0 * beam_energy_J / beam_mass_kg)
   v_c = jnp.sqrt(2.0 * E_c_slow * constants.CONSTANTS.keV_to_J / beam_mass_kg)
   v_gamma = jnp.sqrt(
       2.0 * E_gamma * constants.CONSTANTS.keV_to_J / beam_mass_kg
   )
 
-  # Slowing-down average of the parallel velocity (zicd0.m, following
-  # L.-G. Eriksson): <v> = v_c ((v0^3+v_c^3)/v0^3)^(ev-1)
-  #                        * int_0^1 (v0/v_c) [u^3/(1+u^3)]^ev dlambda,
+  # <v> = v_c ((v0^3+v_c^3)/v0^3)^(ev-1)
+  #       * int_0^1 (v0/v_c) [u^3/(1+u^3)]^ev dlambda,
   # with u = (v0/v_c) lambda and ev = 1 + 2 v_gamma^3 / (3 v_c^3).
   ev = 1.0 + 2.0 * v_gamma**3 / (3.0 * v_c**3)
   lam = jnp.linspace(0.0, 1.0, _NBCD_INTEGRAL_POINTS)
@@ -640,37 +614,92 @@ def calc_nbi_current(
   fi_trap = jnp.minimum(1.0, 1.0 + jnp.tanh(10.0 * (pitch - mu_trap)))
 
   j_cd = (
-      source_params.current_drive_sign
-      * source_params.current_drive_multiplier
+      current_drive_sign
+      * current_drive_multiplier
       * shielding
       * j_fast
       * fi_trap
   )
-  return (j_cd,)
+  return p_ion, p_el, j_cd, S_birth
+
+
+def calc_metis_nbi(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    source_name: str,
+    core_profiles: state.CoreProfiles,
+    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
+    unused_conductivity: conductivity_base.Conductivity | None,
+) -> tuple[array_typing.FloatVectorCell, ...]:
+  """Computes the combined METIS NBI profiles, summed over injectors.
+
+  Returns:
+    Tuple of (ion heating [W/m^3], electron heating [W/m^3], driven parallel
+    current density <j.B>/B_0 [A/m^2], particle source [1/(m^3 s)]) profiles
+    on the cell grid, matching NBISource.AFFECTED_CORE_PROFILES.
+  """
+  source_params = runtime_params.sources[source_name]
+  assert isinstance(source_params, RuntimeParams)
+  per_injector = jax.vmap(
+      _single_injector_profiles,
+      in_axes=(0, 0, 0, 0, 0, 0, None, None),
+  )
+  p_ion, p_el, j_cd, S_birth = per_injector(
+      source_params.P_total,
+      source_params.beam_energy,
+      source_params.beam_mass,
+      source_params.tangency_radius,
+      source_params.current_drive_multiplier,
+      source_params.current_drive_sign,
+      geo,
+      core_profiles,
+  )
+  return (
+      jnp.sum(p_ion, axis=0),
+      jnp.sum(p_el, axis=0),
+      jnp.sum(j_cd, axis=0),
+      jnp.sum(S_birth, axis=0),
+  )
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True, eq=False)
+class NBISource(source.Source):
+  """Combined neutral beam injection source.
+
+  Computes ion heating, electron heating, driven current and particle
+  fueling profiles together for one or more injectors.
+  """
+
+  SOURCE_NAME: ClassVar[str] = 'nbi'
+  AFFECTED_CORE_PROFILES: ClassVar[tuple[source.AffectedCoreProfile, ...]] = (
+      source.AffectedCoreProfile.TEMP_ION,
+      source.AffectedCoreProfile.TEMP_EL,
+      source.AffectedCoreProfile.PSI,
+      source.AffectedCoreProfile.NE,
+  )
+  model_func: source.SourceProfileFunction = (
+      calc_metis_nbi  # pyrefly: ignore[bad-assignment]
+  )
 
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class RuntimeParams(sources_runtime_params_lib.RuntimeParams):
-  """Runtime parameters shared by the METIS NBI source models."""
+  """Runtime parameters for the METIS NBI source.
 
-  P_total: array_typing.FloatScalar
-  beam_energy: array_typing.FloatScalar
-  beam_mass: array_typing.FloatScalar
-  tangency_radius: array_typing.FloatScalar
+  All fields are stacked over injectors, with shape (num_injectors,).
+  """
 
-
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
-class CurrentDriveRuntimeParams(RuntimeParams):
-  """Runtime parameters for the METIS NBI current drive model."""
-
-  current_drive_multiplier: array_typing.FloatScalar
-  current_drive_sign: array_typing.FloatScalar
+  P_total: array_typing.FloatVector
+  beam_energy: array_typing.FloatVector
+  beam_mass: array_typing.FloatVector
+  tangency_radius: array_typing.FloatVector
+  current_drive_multiplier: array_typing.FloatVector
+  current_drive_sign: array_typing.FloatVector
 
 
-class _MetisNBIConfigBase(base.SourceModelBase):
-  """Base config for the METIS NBI source models.
+class MetisNBIInjector(torax_pydantic.BaseModelFrozen):
+  """Configuration for a single neutral beam injector.
 
   Attributes:
     P_total: Injected neutral beam power [W], before shine-through losses.
@@ -679,11 +708,12 @@ class _MetisNBIConfigBase(base.SourceModelBase):
     beam_mass: Beam species mass [amu], in [1, 3] (hydrogenic beams).
     tangency_radius: Beam tangency radius [m] (METIS option.rtang). Zero
       corresponds to perpendicular injection aimed at the machine axis.
+    current_drive_multiplier: Multiplier on the NBCD efficiency (METIS
+      option.nbicdmul).
+    counter_injection: If True, the beam is injected counter to the plasma
+      current and the driven current is negative (METIS sign(angle_nbi)).
   """
 
-  model_name: Annotated[Literal['metis_nbi'], torax_pydantic.JAX_STATIC] = (
-      'metis_nbi'
-  )
   P_total: torax_pydantic.TimeVaryingScalar = torax_pydantic.ValidatedDefault(
       10e6
   )
@@ -696,9 +726,34 @@ class _MetisNBIConfigBase(base.SourceModelBase):
   tangency_radius: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(0.0)
   )
+  current_drive_multiplier: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0)
+  )
+  counter_injection: Annotated[bool, torax_pydantic.JAX_STATIC] = False
+
+
+class MetisNBISourceConfig(base.SourceModelBase):
+  """METIS NBI model configuration for the `nbi` source.
+
+  Attributes:
+    injectors: Per-injector beam configurations. The computed heating,
+      current drive and fueling profiles are summed over injectors.
+  """
+
+  model_name: Annotated[Literal['metis_nbi'], torax_pydantic.JAX_STATIC] = (
+      'metis_nbi'
+  )
+  injectors: tuple[MetisNBIInjector, ...] = (MetisNBIInjector(),)
   mode: Annotated[
       sources_runtime_params_lib.Mode, torax_pydantic.JAX_STATIC
   ] = sources_runtime_params_lib.Mode.MODEL_BASED
+
+  @property
+  def model_func(self) -> source.SourceProfileFunction:
+    return calc_metis_nbi
+
+  def build_source(self) -> NBISource:
+    return NBISource(model_func=self.model_func)
 
   def build_runtime_params(
       self,
@@ -710,105 +765,22 @@ class _MetisNBIConfigBase(base.SourceModelBase):
         ),
         mode=self.mode,
         is_explicit=self.is_explicit,
-        P_total=self.P_total.get_value(t),
-        beam_energy=self.beam_energy.get_value(t),
-        beam_mass=self.beam_mass.get_value(t),
-        tangency_radius=self.tangency_radius.get_value(t),
-    )
-
-
-class MetisNBIHeatSourceConfig(_MetisNBIConfigBase):
-  """METIS NBI ion and electron heating model.
-
-  Register against the 'generic_heat' source.
-  """
-
-  @property
-  def model_func(self) -> source.SourceProfileFunction:
-    return calc_nbi_heating
-
-  def build_source(
-      self,
-  ) -> generic_ion_el_heat_source.GenericIonElectronHeatSource:
-    return generic_ion_el_heat_source.GenericIonElectronHeatSource(
-        model_func=self.model_func
-    )
-
-
-class MetisNBIParticleSourceConfig(_MetisNBIConfigBase):
-  """METIS NBI fueling model.
-
-  Register against the 'generic_particle' source.
-  """
-
-  @property
-  def model_func(self) -> source.SourceProfileFunction:
-    return calc_nbi_particle_source
-
-  def build_source(self) -> generic_particle_source.GenericParticleSource:
-    return generic_particle_source.GenericParticleSource(
-        model_func=self.model_func
-    )
-
-
-class MetisNBICurrentSourceConfig(_MetisNBIConfigBase):
-  """METIS neutral beam current drive model.
-
-  Register against the 'generic_current' source.
-
-  Attributes:
-    current_drive_multiplier: Multiplier on the NBCD efficiency (METIS
-      option.nbicdmul).
-    counter_injection: If True, the beam is injected counter to the plasma
-      current and the driven current is negative (METIS sign(angle_nbi)).
-  """
-
-  current_drive_multiplier: torax_pydantic.PositiveTimeVaryingScalar = (
-      torax_pydantic.ValidatedDefault(1.0)
-  )
-  counter_injection: Annotated[bool, torax_pydantic.JAX_STATIC] = False
-
-  @property
-  def model_func(self) -> source.SourceProfileFunction:
-    return calc_nbi_current
-
-  def build_source(self) -> generic_current_source.GenericCurrentSource:
-    return generic_current_source.GenericCurrentSource(
-        model_func=self.model_func
-    )
-
-  def build_runtime_params(
-      self,
-      t: chex.Numeric,
-  ) -> CurrentDriveRuntimeParams:
-    return CurrentDriveRuntimeParams(
-        prescribed_values=tuple(
-            [v.get_value(t) for v in self.prescribed_values]
+        P_total=jnp.asarray(
+            [inj.P_total.get_value(t) for inj in self.injectors]
         ),
-        mode=self.mode,
-        is_explicit=self.is_explicit,
-        P_total=self.P_total.get_value(t),
-        beam_energy=self.beam_energy.get_value(t),
-        beam_mass=self.beam_mass.get_value(t),
-        tangency_radius=self.tangency_radius.get_value(t),
-        current_drive_multiplier=self.current_drive_multiplier.get_value(t),
-        current_drive_sign=-1.0 if self.counter_injection else 1.0,
+        beam_energy=jnp.asarray(
+            [inj.beam_energy.get_value(t) for inj in self.injectors]
+        ),
+        beam_mass=jnp.asarray(
+            [inj.beam_mass.get_value(t) for inj in self.injectors]
+        ),
+        tangency_radius=jnp.asarray(
+            [inj.tangency_radius.get_value(t) for inj in self.injectors]
+        ),
+        current_drive_multiplier=jnp.asarray([
+            inj.current_drive_multiplier.get_value(t) for inj in self.injectors
+        ]),
+        current_drive_sign=jnp.asarray(
+            [-1.0 if inj.counter_injection else 1.0 for inj in self.injectors]
+        ),
     )
-
-
-def register_metis_nbi_sources():
-  """Registers the METIS NBI models with the TORAX source config schema.
-
-  Must be called before building a `ToraxConfig`. After registration, the
-  models are selected with `model_name='metis_nbi'` in the `generic_heat`,
-  `generic_current` and/or `generic_particle` source configs.
-  """
-  register_model.register_source_model_config(
-      MetisNBIHeatSourceConfig, 'generic_heat'
-  )
-  register_model.register_source_model_config(
-      MetisNBICurrentSourceConfig, 'generic_current'
-  )
-  register_model.register_source_model_config(
-      MetisNBIParticleSourceConfig, 'generic_particle'
-  )

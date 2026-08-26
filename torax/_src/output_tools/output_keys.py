@@ -277,6 +277,7 @@ J_GENERIC_CURRENT = OutputKey(
 J_PARALLEL_GENERIC_CURRENT = OutputKey(
     "j_parallel_generic_current", units=Units.AMPERE_PER_SQUARE_METER
 )
+J_NBI = OutputKey("j_nbi", units=Units.AMPERE_PER_SQUARE_METER)
 J_ECRH = OutputKey("j_ecrh", units=Units.AMPERE_PER_SQUARE_METER)
 J_PARALLEL_ECRH = OutputKey(
     "j_parallel_ecrh", units=Units.AMPERE_PER_SQUARE_METER
@@ -323,6 +324,9 @@ P_FUSION = OutputKey("P_fusion", units=Units.WATT)
 P_ICRH_E = OutputKey("P_icrh_e", units=Units.WATT)
 P_ICRH_I = OutputKey("P_icrh_i", units=Units.WATT)
 P_ICRH_TOTAL = OutputKey("P_icrh_total", units=Units.WATT)
+P_NBI_I = OutputKey("P_nbi_i", units=Units.WATT)
+P_NBI_E = OutputKey("P_nbi_e", units=Units.WATT)
+P_NBI_TOTAL = OutputKey("P_nbi_total", units=Units.WATT)
 
 # ---------------------------------------------------------------------------
 # Post-processed outputs: L-H transition thresholds.
@@ -404,6 +408,7 @@ RHO_Q_3_1_SECOND = OutputKey("rho_q_3_1_second", units=Units.DIMENSIONLESS)
 I_EXTERNAL = OutputKey("I_external", units=Units.AMPERE)
 I_ECRH = OutputKey("I_ecrh", units=Units.AMPERE)
 I_AUX_GENERIC = OutputKey("I_aux_generic", units=Units.AMPERE)
+I_NBI = OutputKey("I_nbi", units=Units.AMPERE)
 I_NON_INDUCTIVE = OutputKey("I_non_inductive", units=Units.AMPERE)
 F_NON_INDUCTIVE = OutputKey("f_non_inductive", units=Units.DIMENSIONLESS)
 F_BOOTSTRAP = OutputKey("f_bootstrap", units=Units.DIMENSIONLESS)
@@ -414,6 +419,7 @@ F_BOOTSTRAP = OutputKey("f_bootstrap", units=Units.DIMENSIONLESS)
 S_GAS_PUFF = OutputKey("S_gas_puff", units=Units.INVERSE_SECOND)
 S_PELLET = OutputKey("S_pellet", units=Units.INVERSE_SECOND)
 S_GENERIC_PARTICLE = OutputKey("S_generic_particle", units=Units.INVERSE_SECOND)
+S_NBI = OutputKey("S_nbi", units=Units.INVERSE_SECOND)
 S_TOTAL = OutputKey("S_total", units=Units.INVERSE_SECOND)
 
 # ---------------------------------------------------------------------------
