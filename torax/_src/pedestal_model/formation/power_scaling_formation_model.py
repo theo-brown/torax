@@ -22,7 +22,6 @@ from torax._src import math_utils
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.geometry import geometry
-from torax._src.pedestal_model import pedestal_model_output
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_lib
 from torax._src.pedestal_model.formation import base
@@ -78,6 +77,10 @@ def calculate_P_SOL_total(
 class PowerScalingFormationModel(base.FormationModel):
   """Pedestal formation based on P_SOL and P_LH thresholds.
 
+  Returns the barrier fraction g = sigmoid(sharpness * ((P_SOL - P_LH) / P_LH
+  - offset)), the blend weight between L-mode transport (g=0) and the barrier
+  transport branch (g=1).
+
   Attributes:
     scaling_law: The scaling law to use for pedestal formation.
     divertor_configuration: The divertor configuration. Only used for the
@@ -96,8 +99,8 @@ class PowerScalingFormationModel(base.FormationModel):
       core_profiles: state.CoreProfiles,
       core_sources: source_profiles_lib.SourceProfiles,
       pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
-  ) -> pedestal_model_output.TransportMultipliers:
-    """Calculates transport decrease multipliers based on P_SOL and P_LH."""
+  ) -> array_typing.FloatScalar:
+    """Calculates the barrier fraction based on P_SOL and P_LH."""
     assert isinstance(
         runtime_params.pedestal.formation, PowerScalingFormationRuntimeParams
     )
@@ -127,20 +130,11 @@ class PowerScalingFormationModel(base.FormationModel):
         rescaled_P_LH,
     )
 
-    # Calculate transport_multiplier
-    # If P_SOL > effective_P_LH, multiplier tends to 0.0
-    # If P_SOL < effective_P_LH, multiplier tends to 1.0
+    # Calculate the barrier fraction g.
+    # If P_SOL > effective_P_LH, g tends to 1.0 (barrier fully formed).
+    # If P_SOL < effective_P_LH, g tends to 0.0 (L-mode transport).
     sharpness = runtime_params.pedestal.formation.sharpness
     offset = runtime_params.pedestal.formation.offset
-    base_multiplier = runtime_params.pedestal.formation.base_multiplier
     normalized_deviation = (P_SOL_total - effective_P_LH) / effective_P_LH
     shifted_deviation = normalized_deviation - offset
-    alpha = jax.nn.sigmoid(shifted_deviation * sharpness)
-    transport_multiplier = (1.0 - alpha) * 1.0 + alpha * base_multiplier
-
-    return pedestal_model_output.TransportMultipliers(
-        chi_e_multiplier=transport_multiplier,
-        chi_i_multiplier=transport_multiplier,
-        D_e_multiplier=transport_multiplier,
-        v_e_multiplier=transport_multiplier,
-    )
+    return jax.nn.sigmoid(shifted_deviation * sharpness)

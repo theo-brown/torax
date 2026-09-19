@@ -298,10 +298,10 @@ def _calc_coeffs_full(
       == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
   ):
     # Explicit mode with ADAPTIVE_TRANSPORT: pedestal output (T_ped, n_ped,
-    # rho_ped_top) stays frozen from pre_step, but transport multipliers are
+    # rho_ped_top) stays frozen from pre_step, but the barrier state is
     # re-evaluated with current profiles.
     frozen_pedestal_output = pedestal_transition_state.pedestal_model_output
-    transport_multipliers = models.pedestal_model.compute_transport_multipliers(
+    barrier_state = models.pedestal_model.compute_barrier_state(
         runtime_params,
         geo,
         core_profiles,
@@ -312,7 +312,7 @@ def _calc_coeffs_full(
     pedestal_transition_state = dataclasses.replace(
         pedestal_transition_state,
         pedestal_model_output=dataclasses.replace(
-            frozen_pedestal_output, transport_multipliers=transport_multipliers
+            frozen_pedestal_output, barrier_state=barrier_state
         ),
     )
 

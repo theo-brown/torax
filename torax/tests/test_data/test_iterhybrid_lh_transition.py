@@ -120,7 +120,6 @@ CONFIG['pedestal'] = {
     },
     'saturation_model': {
         'model_name': 'profile_value',
-        'steepness': 100.0,
     },
     'pedestal_top_smoothing_width': 0.02,
 }

@@ -67,10 +67,6 @@ class FakePedestalPydantic(pedestal.BasePedestal):
         mode=self.mode,
         formation=self.formation_model.build_runtime_params(t),
         saturation=self.saturation_model.build_runtime_params(t),
-        chi_max=self.chi_max.get_value(t),
-        D_e_max=self.D_e_max.get_value(t),
-        V_e_max=self.V_e_max.get_value(t),
-        V_e_min=self.V_e_min.get_value(t),
         pedestal_top_smoothing_width=self.pedestal_top_smoothing_width.get_value(
             t
         ),
