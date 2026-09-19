@@ -24,28 +24,9 @@ from torax._src import state
 from torax._src.geometry import geometry
 from torax._src.internal_boundary_conditions import internal_boundary_conditions as internal_boundary_conditions_lib
 from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_lib
+from torax._src.pedestal_model.saturation import base as saturation_base
 
 # pylint: disable=invalid-name
-
-
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True, eq=False)
-class TransportMultipliers:
-  """Transport multipliers for the pedestal."""
-
-  chi_e_multiplier: array_typing.FloatScalar
-  chi_i_multiplier: array_typing.FloatScalar
-  D_e_multiplier: array_typing.FloatScalar
-  v_e_multiplier: array_typing.FloatScalar
-
-  @classmethod
-  def default(cls):
-    return cls(
-        chi_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-        chi_i_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-        D_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-        v_e_multiplier=jnp.array(1.0, dtype=jax_utils.get_dtype()),
-    )
 
 
 def _build_smoothing_matrix(
@@ -89,16 +70,24 @@ class PedestalModelOutput:
     T_i_ped: The ion temperature at the pedestal top in keV.
     T_e_ped: The electron temperature at the pedestal top in keV.
     n_e_ped: The electron density at the pedestal top in m^-3.
-    transport_multipliers: Multipliers for the transport coefficients in the
-      pedestal region. Only used if the pedestal is in ADAPTIVE_TRANSPORT mode.
+    H_mode_fraction: Blend weight g in [0, 1] between the unmodified
+      transport (g=0, L-mode) and the H-mode transport branch (g=1, fully
+      established H-mode edge). Only used if the pedestal is in
+      ADAPTIVE_TRANSPORT mode; see `modify_core_transport`.
+    saturation_fraction: Per-channel saturation fraction r in (0, 1) from the
+      saturation model. Only used if the pedestal is in ADAPTIVE_TRANSPORT
+      mode; see `modify_core_transport`.
   """
 
   rho_norm_ped_top: array_typing.FloatScalar
   T_i_ped: array_typing.FloatScalar
   T_e_ped: array_typing.FloatScalar
   n_e_ped: array_typing.FloatScalar
-  transport_multipliers: TransportMultipliers = dataclasses.field(
-      default_factory=TransportMultipliers.default
+  H_mode_fraction: array_typing.FloatScalar = dataclasses.field(
+      default_factory=lambda: jnp.array(0.0, dtype=jax_utils.get_dtype())
+  )
+  saturation_fraction: saturation_base.SaturationFraction = dataclasses.field(
+      default_factory=saturation_base.SaturationFraction.default
   )
 
   def to_internal_boundary_conditions(
@@ -229,12 +218,24 @@ class PedestalModelOutput:
   ) -> state.CoreTransport:
     """Modify transport coefficients in the entire pedestal region.
 
-    Scales the turbulent and Pereverzev transport coefficients in the pedestal
-    region by the multipliers in the pedestal model output. This will also scale
-    any components of the transport coefficients that are inherited from the
-    turbulent model, such as ITG, ETG, TEM, Bohm, GyroBohm, etc. Transport
-    coefficients from neoclassical and pedestal transport models are not
-    affected.
+    Each transport channel (chi_i, chi_e, D_e, and the pinch v_e) blends its
+    raw (L-mode) coefficient with a bounded H-mode branch:
+
+      coeff_ped = (1 - g) * coeff_raw + g * (residual + r * (cap - residual))
+
+    where g is the H-mode fraction (formation) and r is the channel's
+    saturation fraction (saturation response). Since g and r are bounded in
+    [0, 1] and the blend is linear in each, the transport sensitivity to the
+    saturation response is bounded by (cap - residual) / (4 * response_width)
+    -- required by the Newton-Raphson solver, which re-evaluates the
+    transport blend inside its residual.
+
+    Each channel's diagnostic turbulence breakdowns (Bohm, ITG, ...) and
+    Pereverzev-Corrigan terms track the same total coefficient, so they are
+    scaled by the channel's relative suppression factor (1 - g) + g * r
+    instead of being floored/capped themselves; a Pereverzev
+    diffusion/convection pair shares one factor, preserving its exact flux
+    cancellation. Neoclassical transport is not affected.
 
     Args:
       core_transport: The core transport coefficients to modify.
@@ -259,67 +260,112 @@ class PedestalModelOutput:
         pedestal_runtime_params.pedestal_top_smoothing_width,
     )
 
-    def multiply_coeff(
-        path: jax.tree_util.KeyPath, coeff: array_typing.FloatVectorFace
+    def smooth(
+        blended: array_typing.FloatVectorFace, raw: array_typing.FloatVectorFace
     ) -> array_typing.FloatVectorFace:
-      """Scale turbulent+Pereverzev transport coefficients in the pedestal."""
-      # Get the variable name of the leaf
-      key = str(path[-1])
+      """Restricts a blend to the pedestal region and smooths its edge."""
+      blended = jnp.where(pedestal_active_mask_face, blended, raw)
+      return jnp.dot(smoothing_matrix, blended)
 
-      # Apply the correct multiplier based on the variable name
-      # TODO(b/488314338): Improve robustness of applying multipliers to
-      # transport coefficients, ideally avoiding string matching.
-      if "neo" in key:
-        # Neoclassical transport should not be affected by scaling from an
-        # ADAPTIVE_TRANSPORT pedestal model.
-        return coeff
-      elif "chi_face_ion" in key:
-        # If transport suppression is not in effect, perform no scaling
-        # (L-mode). If transport suppression is in effect (i.e. H-mode,
-        # chi_i_multiplier != 1.0), then we clip the chi before scaling, to
-        # avoid unrealistic values.
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.chi_i_multiplier, 1.0),
-            coeff,
-            jnp.clip(coeff, max=pedestal_runtime_params.chi_max)
-            * self.transport_multipliers.chi_i_multiplier,
-        )
-      elif "chi_face_el" in key:
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.chi_e_multiplier, 1.0),
-            coeff,
-            jnp.clip(coeff, max=pedestal_runtime_params.chi_max)
-            * self.transport_multipliers.chi_e_multiplier,
-        )
-      elif "d_face_el" in key:
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.D_e_multiplier, 1.0),
-            coeff,
-            jnp.clip(coeff, max=pedestal_runtime_params.D_e_max)
-            * self.transport_multipliers.D_e_multiplier,
-        )
-      elif "v_face_el" in key:
-        modified_coeff = jnp.where(
-            jnp.isclose(self.transport_multipliers.v_e_multiplier, 1.0),
-            coeff,
-            jnp.clip(
-                coeff,
-                min=pedestal_runtime_params.V_e_min,
-                max=pedestal_runtime_params.V_e_max,
-            )
-            * self.transport_multipliers.v_e_multiplier,
-        )
-      else:
-        return coeff
+    g = self.H_mode_fraction
 
-      # Only modify the coefficients in the pedestal region.
-      modified_coeff = jnp.where(
-          pedestal_active_mask_face, modified_coeff, coeff
-      )
+    def blend_channel(
+        total_field: str,
+        component_fields: tuple[str, ...],
+        r: array_typing.FloatScalar,
+        residual: array_typing.FloatScalar,
+        cap: array_typing.FloatScalar,
+    ) -> dict[str, array_typing.FloatVectorFace]:
+      """Blends one transport channel's total field and diagnostic breakdowns.
 
-      # Apply smoothing to the pedestal top
-      modified_coeff = jnp.dot(smoothing_matrix, modified_coeff)
+      Args:
+        total_field: Name of the CoreTransport field solved for in the state
+          equations (e.g. 'chi_face_ion').
+        component_fields: Names of the diagnostic turbulence breakdowns
+          (Bohm, ITG, ...) and Pereverzev-Corrigan terms for this channel.
+        r: This channel's saturation fraction, in (0, 1).
+        residual: H-mode transport at r = 0 (the floor of the H-mode branch).
+        cap: H-mode transport at r = 1 (the ceiling of the H-mode branch).
 
-      return modified_coeff
+      Returns:
+        A field name -> blended value mapping for `dataclasses.replace`.
+      """
+      raw_total = getattr(core_transport, total_field)
+      h_mode_value = residual + r * (cap - residual)
+      blended_total = (1.0 - g) * raw_total + g * h_mode_value
 
-    return jax.tree_util.tree_map_with_path(multiply_coeff, core_transport)
+      suppression_factor = (1.0 - g) + g * r
+      updates = {total_field: smooth(blended_total, raw_total)}
+      for field in component_fields:
+        raw = getattr(core_transport, field)
+        # Diagnostic breakdowns are only populated by some transport models
+        # (e.g. bohm/gyrobohm terms are QLKNN-specific); fields the active
+        # transport model doesn't produce stay None and are left untouched.
+        if raw is not None:
+          updates[field] = smooth(raw * suppression_factor, raw)
+      return updates
+
+    saturation = self.saturation_fraction
+    params = pedestal_runtime_params
+    updates = {}
+    updates.update(blend_channel(
+        total_field="chi_face_ion",
+        component_fields=(
+            "chi_face_ion_bohm",
+            "chi_face_ion_gyrobohm",
+            "chi_face_ion_itg",
+            "chi_face_ion_tem",
+            "chi_face_ion_pereverzev",
+            "full_v_heat_face_ion_pereverzev",
+        ),
+        r=saturation.chi_i_saturation_fraction,
+        residual=params.chi_H_mode_min,
+        cap=params.chi_H_mode_max,
+    ))
+    updates.update(blend_channel(
+        total_field="chi_face_el",
+        component_fields=(
+            "chi_face_el_bohm",
+            "chi_face_el_gyrobohm",
+            "chi_face_el_itg",
+            "chi_face_el_tem",
+            "chi_face_el_etg",
+            "chi_face_el_pereverzev",
+            "full_v_heat_face_el_pereverzev",
+        ),
+        r=saturation.chi_e_saturation_fraction,
+        residual=params.chi_H_mode_min,
+        cap=params.chi_H_mode_max,
+    ))
+    updates.update(blend_channel(
+        total_field="d_face_el",
+        # The Pereverzev particle pair (d_face_el_pereverzev,
+        # v_face_el_pereverzev) are a diffusion/convection pair that must
+        # share one factor to cancel exactly; that shared factor is D_e's r,
+        # so the convection member is included here rather than under the
+        # pinch channel below.
+        component_fields=(
+            "d_face_el_itg",
+            "d_face_el_tem",
+            "d_face_el_pereverzev",
+            "v_face_el_pereverzev",
+        ),
+        r=saturation.D_e_saturation_fraction,
+        residual=params.D_e_H_mode_min,
+        cap=params.D_e_H_mode_max,
+    ))
+    updates.update(blend_channel(
+        total_field="v_face_el",
+        component_fields=("v_face_el_itg", "v_face_el_tem"),
+        # The turbulent pinch is suppressed to zero within the H-mode branch
+        # and has no saturation fraction of its own (raising D alone shifts
+        # the v/D ratio and controls the pedestal density height; see
+        # `saturation.base.SaturationFraction.D_e_saturation_fraction`);
+        # residual = cap = 0 makes the total collapse to
+        # (1 - g) * coeff_raw for any r.
+        r=0.0,
+        residual=0.0,
+        cap=0.0,
+    ))
+
+    return dataclasses.replace(core_transport, **updates)

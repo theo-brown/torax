@@ -54,21 +54,44 @@ class PedestalProfileForm(enum.StrEnum):
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class FormationRuntimeParams:
-  """Runtime params for pedestal formation models."""
+  """Runtime params for pedestal formation models.
+
+  Attributes:
+    sharpness: Sharpness of the sigmoid mapping the formation trigger
+      to the H-mode fraction g in [0, 1].
+    offset: Dimensionless offset of the formation window.
+  """
 
   sharpness: array_typing.FloatScalar
   offset: array_typing.FloatScalar
-  base_multiplier: array_typing.FloatScalar
 
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class SaturationRuntimeParams:
-  """Runtime params for pedestal saturation models."""
+  """Runtime params for pedestal saturation models.
 
-  steepness: array_typing.FloatScalar
+  The shared response maps each proximity-to-limit value x to a
+  saturation fraction r = sigmoid((x - offset) / response_width); the heat
+  channels
+  (chi_i, chi_e) use (offset, response_width) and the particle diffusivity
+  channel (D_e) uses (density_offset, density_response_width).
+
+  Attributes:
+    offset: Proximity value at which the heat channel saturation fraction
+      reaches 0.5 (r = 0.5).
+    response_width: Width of the heat channel saturation response in proximity
+      units. Smaller values regulate more tightly but stiffen the implicit
+      solve.
+    density_offset: As `offset`, for the particle diffusivity channel.
+    density_response_width: As `response_width`, for the particle diffusivity
+      channel.
+  """
+
   offset: array_typing.FloatScalar
-  base_multiplier: array_typing.FloatScalar
+  response_width: array_typing.FloatScalar
+  density_offset: array_typing.FloatScalar
+  density_response_width: array_typing.FloatScalar
 
 
 @jax.tree_util.register_dataclass
@@ -105,10 +128,10 @@ class RuntimeParams:
       per timestep before the solver loop and its output (T_ped, n_ped,
       rho_ped_top) is frozen during Newton iterations. When False, the pedestal
       model is re-evaluated every Newton iteration, coupling pedestal physics to
-      the implicit solve. Note: for ADAPTIVE_TRANSPORT mode, transport
-      multipliers are always re-evaluated implicitly with current profiles
-      regardless of this setting, since the saturation model feedback loop
-      requires implicit coupling.
+      the implicit solve. Note: for ADAPTIVE_TRANSPORT mode, the transport blend
+      is always re-evaluated implicitly with current profiles regardless of
+      this setting, since the saturation feedback loop requires implicit
+      coupling.
     pedestal_profile_form: Controls the shape of internal boundary conditions in
       the pedestal region. SET_AT_PED_TOP (default) pins pedestal values at a
       single grid cell nearest to rho_norm_ped_top. MTANH applies a smooth
@@ -117,10 +140,14 @@ class RuntimeParams:
       core_profiles.
     formation: Runtime params for the formation model.
     saturation: Runtime params for the saturation model.
-    chi_max: Maximum effective thermal diffusion coefficient [m^2/s].
-    D_e_max: Maximum effective particle diffusion coefficient [m^2/s].
-    V_e_max: Maximum effective particle pinch velocity [m/s].
-    V_e_min: Minimum effective particle pinch velocity [m/s].
+    chi_H_mode_max: Heat diffusivity of the H-mode transport branch at full
+      saturation fraction (r = 1) [m^2/s].
+    D_e_H_mode_max: Particle diffusivity of the H-mode transport branch at full
+      saturation fraction (r = 1) [m^2/s].
+    chi_H_mode_min: Heat diffusivity of the H-mode transport branch at zero
+      saturation fraction (r = 0) [m^2/s].
+    D_e_H_mode_min: Particle diffusivity of the H-mode transport branch at zero
+      saturation fraction (r = 0) [m^2/s].
     pedestal_top_smoothing_width: Width of the smoothing kernel at the pedestal
       top.
   """
@@ -139,8 +166,8 @@ class RuntimeParams:
   )
   formation: FormationRuntimeParams
   saturation: SaturationRuntimeParams
-  chi_max: array_typing.FloatScalar
-  D_e_max: array_typing.FloatScalar
-  V_e_max: array_typing.FloatScalar
-  V_e_min: array_typing.FloatScalar
+  chi_H_mode_max: array_typing.FloatScalar
+  D_e_H_mode_max: array_typing.FloatScalar
+  chi_H_mode_min: array_typing.FloatScalar
+  D_e_H_mode_min: array_typing.FloatScalar
   pedestal_top_smoothing_width: array_typing.FloatScalar

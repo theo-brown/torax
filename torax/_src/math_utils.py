@@ -317,6 +317,22 @@ def safe_divide(
   return num / (denom + eps)
 
 
+def bounded_sigmoid_response(
+    x: array_typing.FloatScalar,
+    offset: array_typing.FloatScalar,
+    sharpness: array_typing.FloatScalar,
+) -> array_typing.FloatScalar:
+  """Sigmoid gate bounded in (0, 1): sigmoid(sharpness * (x - offset)).
+
+  Shared by the pedestal formation model (gating the H-mode fraction on
+  proximity to the L-H power threshold) and the pedestal saturation models
+  (gating each channel's saturation fraction on proximity to its target),
+  so that every formation/saturation model produces the same bounded,
+  solver-friendly response shape.
+  """
+  return jax.nn.sigmoid(sharpness * (x - offset))
+
+
 def inverse_softplus(x: jax.Array) -> jax.Array:
   """Inverse of softplus function."""
   # Enforce minimum value to avoid log(0) or log(negative).
