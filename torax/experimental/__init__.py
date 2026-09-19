@@ -18,6 +18,7 @@
 from torax._src.config.build_runtime_params import RuntimeParamsProvider
 from torax._src.config.build_runtime_params import ValidUpdates
 from torax._src.edge.pydantic_model import ExtendedLengyelConfig
+from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from torax._src.orchestration.initial_state import get_initial_state_and_post_processed_outputs
 from torax._src.orchestration.jit_run_loop import run_loop_jit
 from torax._src.orchestration.run_simulation import make_step_fn
@@ -43,4 +44,5 @@ __all__ = [
     'get_initial_state_and_post_processed_outputs',
     'SimState',
     'ExtendedLengyelConfig',
+    'torax_state_to_imas_equilibrium',
 ]
