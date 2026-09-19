@@ -135,4 +135,6 @@ used for the initial state and for every step, since the geometry is part of
 the state carried through the jitted loops and its array types must not
 change. A complete implementation of this loop, including the convergence
 iteration, is available in the FreeGSNKE package
-(``freegsnke.torax_coupling``).
+(``freegsnke.torax_coupling``), both with static equilibria for prescribed
+coil currents and with the coil and passive-structure currents evolved on the
+vessel timescale inside each coupling interval.
