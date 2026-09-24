@@ -165,6 +165,10 @@ class NewtonRaphsonThetaMethod(BaseSolver):
       time. Consider setting to True if you are using GPU or have a case that
       takes many linesearch steps.
     max_linesearch_steps: The maximum number of linesearch steps.
+    jacobian_mode: 'dense' differentiates the residual with jax.jacfwd;
+      'structured' assembles the same Jacobian from a grid-independent number
+      of coloured forward-mode passes (see `structured_jacobian`), several
+      times faster for n_rho >= 50.
   """
 
   solver_type: Annotated[
@@ -182,6 +186,9 @@ class NewtonRaphsonThetaMethod(BaseSolver):
   max_linesearch_steps: Annotated[
       pydantic.PositiveInt, torax_pydantic.JAX_STATIC
   ] = 100
+  jacobian_mode: Annotated[
+      Literal['dense', 'structured'], torax_pydantic.JAX_STATIC
+  ] = 'dense'
 
   @functools.cached_property
   def build_runtime_params(
@@ -206,6 +213,7 @@ class NewtonRaphsonThetaMethod(BaseSolver):
         log_iterations=self.log_iterations,
         vmap_linesearch=self.vmap_linesearch,
         max_linesearch_steps=self.max_linesearch_steps,
+        jacobian_mode=self.jacobian_mode,
         fixed_point_atol=self.fixed_point_atol,
         fixed_point_rtol=self.fixed_point_rtol,
         fixed_point_termination_criterion=self.fixed_point_termination_criterion,

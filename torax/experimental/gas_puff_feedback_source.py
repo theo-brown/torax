@@ -69,15 +69,15 @@ class RuntimeParams(sources_runtime_params_lib.RuntimeParams):
   feedback_gain: array_typing.FloatScalar
 
 
-def calc_puff_feedback_source(
+def calc_puff_feedback_globals(
     runtime_params: runtime_params_lib.RuntimeParams,
     geo: geometry.Geometry,
     source_name: str,
     core_profiles: state.CoreProfiles,
     unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
     unused_conductivity: conductivity_base.Conductivity | None,
-) -> tuple[array_typing.FloatVectorCell, ...]:
-  """Calculates external source term for n from puffs with feedback."""
+) -> jax.Array:
+  """The averaged n_e that the feedback acts on."""
   source_params = runtime_params.sources[source_name]
   assert isinstance(source_params, RuntimeParams)
 
@@ -88,8 +88,24 @@ def calc_puff_feedback_source(
       current_avg_n_e = math_utils.volume_average(core_profiles.n_e.value, geo)  # pyrefly: ignore[bad-argument-type]
     case _ as unknown:
       raise ValueError(f'Unknown average type: {unknown}')
+  return jnp.atleast_1d(current_avg_n_e)
 
-  error = source_params.target_average_n_e - current_avg_n_e
+
+def calc_puff_feedback_source_from_globals(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    source_name: str,
+    core_profiles: state.CoreProfiles,
+    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
+    unused_conductivity: conductivity_base.Conductivity | None,
+    source_globals: jax.Array,
+) -> tuple[array_typing.FloatVectorCell, ...]:
+  """External n source from puffs, given the averaged n_e."""
+  del core_profiles  # Only through source_globals.
+  source_params = runtime_params.sources[source_name]
+  assert isinstance(source_params, RuntimeParams)
+
+  error = source_params.target_average_n_e - source_globals[0]
 
   S_feedback = source_params.feedback_gain * error
   S_total = source_params.S_feedforward + S_feedback
@@ -103,6 +119,13 @@ def calc_puff_feedback_source(
           geo=geo,
       ),
   )
+
+
+# Calculates external source term for n from puffs with feedback.
+calc_puff_feedback_source = source.SplitModelFunction(
+    globals_func=calc_puff_feedback_globals,
+    profile_func=calc_puff_feedback_source_from_globals,
+)
 
 
 class GasPuffFeedbackSourceConfig(base.SourceModelBase):

@@ -16,6 +16,7 @@
 
 import abc
 
+import jax
 from torax._src import state
 from torax._src import static_dataclass
 from torax._src.config import runtime_params as runtime_params_lib
@@ -32,5 +33,27 @@ class InternalBoundaryConditionModel(static_dataclass.StaticDataclass, abc.ABC):
       runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
+      references: jax.Array | None = None,
   ) -> internal_boundary_conditions.InternalBoundaryConditions:
-    """Returns active InternalBoundaryConditions container."""
+    """Returns active InternalBoundaryConditions container.
+
+    Args:
+      runtime_params: Runtime parameters.
+      geo: Geometry of the torus.
+      core_profiles: Core plasma profiles.
+      references: The `references` to use, if not those of core_profiles.
+    """
+
+  def references(
+      self,
+      runtime_params: runtime_params_lib.RuntimeParams,
+      geo: geometry.Geometry,
+      core_profiles: state.CoreProfiles,
+  ) -> jax.Array | None:
+    """The values of the state that the whole profile depends on, if any.
+
+    The structured Jacobian of the Newton-Raphson solver treats them as global
+    quantities of the state.
+    """
+    del runtime_params, geo, core_profiles
+    return None

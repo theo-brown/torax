@@ -14,6 +14,8 @@
 
 """Functions for building source profiles in TORAX."""
 
+from collections.abc import Mapping
+
 import jax
 from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
@@ -21,6 +23,7 @@ from torax._src.geometry import geometry
 from torax._src.neoclassical import neoclassical_models as neoclassical_models_lib
 from torax._src.neoclassical.bootstrap_current import base as bootstrap_current_base
 from torax._src.neoclassical.conductivity import base as conductivity_base
+from torax._src.sources import runtime_params as sources_runtime_params_lib
 from torax._src.sources import source as source_lib
 from torax._src.sources import source_models as source_models_lib
 from torax._src.sources import source_profiles
@@ -47,6 +50,7 @@ def build_source_profiles(
     explicit: bool,
     explicit_source_profiles: source_profiles.SourceProfiles | None = None,
     conductivity: conductivity_base.Conductivity | None = None,
+    source_globals: Mapping[str, jax.Array] | None = None,
 ) -> source_profiles.SourceProfiles:
   """Builds explicit profiles or the union of explicit and implicit profiles.
 
@@ -71,6 +75,8 @@ def build_source_profiles(
       and the implicit profiles computed here.
     conductivity: Conductivity calculated for this time step. Not provided when
       calculating the explicit profiles.
+    source_globals: Globals of `SplitModelFunction` sources by source name (see
+      `build_source_profiles_and_globals`) to evaluate their profiles from.
 
   Returns:
     SourceProfiles caclulated from the source models. If explicit is True, then
@@ -78,6 +84,58 @@ def build_source_profiles(
     union of the explicit profiles in explicit_source_profiles and the implicit
     profiles computed here will be returned.
   """
+  return _build_source_profiles(
+      runtime_params,
+      geo,
+      core_profiles,
+      source_models,
+      neoclassical_models,
+      explicit,
+      explicit_source_profiles,
+      conductivity,
+      source_globals,
+  )[0]
+
+
+def build_source_profiles_and_globals(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+    source_models: source_models_lib.SourceModels,
+    neoclassical_models: neoclassical_models_lib.NeoclassicalModels,
+    explicit_source_profiles: source_profiles.SourceProfiles,
+    conductivity: conductivity_base.Conductivity,
+) -> tuple[source_profiles.SourceProfiles, dict[str, jax.Array]]:
+  """`build_source_profiles(explicit=False)` and the globals of its sources.
+
+  The globals are those of the implicit `SplitModelFunction` sources, keyed by
+  source name.
+  """
+  return _build_source_profiles(
+      runtime_params,
+      geo,
+      core_profiles,
+      source_models,
+      neoclassical_models,
+      False,
+      explicit_source_profiles,
+      conductivity,
+      None,
+  )
+
+
+def _build_source_profiles(
+    runtime_params,
+    geo,
+    core_profiles,
+    source_models,
+    neoclassical_models,
+    explicit,
+    explicit_source_profiles,
+    conductivity,
+    source_globals,
+) -> tuple[source_profiles.SourceProfiles, dict[str, jax.Array]]:
+  """Returns the source profiles and the global quantities of the sources."""
   if not explicit and explicit_source_profiles is None:
     raise ValueError(
         '`explicit_source_profiles` must be provided if explicit is False.'
@@ -108,6 +166,7 @@ def build_source_profiles(
       if explicit_source_profiles
       else {},
   )
+  globals_out = {}
   build_standard_source_profiles(
       calculated_source_profiles=profiles,
       runtime_params=runtime_params,
@@ -116,8 +175,10 @@ def build_source_profiles(
       source_models=source_models,
       explicit=explicit,
       conductivity=conductivity,
+      source_globals=source_globals,
+      globals_out=globals_out,
   )
-  return profiles
+  return profiles, globals_out
 
 
 def build_standard_source_profiles(
@@ -131,18 +192,43 @@ def build_standard_source_profiles(
     conductivity: conductivity_base.Conductivity | None = None,
     calculate_anyway: bool = False,
     psi_only: bool = False,
+    source_globals: Mapping[str, jax.Array] | None = None,
+    globals_out: dict[str, jax.Array] | None = None,
 ):
-  """Updates calculated_source_profiles with standard source profiles."""
+  """Updates calculated_source_profiles with standard source profiles.
+
+  `source_globals` are globals to evaluate sources from (see
+  `build_source_profiles`); `globals_out` collects those of the calculated
+  model-based `SplitModelFunction` sources by source name.
+  """
 
   def calculate_source(source_name: str, source: source_lib.Source):
     source_params = runtime_params.sources[source_name]
     if (explicit == source_params.is_explicit) | calculate_anyway:
+      if (
+          globals_out is not None
+          and isinstance(source.model_func, source_lib.SplitModelFunction)
+          and source_params.mode == sources_runtime_params_lib.Mode.MODEL_BASED
+      ):
+        globals_out[source_name] = source.model_func.globals_func(
+            runtime_params,
+            geo,
+            source_name,
+            core_profiles,
+            calculated_source_profiles,
+            conductivity,
+        )
       value = source.get_value(
           runtime_params,
           geo,
           core_profiles,
           calculated_source_profiles,
           conductivity,
+          source_globals=(
+              None
+              if source_globals is None
+              else source_globals.get(source_name)
+          ),
       )
       _update_standard_source_profiles(
           calculated_source_profiles,

@@ -1,0 +1,306 @@
+=== jac_structure 50 off ===
+N=200 channels=('T_i', 'T_e', 'psi', 'n_e') n_rho=50 t=0.0850480109739369 dt=2.0 smoothing=off
+picard identity check (rel max err): 5.836223586322932e-14
+initial residual mean-abs norm: 7.529200603634891
+TORAX newton: iterations 3 residual 6.748088255342155 error 1
+
+[J at x0 (linear initial guess)] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=1.91e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_i,T_e) blockmax=8.17e+03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_i,psi) blockmax=5.11e+04 bw(>1e-2)=  2 bw(>1e-3)=  2 bw(>1e-6)=  2  offsets0..11: 4e-01 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_i,n_e) blockmax=2.12e+05 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,T_i) blockmax=1.18e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 6e-01 5e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,T_e) blockmax=2.24e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,psi) blockmax=5.92e+04 bw(>1e-2)=  2 bw(>1e-3)=  2 bw(>1e-6)=  2  offsets0..11: 4e-01 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,n_e) blockmax=6.39e+05 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_i) blockmax=4.24e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 8e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=1.28e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 4e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=3.66e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 3e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=1.29e+01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 2e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=2.20e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_e) blockmax=1.71e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 6e-01 2e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,psi) blockmax=4.68e+02 bw(>1e-2)=  2 bw(>1e-3)=  2 bw(>1e-6)=  2  offsets0..11: 6e-01 1e+00 6e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,n_e) blockmax=1.11e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  fraction of ||J||_F within cell-band k: {0: 0.806202, 1: 0.998061, 2: 1.0, 3: 1.0, 4: 1.0, 6: 1.0, 8: 1.0, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 2208 of 40000 (0.055); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 14
+  greedy column-coloring colours for pattern |J|>1e-06*max: 14
+  greedy column-coloring colours for pattern |J|>0.001*max: 14
+
+[J at converged x*] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=3.27e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_i,T_e) blockmax=9.51e+03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_i,psi) blockmax=1.10e+05 bw(>1e-2)=  2 bw(>1e-3)=  2 bw(>1e-6)=  2  offsets0..11: 5e-01 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_i,n_e) blockmax=3.61e+05 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,T_i) blockmax=1.32e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 7e-01 7e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,T_e) blockmax=3.01e+04 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,psi) blockmax=1.16e+05 bw(>1e-2)=  2 bw(>1e-3)=  2 bw(>1e-6)=  2  offsets0..11: 7e-01 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (T_e,n_e) blockmax=7.32e+05 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_i) blockmax=4.32e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 8e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=1.15e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 4e-01 1e+00 5e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=3.77e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=1.23e+01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=1.39e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_e) blockmax=2.48e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,psi) blockmax=7.63e+02 bw(>1e-2)=  2 bw(>1e-3)=  2 bw(>1e-6)=  2  offsets0..11: 5e-01 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,n_e) blockmax=7.88e+03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 5e-01 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  fraction of ||J||_F within cell-band k: {0: 0.803445, 1: 0.997248, 2: 1.0, 3: 1.0, 4: 1.0, 6: 1.0, 8: 1.0, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 2214 of 40000 (0.055); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 14
+  greedy column-coloring colours for pattern |J|>1e-06*max: 14
+  greedy column-coloring colours for pattern |J|>0.001*max: 14
+
+[x0: J vs Picard P] ||J-P||/||J||=0.999 cond(J)=4.92e+07 cond(P)=6.44e+04 rho(I-P^-1J)=52.515 eig(P^-1J) real in [0.46839614013090464, 53.51452535313656] |imag|max=6.953
+  GMRES iters (M=P^-1): {'0.01': (63, 0), '0.0001': (53, 0), '1e-06': (61, 0), '1e-08': (65, 0)}   Jacobi-scaled GMRES to 1e-6: (453, 0)
+
+[x*: J vs Picard P] ||J-P||/||J||=1.000 cond(J)=1.71e+08 cond(P)=3.11e+04 rho(I-P^-1J)=23.527 eig(P^-1J) real in [0.3463165014505706, 24.52695052041643] |imag|max=4.863
+  GMRES iters (M=P^-1): {'0.01': (46, 0), '0.0001': (65, 0), '1e-06': (75, 0), '1e-08': (115, 0)}   Jacobi-scaled GMRES to 1e-6: (195, 0)
+
+chord convergence factor rho(I - J(x0)^-1 J(x*)) = 46.74645551947202  with J(x_old): 68.55626767634669
+band-truncated J(x*) as Newton matrix: rho(I - Jk^-1 J) = {'rho_band1': 1.9316, 'rho_band2': 0.0, 'rho_band3': 0.0, 'rho_band4': 0.0, 'rho_band6': 0.0, 'rho_band8': 0.0, 'rho_band12': 0.0, 'rho_band16': 0.0, 'rho_band24': 0.0}
+DONE
+=== jac_structure 100 on ===
+N=400 channels=('T_i', 'T_e', 'psi', 'n_e') n_rho=100 t=6.0 dt=2.0 smoothing=on
+picard identity check (rel max err): 9.646730290789083e-13
+initial residual mean-abs norm: 0.6998212392482932
+TORAX newton: iterations 5 residual 2.3764715745182254e-06 error 0
+
+[J at x0 (linear initial guess)] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=2.49e+04 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e+00 5e-01 5e-02 2e-02 1e-02 5e-03 3e-02 6e-03 6e-03 6e-03 6e-03 6e-03
+  (T_i,T_e) blockmax=3.80e+02 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 2e-01 3e-01 4e-01 6e-01 3e-01 1e-01 1e+00 9e-02 8e-02 6e-02 5e-02 9e-02
+  (T_i,psi) blockmax=1.63e+04 bw(>1e-2)= 19 bw(>1e-3)= 19 bw(>1e-6)= 19  offsets0..11: 5e-02 7e-02 9e-02 1e-01 1e-01 1e-01 1e-01 1e-01 2e-01 1e-01 6e-01 1e+00
+  (T_i,n_e) blockmax=2.49e+04 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 4e-02 1e+00 5e-01 5e-01 2e-01 9e-02 8e-02 9e-02 1e-01 1e-01 9e-02 6e-01
+  (T_e,T_i) blockmax=4.23e+03 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 9e-02 1e+00 2e-01 2e-01 1e-01 7e-02 4e-01 5e-02 5e-02 4e-02 6e-02 7e-02
+  (T_e,T_e) blockmax=2.08e+04 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e+00 5e-01 8e-03 2e-02 2e-02 8e-03 5e-02 4e-03 3e-03 4e-03 2e-02 6e-03
+  (T_e,psi) blockmax=5.30e+04 bw(>1e-2)= 19 bw(>1e-3)= 19 bw(>1e-6)= 19  offsets0..11: 7e-02 5e-02 4e-02 5e-02 5e-02 5e-02 9e-02 5e-02 4e-02 4e-01 5e-01 1e+00
+  (T_e,n_e) blockmax=1.63e+05 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 8e-02 1e+00 7e-02 7e-02 7e-02 7e-02 5e-02 8e-02 5e-02 7e-02 2e-01 2e-01
+  (psi,T_i) blockmax=1.52e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 2e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=2.76e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=2.61e+03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=1.20e+01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 3e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=2.42e+01 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 2e-01 1e+00 2e-01 2e-01 2e-01 2e-01 3e-01 2e-01 2e-01 2e-01 2e-01 3e-01
+  (n_e,T_e) blockmax=2.87e+00 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 5e-01 5e-01 4e-01 6e-01 4e-01 4e-01 1e+00 4e-01 3e-01 3e-01 3e-01 3e-01
+  (n_e,psi) blockmax=3.17e+02 bw(>1e-2)= 19 bw(>1e-3)= 19 bw(>1e-6)= 19  offsets0..11: 4e-02 5e-02 5e-02 5e-02 7e-02 7e-02 8e-02 8e-02 1e-01 9e-02 4e-01 1e+00
+  (n_e,n_e) blockmax=2.04e+03 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e+00 6e-01 5e-02 9e-02 4e-02 5e-02 6e-02 1e-01 9e-02 5e-02 5e-02 1e-01
+  fraction of ||J||_F within cell-band k: {0: 0.461783, 1: 0.723285, 2: 0.724922, 3: 0.726816, 4: 0.727934, 6: 0.730562, 8: 0.733087, 12: 0.783073, 16: 0.946378, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 22304 of 160000 (0.139); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 134
+  greedy column-coloring colours for pattern |J|>1e-06*max: 134
+  greedy column-coloring colours for pattern |J|>0.001*max: 69
+
+[J at converged x*] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=2.53e+04 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e+00 5e-01 7e-02 3e-02 2e-02 7e-03 3e-02 8e-03 8e-03 8e-03 8e-03 7e-03
+  (T_i,T_e) blockmax=3.44e+02 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 2e-01 7e-01 4e-01 6e-01 4e-01 2e-01 1e+00 9e-02 8e-02 6e-02 6e-02 8e-02
+  (T_i,psi) blockmax=1.46e+04 bw(>1e-2)= 19 bw(>1e-3)= 19 bw(>1e-6)= 19  offsets0..11: 6e-02 8e-02 9e-02 1e-01 1e-01 1e-01 1e-01 1e-01 2e-01 2e-01 5e-01 1e+00
+  (T_i,n_e) blockmax=3.52e+04 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 3e-02 1e+00 4e-01 4e-01 2e-01 7e-02 5e-02 6e-02 6e-02 7e-02 6e-02 4e-01
+  (T_e,T_i) blockmax=4.16e+03 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 9e-02 1e+00 7e-02 2e-01 2e-01 1e-01 5e-01 5e-02 5e-02 4e-02 6e-02 8e-02
+  (T_e,T_e) blockmax=2.13e+04 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e+00 5e-01 2e-03 2e-02 2e-02 1e-02 4e-02 4e-03 3e-03 4e-03 2e-02 5e-03
+  (T_e,psi) blockmax=4.85e+04 bw(>1e-2)= 19 bw(>1e-3)= 19 bw(>1e-6)= 19  offsets0..11: 8e-02 5e-02 4e-02 5e-02 5e-02 5e-02 9e-02 5e-02 4e-02 5e-01 5e-01 1e+00
+  (T_e,n_e) blockmax=1.76e+05 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 8e-02 1e+00 7e-02 7e-02 7e-02 6e-02 6e-02 8e-02 5e-02 6e-02 2e-01 2e-01
+  (psi,T_i) blockmax=1.52e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 2e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=2.77e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=2.60e+03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=1.20e+01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 3e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=3.75e+01 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e-01 1e+00 4e-01 1e-01 1e-01 1e-01 4e-01 1e-01 9e-02 1e-01 1e-01 2e-01
+  (n_e,T_e) blockmax=3.38e+00 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 3e-01 7e-01 5e-01 6e-01 4e-01 3e-01 1e+00 2e-01 2e-01 2e-01 2e-01 2e-01
+  (n_e,psi) blockmax=2.80e+02 bw(>1e-2)= 19 bw(>1e-3)= 19 bw(>1e-6)= 19  offsets0..11: 4e-02 6e-02 5e-02 5e-02 8e-02 7e-02 8e-02 8e-02 1e-01 9e-02 4e-01 1e+00
+  (n_e,n_e) blockmax=1.71e+03 bw(>1e-2)= 18 bw(>1e-3)= 18 bw(>1e-6)= 18  offsets0..11: 1e+00 7e-01 7e-02 1e-01 7e-02 4e-02 1e-01 1e-01 4e-02 5e-02 5e-02 1e-01
+  fraction of ||J||_F within cell-band k: {0: 0.454154, 1: 0.730861, 2: 0.733268, 3: 0.735209, 4: 0.736455, 6: 0.738751, 8: 0.741303, 12: 0.779905, 16: 0.943349, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 22522 of 160000 (0.141); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 134
+  greedy column-coloring colours for pattern |J|>1e-06*max: 134
+  greedy column-coloring colours for pattern |J|>0.001*max: 66
+
+[x0: J vs Picard P] ||J-P||/||J||=0.827 cond(J)=2.47e+08 cond(P)=3.99e+05 rho(I-P^-1J)=15.995 eig(P^-1J) real in [0.34701023043748275, 16.99466117090238] |imag|max=3.169
+  GMRES iters (M=P^-1): {'0.01': (17, 0), '0.0001': (28, 0), '1e-06': (34, 0), '1e-08': (40, 0)}   Jacobi-scaled GMRES to 1e-6: (345, 0)
+
+[x*: J vs Picard P] ||J-P||/||J||=0.833 cond(J)=2.45e+08 cond(P)=4.06e+05 rho(I-P^-1J)=14.572 eig(P^-1J) real in [0.5393565699965541, 15.572115341907542] |imag|max=2.682
+  GMRES iters (M=P^-1): {'0.01': (19, 0), '0.0001': (27, 0), '1e-06': (31, 0), '1e-08': (37, 0)}   Jacobi-scaled GMRES to 1e-6: (251, 0)
+
+chord convergence factor rho(I - J(x0)^-1 J(x*)) = 2.938364939538192  with J(x_old): 6.0537302881537025
+band-truncated J(x*) as Newton matrix: rho(I - Jk^-1 J) = {'rho_band1': 2.8368, 'rho_band2': 1.7496, 'rho_band3': 1.8932, 'rho_band4': 1.5696, 'rho_band6': 1.203, 'rho_band8': 0.9723, 'rho_band12': 0.8927, 'rho_band16': 0.7996, 'rho_band24': 0.0}
+DONE
+=== jac_structure 50 on 0.5 ===
+N=200 channels=('T_i', 'T_e', 'psi', 'n_e') n_rho=50 t=6.0 dt=0.5 smoothing=on
+picard identity check (rel max err): 4.290211652710959e-13
+initial residual mean-abs norm: 0.11202658288237788
+TORAX newton: iterations 3 residual 2.846891087864021e-06 error 0
+
+[J at x0 (linear initial guess)] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=1.49e+03 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 1e-01 2e-02 4e-02 2e-02 4e-02 2e-02 1e-02 2e-02 3e-02 9e-03
+  (T_i,T_e) blockmax=3.74e+01 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 2e-01 9e-01 3e-01 1e+00 1e-01 1e-01 9e-02 2e-01 2e-01 2e-01 3e-03
+  (T_i,psi) blockmax=2.82e+02 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 3e-01 3e-01 6e-01 3e-01 8e-01 1e+00 6e-01 9e-01 7e-01 3e-01 3e-01 2e-01
+  (T_i,n_e) blockmax=2.16e+03 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 8e-01 1e+00 1e-01 1e-01 1e-01 1e-01 1e-01 1e-01 3e-01 4e-01 5e-02
+  (T_e,T_i) blockmax=5.05e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 4e-01 1e-01 3e-01 7e-02 7e-02 9e-02 8e-02 4e-02 3e-02 1e-02
+  (T_e,T_e) blockmax=1.24e+03 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 6e-02 4e-02 1e-01 5e-02 2e-02 2e-02 9e-03 2e-02 2e-02 2e-02
+  (T_e,psi) blockmax=2.96e+03 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 6e-02 1e-01 1e-01 1e-01 8e-01 1e-01 1e+00 2e-01 5e-01 4e-02 4e-02 3e-02
+  (T_e,n_e) blockmax=2.00e+04 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 1e-01 1e-01 1e-01 4e-01 2e-01 4e-02 2e-01 1e-01 1e-01 1e-01
+  (psi,T_i) blockmax=1.44e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 7e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=3.82e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=1.10e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=2.42e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=2.13e+00 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 4e-01 1e+00 7e-01 7e-01 4e-01 3e-01 8e-01 5e-01 3e-01 6e-01 2e-01 1e-01
+  (n_e,T_e) blockmax=3.53e-01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 5e-01 6e-01 8e-01 5e-01 1e+00 4e-01 3e-01 2e-01 2e-01 4e-01 2e-01 3e-02
+  (n_e,psi) blockmax=6.35e+00 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 4e-01 4e-01 3e-01 3e-01 3e-01 1e+00 7e-01 9e-01 7e-01 2e-01 2e-01 1e-01
+  (n_e,n_e) blockmax=1.17e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 8e-01 3e-01 1e-01 8e-02 8e-02 1e-01 7e-02 2e-01 2e-01 5e-02 4e-02
+  fraction of ||J||_F within cell-band k: {0: 0.299656, 1: 0.830803, 2: 0.844745, 3: 0.854544, 4: 0.867246, 6: 0.924053, 8: 0.942534, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 7217 of 40000 (0.180); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 86
+  greedy column-coloring colours for pattern |J|>1e-06*max: 86
+  greedy column-coloring colours for pattern |J|>0.001*max: 46
+
+[J at converged x*] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=1.49e+03 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 2e-01 3e-02 4e-02 2e-02 4e-02 2e-02 2e-02 2e-02 3e-02 9e-03
+  (T_i,T_e) blockmax=3.78e+01 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 4e-01 1e+00 4e-01 9e-01 1e-01 1e-01 1e-01 2e-01 2e-01 2e-01 4e-03
+  (T_i,psi) blockmax=2.79e+02 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 4e-01 3e-01 7e-01 3e-01 7e-01 1e+00 6e-01 9e-01 7e-01 3e-01 3e-01 2e-01
+  (T_i,n_e) blockmax=2.97e+03 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 7e-02 1e+00 1e+00 1e-01 1e-01 2e-01 1e-01 1e-01 1e-01 2e-01 3e-01 4e-02
+  (T_e,T_i) blockmax=5.66e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 4e-01 2e-01 3e-01 7e-02 6e-02 7e-02 8e-02 4e-02 3e-02 2e-02
+  (T_e,T_e) blockmax=1.26e+03 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 5e-02 5e-02 9e-02 5e-02 1e-02 2e-02 9e-03 1e-02 2e-02 2e-02
+  (T_e,psi) blockmax=3.10e+03 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 6e-02 9e-02 1e-01 1e-01 7e-01 1e-01 1e+00 1e-01 5e-01 4e-02 4e-02 3e-02
+  (T_e,n_e) blockmax=2.08e+04 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 1e-01 1e-01 1e-01 3e-01 2e-01 5e-02 2e-01 2e-01 1e-01 1e-01
+  (psi,T_i) blockmax=1.44e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 7e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=3.83e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=1.10e+02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=2.42e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=2.89e+00 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 4e-01 1e+00 4e-01 4e-01 4e-01 4e-01 6e-01 3e-01 2e-01 4e-01 2e-01 8e-02
+  (n_e,T_e) blockmax=3.59e-01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 5e-01 7e-01 1e+00 6e-01 9e-01 5e-01 4e-01 3e-01 2e-01 4e-01 2e-01 2e-02
+  (n_e,psi) blockmax=6.68e+00 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 5e-01 5e-01 4e-01 3e-01 3e-01 1e+00 8e-01 9e-01 7e-01 2e-01 2e-01 1e-01
+  (n_e,n_e) blockmax=9.03e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 1e+00 5e-01 2e-01 2e-01 2e-01 2e-01 1e-01 2e-01 3e-01 9e-02 7e-02
+  fraction of ||J||_F within cell-band k: {0: 0.29139, 1: 0.830122, 2: 0.846153, 3: 0.854547, 4: 0.868162, 6: 0.923536, 8: 0.942275, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 7213 of 40000 (0.180); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 86
+  greedy column-coloring colours for pattern |J|>1e-06*max: 86
+  greedy column-coloring colours for pattern |J|>0.001*max: 45
+
+[x0: J vs Picard P] ||J-P||/||J||=0.945 cond(J)=8.27e+06 cond(P)=1.21e+04 rho(I-P^-1J)=6.090 eig(P^-1J) real in [0.6881203821846862, 6.8781736597622345] |imag|max=1.819
+  GMRES iters (M=P^-1): {'0.01': (22, 0), '0.0001': (22, 0), '1e-06': (26, 0), '1e-08': (29, 0)}   Jacobi-scaled GMRES to 1e-6: (105, 0)
+
+[x*: J vs Picard P] ||J-P||/||J||=0.948 cond(J)=7.84e+06 cond(P)=1.21e+04 rho(I-P^-1J)=10.656 eig(P^-1J) real in [0.7249504524653081, 11.655910810555149] |imag|max=1.981
+  GMRES iters (M=P^-1): {'0.01': (17, 0), '0.0001': (23, 0), '1e-06': (28, 0), '1e-08': (30, 0)}   Jacobi-scaled GMRES to 1e-6: (108, 0)
+
+chord convergence factor rho(I - J(x0)^-1 J(x*)) = 0.3695974433544176  with J(x_old): 0.45955571939546547
+band-truncated J(x*) as Newton matrix: rho(I - Jk^-1 J) = {'rho_band1': 2.155, 'rho_band2': 1.3521, 'rho_band3': 1.1005, 'rho_band4': 1.0056, 'rho_band6': 0.885, 'rho_band8': 0.8302, 'rho_band12': 0.0, 'rho_band16': 0.0, 'rho_band24': 0.0}
+DONE
+=== jac_structure 50 on 0.1 ===
+N=200 channels=('T_i', 'T_e', 'psi', 'n_e') n_rho=50 t=6.0 dt=0.1 smoothing=on
+picard identity check (rel max err): 3.9525045628210206e-12
+initial residual mean-abs norm: 0.02110061725567106
+TORAX newton: iterations 3 residual 8.851388204637444e-07 error 0
+
+[J at x0 (linear initial guess)] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=3.00e+02 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 1e-01 2e-02 5e-02 2e-02 4e-02 1e-02 1e-02 2e-02 3e-02 1e-02
+  (T_i,T_e) blockmax=7.41e+00 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 2e-01 9e-01 3e-01 1e+00 2e-01 3e-01 9e-02 2e-01 2e-01 2e-01 3e-03
+  (T_i,psi) blockmax=2.38e+02 bw(>1e-2)= 11 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 2e-01 2e-01 3e-01 3e-01 1e+00 1e+00 6e-01 9e-01 2e-01 3e-01 2e-01 5e-02
+  (T_i,n_e) blockmax=6.93e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 9e-02 6e-01 7e-01 2e-01 3e-01 1e+00 1e+00 2e-01 3e-01 3e-01 2e-01 3e-02
+  (T_e,T_i) blockmax=1.03e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 4e-01 1e-01 4e-01 7e-02 6e-02 1e-01 9e-02 4e-02 3e-02 2e-02
+  (T_e,T_e) blockmax=2.42e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 6e-02 4e-02 1e-01 8e-02 3e-02 3e-02 1e-02 1e-02 2e-02 2e-02
+  (T_e,psi) blockmax=1.29e+03 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 7e-02 9e-02 1e-01 1e-01 9e-01 6e-01 1e+00 6e-01 2e-01 5e-02 6e-02 1e-02
+  (T_e,n_e) blockmax=4.25e+03 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 9e-02 1e+00 1e-01 1e-01 1e-01 9e-01 7e-01 5e-02 2e-01 2e-01 1e-01 1e-01
+  (psi,T_i) blockmax=2.87e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 7e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=7.63e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=2.31e+01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=4.89e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=3.93e-01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 6e-01 1e+00 5e-01 5e-01 4e-01 4e-01 6e-01 5e-01 3e-01 7e-01 2e-01 1e-01
+  (n_e,T_e) blockmax=6.68e-02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 5e-01 7e-01 8e-01 6e-01 1e+00 5e-01 4e-01 3e-01 2e-01 4e-01 3e-01 3e-02
+  (n_e,psi) blockmax=4.06e+00 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 2e-01 2e-01 2e-01 1e-01 8e-01 1e+00 5e-01 9e-01 2e-01 2e-01 1e-01 4e-02
+  (n_e,n_e) blockmax=2.02e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 9e-01 4e-01 8e-02 9e-02 5e-01 3e-01 6e-02 2e-01 2e-01 5e-02 5e-02
+  fraction of ||J||_F within cell-band k: {0: 0.25248, 1: 0.645199, 2: 0.658572, 3: 0.669435, 4: 0.69458, 6: 0.950309, 8: 0.967485, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 7217 of 40000 (0.180); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 86
+  greedy column-coloring colours for pattern |J|>1e-06*max: 86
+  greedy column-coloring colours for pattern |J|>0.001*max: 46
+
+[J at converged x*] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=2.92e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 1e-01 2e-02 5e-02 2e-02 4e-02 2e-02 1e-02 3e-02 3e-02 1e-02
+  (T_i,T_e) blockmax=7.52e+00 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 2e-01 1e+00 2e-01 1e+00 2e-01 3e-01 1e-01 2e-01 2e-01 2e-01 4e-03
+  (T_i,psi) blockmax=2.41e+02 bw(>1e-2)= 11 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 2e-01 2e-01 2e-01 3e-01 1e+00 1e+00 6e-01 9e-01 2e-01 3e-01 2e-01 6e-02
+  (T_i,n_e) blockmax=7.13e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 9e-02 7e-01 7e-01 2e-01 3e-01 1e+00 1e+00 2e-01 3e-01 3e-01 3e-01 3e-02
+  (T_e,T_i) blockmax=1.03e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 4e-01 1e-01 4e-01 7e-02 6e-02 1e-01 9e-02 5e-02 3e-02 2e-02
+  (T_e,T_e) blockmax=2.49e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 6e-02 3e-02 1e-01 7e-02 3e-02 3e-02 1e-02 1e-02 2e-02 2e-02
+  (T_e,psi) blockmax=1.31e+03 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 7e-02 9e-02 1e-01 1e-01 9e-01 6e-01 1e+00 6e-01 2e-01 5e-02 6e-02 1e-02
+  (T_e,n_e) blockmax=4.31e+03 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 9e-02 1e+00 1e-01 1e-01 8e-02 9e-01 8e-01 5e-02 2e-01 2e-01 1e-01 1e-01
+  (psi,T_i) blockmax=2.87e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 7e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=7.63e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=2.31e+01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 1e+00 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=4.89e-01 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=1.07e+00 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 4e-01 1e+00 8e-01 3e-01 2e-01 2e-01 2e-01 2e-01 1e-01 2e-01 1e-01 4e-02
+  (n_e,T_e) blockmax=7.69e-02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 4e-01 1e+00 1e+00 7e-01 4e-01 4e-01 4e-01 2e-01 2e-01 3e-01 2e-01 2e-02
+  (n_e,psi) blockmax=4.13e+00 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 4e-01 3e-01 2e-01 2e-01 8e-01 1e+00 5e-01 9e-01 2e-01 2e-01 1e-01 6e-02
+  (n_e,n_e) blockmax=1.89e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 9e-01 4e-01 3e-01 2e-01 5e-01 3e-01 9e-02 2e-01 3e-01 7e-02 6e-02
+  fraction of ||J||_F within cell-band k: {0: 0.248441, 1: 0.641816, 2: 0.656023, 3: 0.667893, 4: 0.69259, 6: 0.948632, 8: 0.966242, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 7213 of 40000 (0.180); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 86
+  greedy column-coloring colours for pattern |J|>1e-06*max: 86
+  greedy column-coloring colours for pattern |J|>0.001*max: 41
+
+[x0: J vs Picard P] ||J-P||/||J||=0.972 cond(J)=1.65e+06 cond(P)=1.52e+03 rho(I-P^-1J)=2.712 eig(P^-1J) real in [0.8474262699731255, 3.229822331910503] |imag|max=1.713
+  GMRES iters (M=P^-1): {'0.01': (15, 0), '0.0001': (19, 0), '1e-06': (24, 0), '1e-08': (27, 0)}   Jacobi-scaled GMRES to 1e-6: (104, 0)
+
+[x*: J vs Picard P] ||J-P||/||J||=0.973 cond(J)=2.02e+06 cond(P)=1.47e+03 rho(I-P^-1J)=3.972 eig(P^-1J) real in [0.7629852641586964, 4.972319344167931] |imag|max=1.586
+  GMRES iters (M=P^-1): {'0.01': (16, 0), '0.0001': (22, 0), '1e-06': (26, 0), '1e-08': (29, 0)}   Jacobi-scaled GMRES to 1e-6: (86, 0)
+
+chord convergence factor rho(I - J(x0)^-1 J(x*)) = 0.5893357725494395  with J(x_old): 0.5791939812104354
+band-truncated J(x*) as Newton matrix: rho(I - Jk^-1 J) = {'rho_band1': 1.2548, 'rho_band2': 1.0069, 'rho_band3': 0.8327, 'rho_band4': 0.7991, 'rho_band6': 0.7211, 'rho_band8': 0.7683, 'rho_band12': 0.0, 'rho_band16': 0.0, 'rho_band24': 0.0}
+DONE
+=== jac_structure 50 on 0.02 ===
+N=200 channels=('T_i', 'T_e', 'psi', 'n_e') n_rho=50 t=6.0 dt=0.02 smoothing=on
+picard identity check (rel max err): 1.3458319447746838e-12
+initial residual mean-abs norm: 0.007779241458013567
+TORAX newton: iterations 4 residual 0.00047264845339462126 error 2
+
+[J at x0 (linear initial guess)] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=6.69e+01 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 6e-02 5e-02 1e-02 1e-02 3e-02 1e-02 1e-02 2e-02 2e-02 9e-03
+  (T_i,T_e) blockmax=1.43e+00 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 2e-01 1e+00 1e+00 1e-01 3e-01 3e-01 1e-01 2e-01 2e-01 2e-01 4e-03
+  (T_i,psi) blockmax=4.89e+01 bw(>1e-2)= 11 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 1e-01 2e-01 2e-01 3e-01 9e-01 1e+00 7e-01 9e-01 2e-01 3e-01 2e-01 6e-02
+  (T_i,n_e) blockmax=1.51e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 5e-01 5e-01 2e-01 3e-01 1e+00 1e+00 2e-01 3e-01 3e-01 3e-01 3e-02
+  (T_e,T_i) blockmax=1.79e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 4e-01 6e-01 9e-02 7e-02 6e-02 1e-01 1e-01 5e-02 3e-02 2e-02
+  (T_e,T_e) blockmax=5.10e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 7e-02 7e-02 1e-02 7e-02 3e-02 3e-02 1e-02 1e-02 2e-02 2e-02
+  (T_e,psi) blockmax=2.66e+02 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 7e-02 9e-02 1e-01 1e-01 8e-01 6e-01 1e+00 6e-01 2e-01 5e-02 6e-02 1e-02
+  (T_e,n_e) blockmax=8.78e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 1e+00 1e-01 1e-01 1e-01 9e-01 8e-01 5e-02 2e-01 2e-01 1e-01 1e-01
+  (psi,T_i) blockmax=5.58e-03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 7e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=1.51e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=5.40e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 8e-01 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=9.95e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=9.63e-02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 8e-01 6e-01 5e-01 5e-01 4e-01 5e-01 4e-01 3e-01 6e-01 3e-01 9e-02
+  (n_e,T_e) blockmax=1.11e-02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 8e-01 9e-01 1e+00 1e+00 7e-01 6e-01 5e-01 4e-01 3e-01 6e-01 3e-01 2e-02
+  (n_e,psi) blockmax=8.65e-01 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 1e-01 2e-01 2e-01 1e-01 8e-01 1e+00 5e-01 9e-01 2e-01 2e-01 1e-01 5e-02
+  (n_e,n_e) blockmax=4.57e+00 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 8e-01 3e-01 9e-02 2e-01 7e-01 3e-01 7e-02 2e-01 2e-01 6e-02 5e-02
+  fraction of ||J||_F within cell-band k: {0: 0.504767, 1: 0.728377, 2: 0.737593, 3: 0.745589, 4: 0.762509, 6: 0.95924, 8: 0.972948, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 7214 of 40000 (0.180); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 86
+  greedy column-coloring colours for pattern |J|>1e-06*max: 86
+  greedy column-coloring colours for pattern |J|>0.001*max: 43
+
+[J at converged x*] per-block max|J| by cell offset (relative to block max):
+  (T_i,T_i) blockmax=6.25e+01 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 8e-02 6e-02 1e-02 1e-02 4e-02 1e-02 1e-02 2e-02 3e-02 1e-02
+  (T_i,T_e) blockmax=1.45e+00 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 2e-01 1e+00 1e+00 1e-01 2e-01 3e-01 1e-01 2e-01 2e-01 3e-01 5e-03
+  (T_i,psi) blockmax=4.92e+01 bw(>1e-2)= 11 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 1e-01 2e-01 2e-01 3e-01 9e-01 1e+00 7e-01 9e-01 2e-01 3e-01 2e-01 6e-02
+  (T_i,n_e) blockmax=1.53e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 6e-01 6e-01 2e-01 3e-01 1e+00 1e+00 2e-01 3e-01 3e-01 3e-01 3e-02
+  (T_e,T_i) blockmax=1.91e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e-01 1e+00 4e-01 6e-01 9e-02 7e-02 5e-02 1e-01 9e-02 5e-02 3e-02 2e-02
+  (T_e,T_e) blockmax=5.25e+01 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 5e-01 7e-02 7e-02 1e-02 7e-02 3e-02 3e-02 1e-02 1e-02 2e-02 2e-02
+  (T_e,psi) blockmax=2.68e+02 bw(>1e-2)= 12 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 7e-02 9e-02 1e-01 1e-01 8e-01 6e-01 1e+00 6e-01 2e-01 5e-02 6e-02 2e-02
+  (T_e,n_e) blockmax=8.76e+02 bw(>1e-2)= 11 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 3e-01 1e+00 1e-01 1e-01 1e-01 9e-01 8e-01 5e-02 2e-01 2e-01 2e-01 1e-01
+  (psi,T_i) blockmax=5.58e-03 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 7e-01 1e+00 9e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,T_e) blockmax=1.51e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 5e-01 1e+00 4e-16 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,psi) blockmax=5.40e+00 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 1e+00 8e-01 2e-18 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (psi,n_e) blockmax=9.95e-02 bw(>1e-2)=  1 bw(>1e-3)=  1 bw(>1e-6)=  1  offsets0..11: 3e-01 1e+00 1e-15 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00 0e+00
+  (n_e,T_i) blockmax=1.38e+00 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 8e-01 1e+00 3e-01 1e-01 2e-01 2e-01 2e-01 1e-01 1e-01 1e-01 1e-01 6e-03
+  (n_e,T_e) blockmax=1.38e-01 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 7e-01 3e-01 1e-01 2e-01 2e-01 1e-01 1e-01 1e-01 1e-01 8e-02 1e-03
+  (n_e,psi) blockmax=2.87e+00 bw(>1e-2)= 11 bw(>1e-3)= 12 bw(>1e-6)= 12  offsets0..11: 1e+00 6e-01 7e-01 2e-01 2e-01 3e-01 2e-01 3e-01 1e-01 9e-02 8e-02 7e-02
+  (n_e,n_e) blockmax=7.17e+01 bw(>1e-2)= 10 bw(>1e-3)= 11 bw(>1e-6)= 11  offsets0..11: 1e+00 7e-01 1e-01 2e-02 5e-02 6e-02 5e-02 5e-02 4e-02 3e-02 4e-02 3e-03
+  fraction of ||J||_F within cell-band k: {0: 0.5019, 1: 0.724697, 2: 0.73412, 3: 0.742095, 4: 0.759336, 6: 0.957268, 8: 0.971344, 12: 1.0, 16: 1.0, 24: 1.0, 32: 1.0}
+  nnz(|J|>1e-12 max) = 7206 of 40000 (0.180); dense fraction
+  greedy column-coloring colours for pattern |J|>1e-12*max: 86
+  greedy column-coloring colours for pattern |J|>1e-06*max: 86
+  greedy column-coloring colours for pattern |J|>0.001*max: 44
+
+[x0: J vs Picard P] ||J-P||/||J||=0.976 cond(J)=3.35e+05 cond(P)=2.28e+02 rho(I-P^-1J)=1.255 eig(P^-1J) real in [0.8373158941021364, 1.9039093106163425] |imag|max=0.932
+  GMRES iters (M=P^-1): {'0.01': (7, 0), '0.0001': (14, 0), '1e-06': (17, 0), '1e-08': (21, 0)}   Jacobi-scaled GMRES to 1e-6: (65, 0)
+
+[x*: J vs Picard P] ||J-P||/||J||=0.976 cond(J)=1.41e+06 cond(P)=2.18e+02 rho(I-P^-1J)=1.138 eig(P^-1J) real in [0.025412829988390874, 1.9779298826639775] |imag|max=0.583
+  GMRES iters (M=P^-1): {'0.01': (11, 0), '0.0001': (22, 0), '1e-06': (20, 0), '1e-08': (27, 0)}   Jacobi-scaled GMRES to 1e-6: (69, 0)
+
+chord convergence factor rho(I - J(x0)^-1 J(x*)) = 23.236744456856  with J(x_old): 11.509781959408123
+band-truncated J(x*) as Newton matrix: rho(I - Jk^-1 J) = {'rho_band1': 1.1198, 'rho_band2': 7.1397, 'rho_band3': 1.6796, 'rho_band4': 0.9225, 'rho_band6': 1.1152, 'rho_band8': 0.7976, 'rho_band12': 0.0, 'rho_band16': 0.0, 'rho_band24': 0.0}
+DONE
+SWEEP_DONE

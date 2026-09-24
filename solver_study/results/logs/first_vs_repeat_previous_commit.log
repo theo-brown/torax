@@ -1,0 +1,68 @@
+=== 12:52:44 rampup 50 dense (load 0.45)
+=== 12:54:00 rampup 50 structured (load 2.93)
+=== 12:55:07 rampup 100 dense (load 3.03)
+=== 12:57:19 rampup 100 structured (load 3.08)
+=== 12:58:36 rampup_global 50 dense (load 3.63)
+=== 13:00:04 rampup_global 50 structured (load 3.47)
+=== 13:01:33 rampup_global 100 dense (load 3.16)
+=== 13:03:48 rampup_global 100 structured (load 2.56)
+=== 13:05:25 predictor_corrector 25 dense (load 2.42)
+=== 13:06:08 predictor_corrector 25 structured (load 2.22)
+=== 13:07:01 predictor_corrector 50 dense (load 1.69)
+=== 13:07:57 predictor_corrector 50 structured (load 2.51)
+=== 13:08:54 predictor_corrector 100 dense (load 1.74)
+=== 13:11:00 predictor_corrector 100 structured (load 3.52)
+DRIVER_DONE
+{"run": 2, "wall_s": 10.597113329000422, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921702}, {"run": 3, "wall_s": 10.787313938999432, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921702}]}
+RUN {"run": 1, "wall_s": 53.73861482000029, "compiles": 53, "compile_s": 39.94982552528381, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921764}
+RUN {"run": 2, "wall_s": 3.9736440289998427, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921764}
+RUN {"run": 3, "wall_s": 3.9708761789988785, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921764}
+RESULT {"case": "rampup", "n_rho": 50, "mode": "structured", "import_s": 2.8811390360006044, "process_s": 64.57328048899944, "runs": [{"run": 1, "wall_s": 53.73861482000029, "compiles": 53, "compile_s": 39.94982552528381, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921764}, {"run": 2, "wall_s": 3.9736440289998427, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921764}, {"run": 3, "wall_s": 3.9708761789988785, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.573953583921764}]}
+RUN {"run": 1, "wall_s": 68.67058312299923, "compiles": 53, "compile_s": 31.497615814208984, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907524}
+RUN {"run": 2, "wall_s": 29.094301299001017, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907524}
+RUN {"run": 3, "wall_s": 29.01319728300041, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907524}
+RESULT {"case": "rampup", "n_rho": 100, "mode": "dense", "import_s": 2.9015375599992694, "process_s": 129.68589907099886, "runs": [{"run": 1, "wall_s": 68.67058312299923, "compiles": 53, "compile_s": 31.497615814208984, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907524}, {"run": 2, "wall_s": 29.094301299001017, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907524}, {"run": 3, "wall_s": 29.01319728300041, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907524}]}
+RUN {"run": 1, "wall_s": 56.060246199000176, "compiles": 53, "compile_s": 38.72697997093201, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907288}
+RUN {"run": 2, "wall_s": 8.034483613999328, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907288}
+RUN {"run": 3, "wall_s": 8.034074288998454, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907288}
+RESULT {"case": "rampup", "n_rho": 100, "mode": "structured", "import_s": 3.126824607999879, "process_s": 75.26408355000058, "runs": [{"run": 1, "wall_s": 56.060246199000176, "compiles": 53, "compile_s": 38.72697997093201, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907288}, {"run": 2, "wall_s": 8.034483613999328, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907288}, {"run": 3, "wall_s": 8.034074288998454, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 8.574332954907288}]}
+RUN {"run": 1, "wall_s": 57.44438088100105, "compiles": 60, "compile_s": 36.009042501449585, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010277}
+RUN {"run": 2, "wall_s": 12.615555848999065, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010277}
+RUN {"run": 3, "wall_s": 12.614163641001142, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010277}
+RESULT {"case": "rampup_global", "n_rho": 50, "mode": "dense", "import_s": 3.0782795830000396, "process_s": 85.76220603399997, "runs": [{"run": 1, "wall_s": 57.44438088100105, "compiles": 60, "compile_s": 36.009042501449585, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010277}, {"run": 2, "wall_s": 12.615555848999065, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010277}, {"run": 3, "wall_s": 12.614163641001142, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010277}]}
+RUN {"run": 1, "wall_s": 71.43394502599949, "compiles": 60, "compile_s": 53.71719312667847, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010284}
+RUN {"run": 2, "wall_s": 5.3329681850009365, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010284}
+RUN {"run": 3, "wall_s": 5.720409097999436, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010284}
+RESULT {"case": "rampup_global", "n_rho": 50, "mode": "structured", "import_s": 3.0325375069987786, "process_s": 85.52772146699863, "runs": [{"run": 1, "wall_s": 71.43394502599949, "compiles": 60, "compile_s": 53.71719312667847, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010284}, {"run": 2, "wall_s": 5.3329681850009365, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010284}, {"run": 3, "wall_s": 5.720409097999436, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05114766010284}]}
+RUN {"run": 1, "wall_s": 74.12330045599992, "compiles": 60, "compile_s": 37.23243832588196, "steps": 40, "t_final": 80.0, "T_e0": 9.05277802345775}
+RUN {"run": 2, "wall_s": 28.46757723799965, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05277802345775}
+RUN {"run": 3, "wall_s": 27.58606822799993, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05277802345775}
+RESULT {"case": "rampup_global", "n_rho": 100, "mode": "dense", "import_s": 3.146637705000103, "process_s": 133.33293078000133, "runs": [{"run": 1, "wall_s": 74.12330045599992, "compiles": 60, "compile_s": 37.23243832588196, "steps": 40, "t_final": 80.0, "T_e0": 9.05277802345775}, {"run": 2, "wall_s": 28.46757723799965, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05277802345775}, {"run": 3, "wall_s": 27.58606822799993, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.05277802345775}]}
+RUN {"run": 1, "wall_s": 73.50034482000046, "compiles": 60, "compile_s": 52.907527446746826, "steps": 40, "t_final": 80.0, "T_e0": 9.052778023457773}
+RUN {"run": 2, "wall_s": 8.76827988399964, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.052778023457773}
+RUN {"run": 3, "wall_s": 8.374528371999986, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.052778023457773}
+RESULT {"case": "rampup_global", "n_rho": 100, "mode": "structured", "import_s": 3.0575576729988825, "process_s": 93.70925751599862, "runs": [{"run": 1, "wall_s": 73.50034482000046, "compiles": 60, "compile_s": 52.907527446746826, "steps": 40, "t_final": 80.0, "T_e0": 9.052778023457773}, {"run": 2, "wall_s": 8.76827988399964, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.052778023457773}, {"run": 3, "wall_s": 8.374528371999986, "compiles": 0, "compile_s": 0, "steps": 40, "t_final": 80.0, "T_e0": 9.052778023457773}]}
+RUN {"run": 1, "wall_s": 37.54248136099886, "compiles": 53, "compile_s": 28.861464023590088, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529154}
+RUN {"run": 2, "wall_s": 0.6589918450008554, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529154}
+RUN {"run": 3, "wall_s": 0.5860159740004747, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529154}
+RESULT {"case": "predictor_corrector", "n_rho": 25, "mode": "dense", "import_s": 2.921985790999315, "process_s": 41.71702989199912, "runs": [{"run": 1, "wall_s": 37.54248136099886, "compiles": 53, "compile_s": 28.861464023590088, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529154}, {"run": 2, "wall_s": 0.6589918450008554, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529154}, {"run": 3, "wall_s": 0.5860159740004747, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529154}]}
+RUN {"run": 1, "wall_s": 47.022208607999346, "compiles": 53, "compile_s": 36.616326093673706, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529104}
+RUN {"run": 2, "wall_s": 0.49040054500073893, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529104}
+RUN {"run": 3, "wall_s": 0.4944815719991311, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529104}
+RESULT {"case": "predictor_corrector", "n_rho": 25, "mode": "structured", "import_s": 3.086539667998295, "process_s": 51.10140865299945, "runs": [{"run": 1, "wall_s": 47.022208607999346, "compiles": 53, "compile_s": 36.616326093673706, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529104}, {"run": 2, "wall_s": 0.49040054500073893, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529104}, {"run": 3, "wall_s": 0.4944815719991311, "compiles": 0, "compile_s": 0, "steps": 5, "t_final": 1.0, "T_e0": 26.915002180529104}]}
+RUN {"run": 1, "wall_s": 41.777549144999284, "compiles": 53, "compile_s": 29.923102617263794, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685107}
+RUN {"run": 2, "wall_s": 4.505627890999676, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685107}
+RUN {"run": 3, "wall_s": 4.1536450130006415, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685107}
+RESULT {"case": "predictor_corrector", "n_rho": 50, "mode": "dense", "import_s": 3.154068563000692, "process_s": 53.599537050000436, "runs": [{"run": 1, "wall_s": 41.777549144999284, "compiles": 53, "compile_s": 29.923102617263794, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685107}, {"run": 2, "wall_s": 4.505627890999676, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685107}, {"run": 3, "wall_s": 4.1536450130006415, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685107}]}
+RUN {"run": 1, "wall_s": 48.289864313999715, "compiles": 53, "compile_s": 36.912054777145386, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685412}
+RUN {"run": 2, "wall_s": 1.2563290019988926, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685412}
+RUN {"run": 3, "wall_s": 1.5645115560000704, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685412}
+RESULT {"case": "predictor_corrector", "n_rho": 50, "mode": "structured", "import_s": 3.192152655999962, "process_s": 54.31005486599861, "runs": [{"run": 1, "wall_s": 48.289864313999715, "compiles": 53, "compile_s": 36.912054777145386, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685412}, {"run": 2, "wall_s": 1.2563290019988926, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685412}, {"run": 3, "wall_s": 1.5645115560000704, "compiles": 0, "compile_s": 0, "steps": 13, "t_final": 1.0, "T_e0": 26.498823816685412}]}
+RUN {"run": 1, "wall_s": 67.44164343099874, "compiles": 53, "compile_s": 31.73839521408081, "steps": 49, "t_final": 1.0, "T_e0": 26.08377913955188}
+RUN {"run": 2, "wall_s": 27.14253030299915, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.08377913955188}
+RUN {"run": 3, "wall_s": 26.763956648001113, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.08377913955188}
+RESULT {"case": "predictor_corrector", "n_rho": 100, "mode": "dense", "import_s": 3.1754256509993866, "process_s": 124.52786480299983, "runs": [{"run": 1, "wall_s": 67.44164343099874, "compiles": 53, "compile_s": 31.73839521408081, "steps": 49, "t_final": 1.0, "T_e0": 26.08377913955188}, {"run": 2, "wall_s": 27.14253030299915, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.08377913955188}, {"run": 3, "wall_s": 26.763956648001113, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.08377913955188}]}
+RUN {"run": 1, "wall_s": 52.12969585999963, "compiles": 53, "compile_s": 36.16641163825989, "steps": 49, "t_final": 1.0, "T_e0": 26.083779139551766}
+RUN {"run": 2, "wall_s": 6.576635248999082, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.083779139551766}
+RUN {"run": 3, "wall_s": 7.204084532999332, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.083779139551766}
+RESULT {"case": "predictor_corrector", "n_rho": 100, "mode": "structured", "import_s": 3.0745343069993396, "process_s": 68.99384919799922, "runs": [{"run": 1, "wall_s": 52.12969585999963, "compiles": 53, "compile_s": 36.16641163825989, "steps": 49, "t_final": 1.0, "T_e0": 26.083779139551766}, {"run": 2, "wall_s": 6.576635248999082, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.083779139551766}, {"run": 3, "wall_s": 7.204084532999332, "compiles": 0, "compile_s": 0, "steps": 49, "t_final": 1.0, "T_e0": 26.083779139551766}]}

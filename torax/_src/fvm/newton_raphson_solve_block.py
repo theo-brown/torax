@@ -37,6 +37,7 @@ from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.solver import jax_root_finding
 from torax._src.solver import predictor_corrector_method
+from torax._src.solver import structured_jacobian
 from torax._src.sources import source_profiles
 
 # Delta is a vector. If no entry of delta is above this magnitude, we terminate
@@ -54,6 +55,7 @@ MIN_DELTA: Final[float] = 1e-7
         'vmap_linesearch',
         'max_linesearch_steps',
         'log_iterations',
+        'jacobian_mode',
     ],
 )
 def newton_raphson_solve_block(
@@ -79,6 +81,7 @@ def newton_raphson_solve_block(
     max_linesearch_steps: int,
     vmap_linesearch: bool = False,
     log_iterations: bool = False,
+    jacobian_mode: str = 'dense',
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     state_module.SolverNumericOutputs,
@@ -154,7 +157,8 @@ def newton_raphson_solve_block(
     max_linesearch_steps: Maximum number of linesearch steps to try.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
-
+    jacobian_mode: 'dense' (jax.jacfwd) or 'structured' (see
+      `structured_jacobian`).
 
   Returns:
     x_new: Tuple, with x_new[i] giving channel i of x at the next time step
@@ -239,6 +243,12 @@ def newton_raphson_solve_block(
       pedestal_transition_state=pedestal_transition_state,
   )
 
+  custom_jac = (
+      structured_jacobian.jacobian_fn(residual_fun)
+      if jacobian_mode == 'structured'
+      else None
+  )
+
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
       fun=residual_fun,
@@ -250,6 +260,7 @@ def newton_raphson_solve_block(
       vmap_linesearch=vmap_linesearch,
       max_linesearch_steps=max_linesearch_steps,
       log_iterations=log_iterations,
+      custom_jac=custom_jac,
   )
 
   x_root, metadata = root_finder(x0=init_x_new_vec)

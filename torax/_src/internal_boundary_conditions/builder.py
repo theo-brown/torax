@@ -25,6 +25,33 @@ from torax._src.pedestal_model import pedestal_transition_state as pedestal_tran
 # pylint: disable=invalid-name
 
 
+def references(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+    pedestal_transition_state: (
+        pedestal_transition_state_lib.PedestalTransitionState
+    ),
+    internal_boundary_condition_model: (
+        base_model.InternalBoundaryConditionModel
+    ),
+) -> dict[str, jax.Array]:
+  """The values of the state that whole internal boundary profiles depend on.
+
+  Keyed 'pedestal' and 'model' for the pedestal and profile-condition internal
+  boundary conditions that have any; see `build_internal_boundary_conditions`.
+  """
+  refs = {
+      'pedestal': pedestal_transition_state.internal_boundary_references(
+          runtime_params.t, runtime_params.pedestal, geo, core_profiles
+      ),
+      'model': internal_boundary_condition_model.references(
+          runtime_params, geo, core_profiles
+      ),
+  }
+  return {k: v for k, v in refs.items() if v is not None}
+
+
 def build_internal_boundary_conditions(
     runtime_params: runtime_params_lib.RuntimeParams,
     geo: geometry.Geometry,
@@ -35,6 +62,7 @@ def build_internal_boundary_conditions(
     internal_boundary_condition_model: (
         base_model.InternalBoundaryConditionModel
     ),
+    references: dict[str, jax.Array] | None = None,
 ) -> internal_boundary_conditions_lib.InternalBoundaryConditions:
   """Builds the active internal boundary conditions for this time step.
 
@@ -51,16 +79,19 @@ def build_internal_boundary_conditions(
     pedestal_transition_state: Current state of the pedestal transition.
     internal_boundary_condition_model: Model used to evaluate profile-condition
       internal boundary conditions.
+    references: The `references` to use, if not those of core_profiles.
 
   Returns:
     The active InternalBoundaryConditions object.
   """
+  references = references or {}
   pedestal_internal_boundary_conditions = (
       pedestal_transition_state.to_internal_boundary_conditions(
           t=runtime_params.t,
           pedestal_runtime_params=runtime_params.pedestal,
           geo=geo,
           core_profiles=core_profiles,
+          references=references.get('pedestal'),
       )
   )
 
@@ -68,6 +99,7 @@ def build_internal_boundary_conditions(
       runtime_params=runtime_params,
       geo=geo,
       core_profiles=core_profiles,
+      references=references.get('model'),
   )
 
   is_pedestal_ibc_active = pedestal_transition_state.is_ibc_active(

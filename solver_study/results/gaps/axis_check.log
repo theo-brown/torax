@@ -1,0 +1,54 @@
+=== uniform n_rho=16 min_rho_norm=0.0 ===
+  axis_columns: [32, 33, 34, 35]
+  chain_vs_dense: 2.919572102354382e-16
+  struct_vs_dense: 3.7543500828604157e-16
+  dGdx_outside: 0.0
+  dGdx_outside_entries: []
+  dhdx_outside: 0.0
+  dGdc_outside: 0.0
+  struct_maxdiff: 1.1937117960769683e-12
+=== uniform n_rho=16 min_rho_norm=0.2 ===
+  axis_columns: [34, 35, 36, 37]
+  chain_vs_dense: 2.9195727093764073e-16
+  struct_vs_dense: 3.7543472036455935e-16
+  dGdx_outside: 0.0
+  dGdx_outside_entries: []
+  dhdx_outside: 0.0
+  dGdc_outside: 0.0
+  struct_maxdiff: 1.1937117960769683e-12
+=== uniform n_rho=12 min_rho_norm=0.6 ===
+  axis_columns: [30, 31, 32, 33]
+  chain_vs_dense: 8.468587685032504e-16
+  struct_vs_dense: 3.953756549961479e-15
+  dGdx_outside: 0.0
+  dGdx_outside_entries: []
+  dhdx_outside: 0.0
+  dGdc_outside: 0.0
+  struct_maxdiff: 1.3642420526593924e-12
+=== uniform n_rho=10 min_rho_norm=1.0 ===
+  axis_columns: [20, 21, 22, 23]
+  chain_vs_dense: 9.408280308119547e-16
+  struct_vs_dense: 1.0496885088836786e-15
+  dGdx_outside: 0.0
+  dGdx_outside_entries: []
+  dhdx_outside: 0.0
+  dGdc_outside: 0.0
+  struct_maxdiff: 1.6342482922482304e-13
+=== skewed n_rho=16 min_rho_norm=0.3 ===
+  axis_columns: [35, 36, 37, 38]
+  chain_vs_dense: 1.4795497654809726e-16
+  struct_vs_dense: 5.70659089202943e-16
+  dGdx_outside: 0.0
+  dGdx_outside_entries: []
+  dhdx_outside: 0.0
+  dGdc_outside: 0.0
+  struct_maxdiff: 2.7426949600339867e-12
+=== axis_refined n_rho=20 min_rho_norm=0.1 ===
+  axis_columns: [43, 44, 45, 46]
+  chain_vs_dense: 1.903204953819206e-15
+  struct_vs_dense: 1.892281034921815e-15
+  dGdx_outside: 0.0
+  dGdx_outside_entries: []
+  dhdx_outside: 0.0
+  dGdc_outside: 0.0
+  struct_maxdiff: 1.3393730569077889e-12

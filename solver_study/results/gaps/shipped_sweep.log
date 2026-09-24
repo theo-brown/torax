@@ -1,0 +1,65 @@
+RESULT test_all_transport_fusion_qlknn: worst row x_old 1.5e-14, 5% noise 6.4e-15
+RESULT test_bohmgyrobohm_all: worst row x_old 1.2e-15, 5% noise 2.5e-15
+RESULT test_bremsstrahlung_time_dependent_Zimp: worst row x_old 3.9e-16, 5% noise 1.4e-16
+RESULT test_changing_config_after: worst row x_old 3.6e-15, 5% noise 8.2e-15
+RESULT test_changing_config_before: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_chease: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_combined_transport: worst row x_old 3.5e-15, 5% noise 2.6e-15
+RESULT test_crank_nicolson: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_fixed_dt: worst row x_old 4.6e-15, 5% noise 1.8e-15
+RESULT test_imas_profiles_and_geo: worst row x_old 2.6e-15, 5% noise 6.2e-15
+RESULT test_implicit: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_implicit_short_optimizer: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_iterbaseline_mockup: worst row x_old 2.7e-15, 5% noise 6.5e-15
+RESULT test_iterhybrid_lh_transition: worst row x_old 1.1e-15, 5% noise 1.1e-15
+RESULT test_iterhybrid_lh_transition_internal_boundary_condition: worst row x_old 1.1e-15, 5% noise 1.1e-15
+RESULT test_iterhybrid_makenans: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_mockup: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_predictor_corrector: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_predictor_corrector_Lmode_combined: worst row x_old 7.2e-15, 5% noise 7.5e-13
+RESULT test_iterhybrid_predictor_corrector_clip_inputs: worst row x_old 5.8e-15, 5% noise 5.6e-15
+RESULT test_iterhybrid_predictor_corrector_constant_fraction_impurity_radiation: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_predictor_corrector_cyclotron: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_predictor_corrector_ec_linliu: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_predictor_corrector_eqdsk: worst row x_old 5.2e-15, 5% noise 1.2e-14
+RESULT test_iterhybrid_predictor_corrector_imas: worst row x_old 6.1e-15, 5% noise 1.0e-14
+RESULT test_iterhybrid_predictor_corrector_mavrin_impurity_radiation: worst row x_old 4.5e-15, 5% noise 8.8e-15
+RESULT test_iterhybrid_predictor_corrector_mavrin_n_e_ratios: worst row x_old 3.0e-15, 5% noise 9.4e-15
+RESULT test_iterhybrid_predictor_corrector_mavrin_n_e_ratios_lengyel: worst row x_old 3.0e-15, 5% noise 9.4e-15
+RESULT test_iterhybrid_predictor_corrector_mavrin_n_e_ratios_z_eff: worst row x_old 4.7e-15, 5% noise 1.2e-14
+RESULT test_iterhybrid_predictor_corrector_neoclassical: worst row x_old 5.6e-15, 5% noise 1.4e-14
+SKIP torax.tests.test_data.test_iterhybrid_predictor_corrector_qualikiz: ValidationError: 1 validation error for ToraxConfig
+SKIP torax.tests.test_data.test_iterhybrid_predictor_corrector_qualikiz_rotation: ValidationError: 1 validation error for ToraxConfig
+RESULT test_iterhybrid_predictor_corrector_rotation: worst row x_old 2.1e-15, 5% noise non-finite (structured 1536, dense 3904)
+RESULT test_iterhybrid_predictor_corrector_set_pped_tpedratio_nped: worst row x_old 5.8e-15, 5% noise 6.6e-15
+SKIP torax.tests.test_data.test_iterhybrid_predictor_corrector_tglf: JaxRuntimeError: INTERNAL: CpuCallback error calling callback: Traceback (most recent call last):
+RESULT test_iterhybrid_predictor_corrector_tglfnn_ukaea: worst row x_old 2.1e-15, 5% noise 6.9e-15
+RESULT test_iterhybrid_predictor_corrector_tglfnn_ukaea_rotation: worst row x_old non-finite (structured 2048, dense 3904), 5% noise non-finite (structured 2048, dense 3904)
+RESULT test_iterhybrid_predictor_corrector_timedependent_isotopes: worst row x_old 5.8e-15, 5% noise 6.6e-15
+RESULT test_iterhybrid_predictor_corrector_tungsten: worst row x_old 5.0e-15, 5% noise 1.0e-14
+RESULT test_iterhybrid_predictor_corrector_zeffprofile: worst row x_old 2.7e-14, 5% noise 1.3e-14
+SKIP torax.tests.test_data.test_iterhybrid_predictor_corrector_zeffprofile_qualikiz: ValidationError: 1 validation error for ToraxConfig
+RESULT test_iterhybrid_radiation_collapse: worst row x_old 1.3e-15, 5% noise 3.6e-16
+RESULT test_iterhybrid_rampup: worst row x_old 3.3e-15, 5% noise 9.3e-15
+FAILED torax.tests.test_data.test_iterhybrid_rampup_restart
+RESULT test_iterhybrid_rampup_sawtooth: worst row x_old 9.1e-15, 5% noise 6.9e-15
+RESULT test_iterhybrid_rampup_short: worst row x_old 3.3e-15, 5% noise 9.3e-15
+RESULT test_ne_qlknn_deff_veff: worst row x_old 4.8e-15, 5% noise 1.3e-14
+RESULT test_ne_qlknn_defromchie: worst row x_old 4.8e-15, 5% noise 6.8e-15
+RESULT test_particle_sources_cgm: worst row x_old 1.2e-15, 5% noise 2.9e-15
+RESULT test_prescribed_generic_current_source: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_prescribed_timedependent_ne: worst row x_old 2.8e-15, 5% noise 1.4e-15
+RESULT test_psi_and_heat: worst row x_old 5.8e-15, 5% noise 8.7e-16
+RESULT test_psi_heat_dens: worst row x_old 5.9e-16, 5% noise 6.7e-16
+RESULT test_psichease_ip_chease_vloop: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_psichease_ip_parameters_vloop_varying: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_psichease_prescribed_johm: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_psichease_prescribed_jtot: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_psichease_prescribed_jtot_vloop: worst row x_old 0.0e+00, 5% noise 0.0e+00
+RESULT test_semiimplicit_convection: worst row x_old 1.8e-15, 5% noise 1.3e-15
+RESULT test_step_flattop_bgb: worst row x_old 9.9e-16, 5% noise 1.7e-15
+RESULT test_timedependence: worst row x_old 3.7e-15, 5% noise 1.5e-15
+RESULT basic_config: worst row x_old 1.4e-19, 5% noise 2.8e-19
+RESULT iterhybrid_predictor_corrector: worst row x_old 6.7e-15, 5% noise 4.7e-15
+RESULT iterhybrid_rampup: worst row x_old 3.9e-15, 5% noise 7.4e-15
+RESULT step_flattop_bgb: worst row x_old 9.9e-16, 5% noise 1.7e-15

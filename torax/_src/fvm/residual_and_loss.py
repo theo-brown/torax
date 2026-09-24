@@ -41,6 +41,7 @@ from torax._src.fvm import fvm_conversions
 from torax._src.geometry import geometry
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.sources import source_profiles
+from torax._src.transport_model import transport_coeffs as transport_coeffs_lib
 
 Block1DCoeffs: TypeAlias = block_1d_coeffs.Block1DCoeffs
 
@@ -329,6 +330,8 @@ def theta_method_block_residual(
     coeffs_old: Block1DCoeffs,
     evolving_names: tuple[str, ...],
     pedestal_transition_state: pedestal_transition_state_lib.PedestalTransitionState,
+    turbulent_transport: transport_coeffs_lib.TransportCoeffs | None = None,
+    state_globals: calc_coeffs.StateGlobals | None = None,
 ) -> jax.Array:
   """Residual of theta-method equation for core profiles at next time-step.
 
@@ -353,6 +356,8 @@ def theta_method_block_residual(
       evolve.
     pedestal_transition_state: State for tracking pedestal L-H and H-L
       transitions.
+    turbulent_transport: See `calc_coeffs.calc_coeffs`.
+    state_globals: See `calc_coeffs.calc_coeffs`.
 
   Returns:
     residual: Vector residual between LHS and RHS of the theta method equation.
@@ -385,6 +390,8 @@ def theta_method_block_residual(
       evolving_names=evolving_names,
       use_pereverzev=False,
       pedestal_transition_state=pedestal_transition_state,
+      turbulent_transport=turbulent_transport,
+      state_globals=state_globals,
   )
 
   solver_params = runtime_params_t_plus_dt.solver

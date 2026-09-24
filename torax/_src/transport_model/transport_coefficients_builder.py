@@ -33,30 +33,13 @@ from torax._src.transport_model import transport_model as transport_model_lib
 # pylint: disable=invalid-name
 
 
-@jax.jit(
-    static_argnames=(
-        'transport_model',
-        'neoclassical_models',
-        'internal_boundary_condition_model',
-    )
-)
-def calculate_all_transport_coeffs(
-    transport_model: transport_model_lib.TransportModel,
-    neoclassical_models: neoclassical_models_lib.NeoclassicalModels,
-    internal_boundary_condition_model: (
-        internal_boundary_conditions_base_model.InternalBoundaryConditionModel
-    ),
+def _apply_pedestal_transition_override(
     runtime_params: runtime_params_lib.RuntimeParams,
-    geo: geometry.Geometry,
-    core_profiles: state.CoreProfiles,
     pedestal_transition_state: (
         pedestal_transition_state_lib.PedestalTransitionState
     ),
-    use_pereverzev: bool = False,
-) -> state.CoreTransport:
-  """Calculates the transport coefficients from all models."""
-
-  # Toggle the pedestal model on/off based on the pedestal transition state.
+) -> runtime_params_lib.RuntimeParams:
+  """Toggles the pedestal on/off based on the pedestal transition state."""
   # TODO(b/434175938): Find an alternative method for propagating pedestal
   # transition state to the core transport masking. Currently, we're overriding
   # the runtime params which is a bit hacky. Options include passing the
@@ -79,7 +62,83 @@ def calculate_all_transport_coeffs(
         runtime_params,
         pedestal=pedestal_params,
     )
+  return runtime_params
 
+
+def postprocess_turbulent_transport(
+    transport_model: transport_model_lib.TransportModel,
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    pedestal_transition_state: (
+        pedestal_transition_state_lib.PedestalTransitionState
+    ),
+    coeffs: transport_coeffs_lib.TransportCoeffs,
+) -> transport_coeffs_lib.TransportCoeffs:
+  """Smooths raw turbulent coefficients and applies an adaptive pedestal.
+
+  These are the steps of `calculate_all_transport_coeffs` that couple distant
+  faces.
+
+  Args:
+    transport_model: The transport model.
+    runtime_params: Runtime parameters.
+    geo: Geometry of the torus.
+    pedestal_transition_state: State of the pedestal.
+    coeffs: The clipped coefficients of the transport model.
+
+  Returns:
+    The turbulent transport coefficients.
+  """
+  runtime_params = _apply_pedestal_transition_override(
+      runtime_params, pedestal_transition_state
+  )
+  pedestal_model_output = pedestal_transition_state.pedestal_model_output
+  coeffs = transport_model.smooth_coeffs(
+      runtime_params, geo, coeffs, pedestal_model_output
+  )
+  if (
+      runtime_params.pedestal.mode
+      == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
+  ):
+    coeffs = pedestal_model_output.scale_transport_coeffs(
+        coeffs, geo, runtime_params.pedestal
+    )
+  return coeffs
+
+
+@jax.jit(
+    static_argnames=(
+        'transport_model',
+        'neoclassical_models',
+        'internal_boundary_condition_model',
+        'postprocess',
+    )
+)
+def calculate_all_transport_coeffs(
+    transport_model: transport_model_lib.TransportModel,
+    neoclassical_models: neoclassical_models_lib.NeoclassicalModels,
+    internal_boundary_condition_model: (
+        internal_boundary_conditions_base_model.InternalBoundaryConditionModel
+    ),
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+    pedestal_transition_state: (
+        pedestal_transition_state_lib.PedestalTransitionState
+    ),
+    use_pereverzev: bool = False,
+    turbulent_transport: transport_coeffs_lib.TransportCoeffs | None = None,
+    postprocess: bool = True,
+) -> state.CoreTransport:
+  """Calculates the transport coefficients from all models.
+
+  `turbulent_transport`, if given, replaces the turbulent coefficients;
+  `postprocess=False` leaves out `postprocess_turbulent_transport`. Both serve
+  the structured Jacobian.
+  """
+  runtime_params = _apply_pedestal_transition_override(
+      runtime_params, pedestal_transition_state
+  )
   pedestal_model_output = pedestal_transition_state.pedestal_model_output
   two_point_mask = (
       internal_boundary_conditions_builder.build_internal_boundary_conditions(
@@ -90,13 +149,30 @@ def calculate_all_transport_coeffs(
           internal_boundary_condition_model=internal_boundary_condition_model,
       ).get_two_point_face_mask(geo)
   )
-  turbulent_transport_coeffs = transport_model(
-      runtime_params=runtime_params,
-      geo=geo,
-      core_profiles=core_profiles,
-      pedestal_model_output=pedestal_model_output,
-      two_point_mask=two_point_mask,
-  )
+  if turbulent_transport is not None:
+    turbulent_transport_coeffs = transport_coeffs_lib.TurbulentTransport(
+        total=turbulent_transport
+    )
+  else:
+    turbulent_transport_coeffs = transport_model(
+        runtime_params=runtime_params,
+        geo=geo,
+        core_profiles=core_profiles,
+        pedestal_model_output=pedestal_model_output,
+        two_point_mask=two_point_mask,
+        apply_smoothing=False,
+    )
+    if postprocess:
+      turbulent_transport_coeffs = dataclasses.replace(
+          turbulent_transport_coeffs,
+          total=postprocess_turbulent_transport(
+              transport_model,
+              runtime_params,
+              geo,
+              pedestal_transition_state,
+              turbulent_transport_coeffs.total,
+          ),
+      )
   neoclassical_transport_coeffs = neoclassical_models.transport(
       runtime_params,
       geo,
@@ -133,29 +209,25 @@ def calculate_all_transport_coeffs(
         pereverzev_transport_coeffs,
     )
 
+  # In ADAPTIVE_TRANSPORT mode the pedestal scales the Pereverzev coefficients
+  # as it does the turbulent ones (in postprocess_turbulent_transport).
+  if (
+      runtime_params.pedestal.mode
+      == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
+  ):
+    pereverzev_transport_coeffs = pedestal_model_output.scale_transport_coeffs(
+        pereverzev_transport_coeffs, geo, runtime_params.pedestal
+    )
+
   total = transport_coeffs_lib.sum_transport_coeffs(
       turbulent_transport_coeffs.total,
       neoclassical_transport_coeffs,
       pereverzev_transport_coeffs,
   )
 
-  core_transport = state.CoreTransport(
+  return state.CoreTransport(
       total=total,
       turbulent=turbulent_transport_coeffs,
       neoclassical=neoclassical_transport_coeffs,
       pereverzev=pereverzev_transport_coeffs,
   )
-
-  # Modify the turbulent + Pereverzev transport coefficients if the pedestal
-  # model is in ADAPTIVE_TRANSPORT mode.
-  if (
-      runtime_params.pedestal.mode
-      == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
-  ):
-    core_transport = pedestal_model_output.modify_core_transport(
-        core_transport=core_transport,
-        geo=geo,
-        pedestal_runtime_params=runtime_params.pedestal,
-    )
-
-  return core_transport

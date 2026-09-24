@@ -47,8 +47,9 @@ class PrescribedIBCModel(base_model.InternalBoundaryConditionModel):
       runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
+      references: jax.Array | None = None,
   ) -> internal_boundary_conditions.InternalBoundaryConditions:
-    del geo, core_profiles
+    del geo, core_profiles, references
     params = runtime_params.profile_conditions.internal_boundary_conditions
     assert isinstance(
         params, RuntimeParams

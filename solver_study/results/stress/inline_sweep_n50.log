@@ -1,0 +1,24 @@
+=== 01:13:50 official_api.py dense 50 4
+RESULT mode=dense n_rho=50 t_final=4.0 wrap=False wall=28.5s steps=2 T_e0=28.3740126497
+rc=0 process_wall=32.012505457 s
+=== 01:14:22 official_api_patched.py xla_late structured 50 4
+RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=31.3s steps=2 T_e0=28.3740126497
+rc=0 process_wall=34.988558284 s
+=== 01:14:57 official_api_patched.py xla_early structured 50 4
+RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=47.0s steps=2 T_e0=28.3740126497
+rc=0 process_wall=50.922896800 s
+=== 01:15:48 official_api_patched.py auto structured 50 4
+RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=35.3s steps=2 T_e0=28.3740126497
+rc=0 process_wall=38.967637400 s
+=== 01:16:27 official_api_patched.py jax_early structured 50 4
+RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=38.2s steps=2 T_e0=28.3740126497
+rc=0 process_wall=41.956706635 s
+=== 01:17:09 official_api_patched.py none structured 50 4
+RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=37.7s steps=2 T_e0=28.3740126497
+rc=0 process_wall=41.506053548 s
+=== 01:17:51 done
+=== unpatched official_api.py structured 50 4 (XLA_LATE): rc=124 after 400 s (timeout)
+=== unpatched official_api.py structured 50 4 (plain jax.jit): RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=35.4s steps=2 T_e0=28.3740126497
+=== XLA_LATE restored in the source, unpatched official_api.py structured 50 4:
+JAX_INCLUDE_FULL_TRACEBACKS_IN_LOCATIONS=false: RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=31.3s steps=2 T_e0=28.3740126497
+JAX_INCLUDE_FULL_TRACEBACKS_IN_LOCATIONS=true (default): rc=124 after 300 s (timeout)

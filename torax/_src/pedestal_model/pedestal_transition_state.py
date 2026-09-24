@@ -227,30 +227,72 @@ class PedestalTransitionState:
 
     return is_active
 
+  def _internal_boundary_output(
+      self,
+      t: array_typing.FloatScalar,
+      pedestal_runtime_params: runtime_params_lib.RuntimeParams,
+  ) -> pedestal_model_output_lib.PedestalModelOutput:
+    """The pedestal model output that sets the internal boundary conditions."""
+    if (
+        pedestal_runtime_params.use_formation_model_with_internal_boundary_condition
+    ):
+      return self._get_scaled_pedestal_model_output(
+          t=t,
+          transition_time_width=pedestal_runtime_params.transition_time_width,
+      )
+    return self.pedestal_model_output
+
+  def internal_boundary_references(
+      self,
+      t: array_typing.FloatScalar,
+      pedestal_runtime_params: runtime_params_lib.RuntimeParams,
+      geo: geometry.Geometry,
+      core_profiles: state.CoreProfiles,
+  ) -> jax.Array | None:
+    """The values of the state that the whole pedestal profile uses, if any."""
+    if (
+        pedestal_runtime_params.mode
+        != runtime_params_lib.Mode.INTERNAL_BOUNDARY_CONDITION
+        or pedestal_runtime_params.pedestal_profile_form
+        != runtime_params_lib.PedestalProfileForm.MTANH
+    ):
+      return None
+    return self._internal_boundary_output(
+        t, pedestal_runtime_params
+    ).mtanh_references(geo, core_profiles)
+
   def to_internal_boundary_conditions(
       self,
       t: array_typing.FloatScalar,
       pedestal_runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
+      references: jax.Array | None = None,
   ) -> internal_boundary_conditions_lib.InternalBoundaryConditions:
-    """Builds the internal boundary conditions produced by the pedestal model."""
+    """Builds the internal boundary conditions produced by the pedestal model.
+
+    Args:
+      t: Time.
+      pedestal_runtime_params: Runtime parameters of the pedestal.
+      geo: Geometry of the torus.
+      core_profiles: Core plasma profiles.
+      references: The `internal_boundary_references` to use, if not those of
+        core_profiles.
+
+    Returns:
+      The internal boundary conditions of the pedestal.
+    """
     if (
         pedestal_runtime_params.mode
         == runtime_params_lib.Mode.INTERNAL_BOUNDARY_CONDITION
     ):
-      pedestal_model_output = self.pedestal_model_output
-      if (
-          pedestal_runtime_params.use_formation_model_with_internal_boundary_condition
-      ):
-        pedestal_model_output = self._get_scaled_pedestal_model_output(
-            t=t,
-            transition_time_width=pedestal_runtime_params.transition_time_width,
-        )
-      return pedestal_model_output.to_internal_boundary_conditions(
+      return self._internal_boundary_output(
+          t, pedestal_runtime_params
+      ).to_internal_boundary_conditions(
           geo,
           core_profiles=core_profiles,
           pedestal_profile_form=pedestal_runtime_params.pedestal_profile_form,
+          references=references,
       )
     else:
       # In ADAPTIVE_TRANSPORT mode, transport coefficients govern the edge;

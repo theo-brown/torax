@@ -1,0 +1,25 @@
+=== 07:48:32 START base_rampup
+[base_rampup] DONE steps=40 t=80.0000 first_step=23.40s median_step=0.7514s run_clean=27.03s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=58.7s
+=== 07:49:32 START base_step
+[base_step] DONE steps=40 t=400.0000 first_step=25.71s median_step=0.6278s run_clean=32.79s inner_total=61 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=67.7s
+=== 07:50:41 START cmp_b_newton
+[cmp_b_newton] DONE steps=10 t=2.0000 first_step=21.63s median_step=0.0425s run_clean=0.43s inner_total=40 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=29.8s
+=== 07:51:12 START cmp_a_linear
+[cmp_a_linear] DONE steps=7 t=2.0000 first_step=13.95s median_step=0.0060s run_clean=0.04s inner_total=14 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=21.2s
+=== 07:51:35 START scale_linear_25
+[scale_linear_25] DONE steps=4 t=1.0000 first_step=13.15s median_step=0.0064s run_clean=0.02s inner_total=8 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=21.1s
+=== 07:51:57 START scale_newton_25
+[scale_newton_25] DONE steps=5 t=1.0000 first_step=22.28s median_step=0.0544s run_clean=0.21s inner_total=26 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=30.1s
+=== 07:52:28 START scale_linear_50
+[scale_linear_50] DONE steps=14 t=1.0000 first_step=14.15s median_step=0.0063s run_clean=0.08s inner_total=28 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=21.7s
+=== 07:52:50 START scale_newton_50
+[scale_newton_50] DONE steps=13 t=1.0000 first_step=23.17s median_step=1.1818s run_clean=14.50s inner_total=46 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=45.8s
+=== 07:53:38 START compile_vmapF_pcT
+[compile_vmapF_pcT] DONE steps=5 t=0.2184 first_step=0.26s median_step=0.1857s run_clean=0.78s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=27.5s
+=== 07:54:06 START compile_vmapF_pcF
+[compile_vmapF_pcF] DONE steps=5 t=0.2184 first_step=0.23s median_step=0.2032s run_clean=0.84s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=26.4s
+=== 07:54:34 START compile_vmapT_pcT
+[compile_vmapT_pcT] DONE steps=5 t=0.2184 first_step=0.36s median_step=0.2379s run_clean=1.01s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=31.4s
+=== 07:55:06 START compile_linear
+[compile_linear] DONE steps=5 t=0.2711 first_step=0.04s median_step=0.0054s run_clean=0.02s inner_total=10 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=19.8s
+CLEAN_DONE

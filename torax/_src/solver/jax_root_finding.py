@@ -84,8 +84,8 @@ def root_newton_raphson(
     use_jax_custom_root: If true, use jax.lax.custom_root to allow for
       differentiable solving. This can increase compile times even when no
       derivatives are requested.
-    custom_jac: If provided, use this function to compute the Jacobian of `fun`
-      instead of jax.jacfwd.
+    custom_jac: If provided, computes the Jacobian of `fun` in the Newton
+      iterations instead of jax.jacfwd.
     linesearch_norm: Scalar norm function applied to residual vectors for line
       search acceptance. Defaults to L1 norm.
     convergence_norm: Scalar norm function applied to residual vectors for
@@ -159,12 +159,10 @@ def root_newton_raphson(
     return jnp.linalg.solve(jax.jacfwd(g)(y), y)
 
   if use_jax_custom_root:
-    if custom_jac is not None:
-      raise ValueError('custom_jac is not compatible with use_jax_custom_root.')
     x_out, metadata = jax.lax.custom_root(
         f=fun,
         initial_guess=x0,
-        solve=_newton_raphson,
+        solve=functools.partial(_newton_raphson, jacobian_fun=custom_jac),
         tangent_solve=back,
         has_aux=True,
     )

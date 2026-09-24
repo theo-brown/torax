@@ -1,0 +1,20 @@
+=== E5 (E1b + XLA_LATE) structured
+  cmp_e1b_e5_structured: lower 4.5 s, xla compile 18.2 s, first step (jit) 0.1 s, hlo 21.1 MB, steps 3
+  cmpg_e1b_e5_structured: lower 5.7 s, xla compile 21.2 s, first step (jit) 0.1 s, hlo 24.8 MB, steps 3
+DRIVER_DONE
+=== repeat E1b structured for noise
+  cmp_e1b_rep_structured: lower 4.1 s, xla compile 16.9 s, first step (jit) 0.1 s, hlo 21.1 MB, steps 3
+  cmpg_e1b_rep_structured: lower 5.3 s, xla compile 21.3 s, first step (jit) 0.1 s, hlo 24.8 MB, steps 3
+DRIVER_DONE
+=== XLA flags sweep
+  xla3_pc50_dense: lower 3.5 s, xla compile 16.1 s, first step 0.3 s, median step 270.0 ms, run_clean 0.54 s, steps 3
+  xla3_pc50_structured: lower 4.3 s, xla compile 16.6 s, first step 0.1 s, median step 69.9 ms, run_clean 0.14 s, steps 3
+  xla3_rampup100_structured: lower 0.0 s, xla compile 0.0 s, first step 22.1 s, median step 106.1 ms, run_clean 4.36 s, steps 40
+  xla2_pc50_dense: lower 3.5 s, xla compile 15.2 s, first step 0.3 s, median step 262.5 ms, run_clean 0.52 s, steps 3
+  xla2_pc50_structured: lower 4.6 s, xla compile 16.0 s, first step 0.1 s, median step 58.0 ms, run_clean 0.12 s, steps 3
+  xla2_rampup100_structured: lower 0.0 s, xla compile 0.0 s, first step 21.4 s, median step 101.6 ms, run_clean 4.44 s, steps 40
+  xla1_pc50_dense: lower 3.2 s, xla compile 15.8 s, first step 0.3 s, median step 251.2 ms, run_clean 0.50 s, steps 3
+  xla1_pc50_structured: lower 4.4 s, xla compile 15.9 s, first step 0.2 s, median step 70.0 ms, run_clean 0.14 s, steps 3
+  xla1_rampup100_structured: lower 0.0 s, xla compile 0.0 s, first step 21.5 s, median step 100.1 ms, run_clean 4.44 s, steps 40
+DRIVER_DONE
+CHAIN2_DONE

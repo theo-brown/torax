@@ -51,6 +51,7 @@ class NewtonRaphsonRuntimeParams(solver_runtime_params_lib.RuntimeParams):
   log_iterations: bool = dataclasses.field(metadata={'static': True})
   vmap_linesearch: bool = dataclasses.field(metadata={'static': True})
   max_linesearch_steps: int = dataclasses.field(metadata={'static': True})
+  jacobian_mode: str = dataclasses.field(metadata={'static': True})
 
 
 class NonlinearThetaMethod(solver.Solver):
@@ -264,6 +265,7 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         pedestal_transition_state=pedestal_transition_state,
         vmap_linesearch=solver_params.vmap_linesearch,
         max_linesearch_steps=solver_params.max_linesearch_steps,
+        jacobian_mode=solver_params.jacobian_mode,
     )
     return (
         x_new,

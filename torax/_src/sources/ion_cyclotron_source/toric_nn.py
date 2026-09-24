@@ -359,20 +359,20 @@ def _get_minority_concentration_from_composition(
   )
 
 
-def icrh_model_func(
+def icrh_globals(
     runtime_params: runtime_params_lib.RuntimeParams,
     geo: geometry.Geometry,
     source_name: str,
     core_profiles: state.CoreProfiles,
     unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
     unused_conductivity: conductivity_base.Conductivity | None,
-    toric_nn: ToricNNWrapper,
-) -> tuple[
-    array_typing.FloatVectorCell,
-    array_typing.FloatVectorCell,
-    tuple[fast_ion_lib.FastIon, ...],
-]:
-  """Compute ion/electron heat source terms."""
+) -> jax.Array:
+  """The state-dependent scalar inputs of ToricNN.
+
+  Returns `[volume_average_temperature, volume_average_density,
+  minority_concentration, temperature_peaking_factor, density_peaking_factor]`
+  in the units of `core_profiles`.
+  """
   source_params = runtime_params.sources[source_name]
   assert isinstance(source_params, RuntimeParams)
 
@@ -393,8 +393,6 @@ def icrh_model_func(
     # Use legacy parameter (backward compatibility)
     # TODO(b/434175938): Remove backward compatibility in V2.
     minority_concentration_scalar = source_params.minority_concentration
-    # For profile-dependent calculations, use constant value
-    minority_concentration_profile = source_params.minority_concentration
 
   # Construct inputs for ToricNN.
   volume_average_temperature = math_utils.volume_average(
@@ -409,6 +407,53 @@ def icrh_model_func(
       core_profiles.T_e.value[0] / volume_average_temperature  # pyrefly: ignore[bad-index]
   )
   density_peaking_factor = core_profiles.n_e.value[0] / volume_average_density  # pyrefly: ignore[bad-index]
+  return jnp.stack([
+      jnp.asarray(volume_average_temperature),
+      jnp.asarray(volume_average_density),
+      jnp.asarray(minority_concentration_scalar),
+      jnp.asarray(temperature_peaking_factor),
+      jnp.asarray(density_peaking_factor),
+  ])
+
+
+def icrh_model_func(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    source_name: str,
+    core_profiles: state.CoreProfiles,
+    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
+    unused_conductivity: conductivity_base.Conductivity | None,
+    source_globals: jax.Array,
+    toric_nn: ToricNNWrapper,
+) -> tuple[
+    array_typing.FloatVectorCell,
+    array_typing.FloatVectorCell,
+    tuple[fast_ion_lib.FastIon, ...],
+]:
+  """Compute ion/electron heat source terms, given `icrh_globals`."""
+  source_params = runtime_params.sources[source_name]
+  assert isinstance(source_params, RuntimeParams)
+
+  if source_params.minority_species is not None:
+    minority_concentration_profile = (
+        _get_minority_concentration_from_composition(
+            runtime_params.plasma_composition,
+            core_profiles,
+            source_params.minority_species,
+        )
+    )
+  else:
+    # For profile-dependent calculations, use constant value
+    minority_concentration_profile = source_params.minority_concentration
+
+  (
+      volume_average_temperature,
+      volume_average_density,
+      minority_concentration_scalar,
+      temperature_peaking_factor,
+      density_peaking_factor,
+  ) = source_globals
+
   Router = geo.R_out_face[-1]  # Use LCFS outboard radius
   Rinner = geo.R_in_face[-1]  # Use LCFS inboard radius
   # Assumption: inner and outer gaps are not functions of z0.
@@ -532,12 +577,12 @@ def icrh_model_func(
 @functools.lru_cache(maxsize=1)
 def _icrh_model_func_with_toric_nn(
     model_path: str,
-) -> source.SourceProfileFunction:
+) -> source.SplitModelFunction:
   """Returns a function that computes the ICRH source terms given a ToricNN."""
   toric_nn = ToricNNWrapper(model_path)
-  return functools.partial(
-      icrh_model_func,
-      toric_nn=toric_nn,
+  return source.SplitModelFunction(
+      globals_func=icrh_globals,
+      profile_func=functools.partial(icrh_model_func, toric_nn=toric_nn),
   )
 
 

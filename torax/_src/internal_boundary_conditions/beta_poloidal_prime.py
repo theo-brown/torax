@@ -75,11 +75,44 @@ class BetaPoloidalPrimeIBCModel(base_model.InternalBoundaryConditionModel):
   density profile and Ti/Te ratio.
   """
 
+  def references(
+      self,
+      runtime_params: runtime_params_lib.RuntimeParams,
+      geo: geometry.Geometry,
+      core_profiles: state.CoreProfiles,
+  ) -> jax.Array:
+    """The values of the state that the whole edge profile depends on.
+
+    Args:
+      runtime_params: Runtime parameters.
+      geo: Magnetic geometry of the torus.
+      core_profiles: Core plasma state profiles.
+
+    Returns:
+      psi on the axis, at the separatrix and at rho_norm_edge, and n_e, B_pol^2
+      and the total pressure at the separatrix.
+    """
+    params = runtime_params.profile_conditions.internal_boundary_conditions
+    assert isinstance(params, RuntimeParams)
+    psi_face = core_profiles.psi.face_value()
+    return jnp.concatenate([
+        jnp.atleast_1d(v)
+        for v in (
+            psi_face[0],
+            psi_face[-1],
+            jnp.interp(params.rho_norm_edge, geo.rho_face_norm, psi_face),
+            core_profiles.n_e.right_face_value,
+            psi_calculations.calc_bpol_squared(geo, core_profiles.psi)[-1],
+            core_profiles.pressure_total.right_face_value,
+        )
+    ])
+
   def __call__(
       self,
       runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
+      references: jax.Array | None = None,
   ) -> internal_boundary_conditions.InternalBoundaryConditions:
     """Evaluates edge kinetic profiles (T_e, T_i, n_e) from beta_poloidal_prime.
 
@@ -88,6 +121,7 @@ class BetaPoloidalPrimeIBCModel(base_model.InternalBoundaryConditionModel):
         configuration.
       geo: Magnetic geometry of the torus.
       core_profiles: Core plasma state profiles.
+      references: The `references` to use, if not those of core_profiles.
 
     Returns:
       Active InternalBoundaryConditions with T_e, T_i, and n_e profiles masked
@@ -99,14 +133,13 @@ class BetaPoloidalPrimeIBCModel(base_model.InternalBoundaryConditionModel):
         f' {type(params)}.'
     )
 
-    psi_face = core_profiles.psi.face_value()
-    psi_axis = psi_face[0]
-    psi_sep = psi_face[-1]
+    if references is None:
+      references = self.references(runtime_params, geo, core_profiles)
+    psi_axis, psi_sep, psi_edge, n_e_sep, bpol2_sep, p_total_sep = references
     delta_psi = psi_sep - psi_axis
     psi_norm_cell = (core_profiles.psi.value - psi_axis) / delta_psi
 
     # Map the edge model boundary location rho_norm_edge to psi_norm_edge.
-    psi_edge = jnp.interp(params.rho_norm_edge, geo.rho_face_norm, psi_face)
     psi_norm_edge = (psi_edge - psi_axis) / delta_psi
     edge_mask = geo.rho_norm >= params.rho_norm_edge
 
@@ -123,7 +156,6 @@ class BetaPoloidalPrimeIBCModel(base_model.InternalBoundaryConditionModel):
 
     # Linearly interpolate n_e in normalized poloidal flux between n_e_edge
     # (at psi_norm_edge) and n_e_sep (at psi_norm = 1.0).
-    n_e_sep = core_profiles.n_e.right_face_value
     edge_flux_frac = jnp.clip(
         (psi_norm_cell - psi_norm_edge)
         / (1.0 - psi_norm_edge + constants.CONSTANTS.eps),
@@ -135,8 +167,6 @@ class BetaPoloidalPrimeIBCModel(base_model.InternalBoundaryConditionModel):
 
     bpol2_face = psi_calculations.calc_bpol_squared(geo, core_profiles.psi)
     bpol2_cell = geometry.face_to_cell(bpol2_face)
-    bpol2_sep = bpol2_face[-1]
-    p_total_sep = core_profiles.pressure_total.right_face_value
     beta_pol_sep = p_total_sep / (
         bpol2_sep / (2.0 * constants.CONSTANTS.mu_0) + constants.CONSTANTS.eps
     )
