@@ -106,6 +106,11 @@ def enable_errors(value: bool):
     _ERRORS_ENABLED = previous_value
 
 
+def errors_enabled() -> bool:
+  """Returns whether `error_if` checks are currently enabled."""
+  return _ERRORS_ENABLED
+
+
 def error_if(
     var: jax.Array,
     cond: jax.Array,

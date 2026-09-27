@@ -29,14 +29,35 @@ from torax._src.fvm import block_1d_coeffs
 from torax._src.fvm import cell_variable
 from torax._src.geometry import geometry
 from torax._src.internal_boundary_conditions import builder as internal_boundary_conditions_builder
+from torax._src.pedestal_model import pedestal_model_output as pedestal_model_output_lib
 from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_lib
 from torax._src.sources import source_profile_builders
 from torax._src.sources import source_profiles as source_profiles_lib
 from torax._src.transport_model import transport_coefficients_builder
+from torax._src.transport_model import transport_coeffs as transport_coeffs_lib
 
 
 # pylint: disable=invalid-name
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class StateGlobals:
+  """The quantities through which the coefficients couple distant cells.
+
+  Attributes:
+    sources: The globals of the `SplitModelFunction` sources, by source name.
+    pedestal: The pedestal model output if it depends on the state (implicit
+      pedestal or ADAPTIVE_TRANSPORT), else None.
+    internal_boundary_references: The values of the state that whole internal
+      boundary profiles depend on, their counterpart of the source globals
+      (see `internal_boundary_conditions_builder.internal_boundary_references`).
+  """
+
+  sources: dict[str, jax.Array]
+  pedestal: pedestal_model_output_lib.PedestalModelOutput | None
+  internal_boundary_references: dict[str, jax.Array | None]
+
+
 class CoeffsCallback:
   """Calculates Block1DCoeffs for a state."""
 
@@ -155,6 +176,8 @@ def calc_coeffs(
     ),
     use_pereverzev: bool = False,
     explicit_call: bool = False,
+    turbulent_transport: transport_coeffs_lib.TransportCoeffs | None = None,
+    state_globals: StateGlobals | None = None,
 ) -> block_1d_coeffs.Block1DCoeffs:
   """Calculates Block1DCoeffs for the time step described by `core_profiles`.
 
@@ -182,6 +205,9 @@ def calc_coeffs(
       explicit component of the PDE. Then calculates a reduced Block1DCoeffs if
       theta_implicit=1. This saves computation for the default fully implicit
       implementation.
+    turbulent_transport: Replaces the turbulent transport coefficients if given
+      (see `transport_coefficients_builder.calculate_all_transport_coeffs`).
+    state_globals: Replaces the `calc_state_globals` of core_profiles if given.
 
   Returns:
     coeffs: Block1DCoeffs containing the coefficients at this time step.
@@ -205,6 +231,8 @@ def calc_coeffs(
         evolving_names=evolving_names,
         use_pereverzev=use_pereverzev,
         pedestal_transition_state=pedestal_transition_state,
+        turbulent_transport=turbulent_transport,
+        state_globals=state_globals,
     )
 
 
@@ -225,6 +253,8 @@ def _calc_coeffs_full(
         pedestal_transition_state_lib.PedestalTransitionState
     ),
     use_pereverzev: bool = False,
+    turbulent_transport: transport_coeffs_lib.TransportCoeffs | None = None,
+    state_globals: StateGlobals | None = None,
 ) -> block_1d_coeffs.Block1DCoeffs:
   """See `calc_coeffs` for details."""
 
@@ -246,6 +276,7 @@ def _calc_coeffs_full(
       explicit=False,
       explicit_source_profiles=explicit_source_profiles,
       conductivity=conductivity,
+      source_globals=None if state_globals is None else state_globals.sources,
   )
 
   # --- Transient term coefficients --- #
@@ -270,49 +301,21 @@ def _calc_coeffs_full(
   tic_dens_el = geo.vpr
 
   # --- Diffusion and convection term coefficients --- #
-  # Compute pedestal model output and store on transition state.
-  # When explicit_pedestal is False, fully re-evaluate the pedestal model every
-  # Newton iteration. When True, the output from pre_step is frozen. However,
-  # for ADAPTIVE_TRANSPORT mode, transport multipliers must still be
-  # re-evaluated implicitly with current profiles (the saturation model's
-  # feedback loop requires it). We call formation + saturation directly to
-  # avoid re-running _call_implementation (the expensive pedestal physics).
-  # TODO(b/434175938): V2: Consider having pedestal_model return an updated
-  # PedestalTransitionState directly, avoiding the fragile manual
-  # dataclasses.replace at every call site.
-  if not runtime_params.pedestal.explicit_pedestal:
-    pedestal_model_output = models.pedestal_model(
-        runtime_params,
-        geo,
-        core_profiles,
-        merged_source_profiles,
-        pedestal_transition_state,
-    )
+  pedestal_model_output = (
+      _evaluate_pedestal(
+          runtime_params,
+          geo,
+          core_profiles,
+          merged_source_profiles,
+          pedestal_transition_state,
+          models,
+      )
+      if state_globals is None
+      else state_globals.pedestal
+  )
+  if pedestal_model_output is not None:
     pedestal_transition_state = dataclasses.replace(
-        pedestal_transition_state,
-        pedestal_model_output=pedestal_model_output,
-    )
-  elif (
-      runtime_params.pedestal.mode
-      == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
-  ):
-    # Explicit mode with ADAPTIVE_TRANSPORT: pedestal output (T_ped, n_ped,
-    # rho_ped_top) stays frozen from pre_step, but transport multipliers are
-    # re-evaluated with current profiles.
-    frozen_pedestal_output = pedestal_transition_state.pedestal_model_output
-    transport_multipliers = models.pedestal_model.compute_transport_multipliers(
-        runtime_params,
-        geo,
-        core_profiles,
-        merged_source_profiles,
-        pedestal_transition_state,
-        frozen_pedestal_output,
-    )
-    pedestal_transition_state = dataclasses.replace(
-        pedestal_transition_state,
-        pedestal_model_output=dataclasses.replace(
-            frozen_pedestal_output, transport_multipliers=transport_multipliers
-        ),
+        pedestal_transition_state, pedestal_model_output=pedestal_model_output
     )
 
   # 2. Compute transport coefficients.
@@ -326,6 +329,7 @@ def _calc_coeffs_full(
           core_profiles=core_profiles,
           pedestal_transition_state=pedestal_transition_state,
           use_pereverzev=use_pereverzev,
+          turbulent_transport=turbulent_transport,
       )
   )
 
@@ -540,6 +544,11 @@ def _calc_coeffs_full(
           core_profiles=core_profiles,
           pedestal_transition_state=pedestal_transition_state,
           internal_boundary_condition_model=models.internal_boundary_condition_model,
+          references=(
+              None
+              if state_globals is None
+              else state_globals.internal_boundary_references
+          ),
       )
   )
 
@@ -564,6 +573,126 @@ def _calc_coeffs_full(
   )
 
   return coeffs
+
+
+def _evaluate_pedestal(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+    source_profiles: source_profiles_lib.SourceProfiles,
+    pedestal_transition_state: (
+        pedestal_transition_state_lib.PedestalTransitionState
+    ),
+    models: models_lib.Models,
+) -> pedestal_model_output_lib.PedestalModelOutput | None:
+  """The pedestal model output at core_profiles, if it depends on them."""
+  # When explicit_pedestal is False, fully re-evaluate the pedestal model every
+  # Newton iteration. When True, the output from pre_step is frozen. However,
+  # for ADAPTIVE_TRANSPORT mode, transport multipliers must still be
+  # re-evaluated implicitly with current profiles (the saturation model's
+  # feedback loop requires it). We call formation + saturation directly to
+  # avoid re-running _call_implementation (the expensive pedestal physics).
+  # TODO(b/434175938): V2: Consider having pedestal_model return an updated
+  # PedestalTransitionState directly, avoiding the fragile manual
+  # dataclasses.replace at every call site.
+  if not runtime_params.pedestal.explicit_pedestal:
+    return models.pedestal_model(
+        runtime_params,
+        geo,
+        core_profiles,
+        source_profiles,
+        pedestal_transition_state,
+    )
+  if (
+      runtime_params.pedestal.mode
+      == pedestal_runtime_params_lib.Mode.ADAPTIVE_TRANSPORT
+  ):
+    # Explicit mode with ADAPTIVE_TRANSPORT: pedestal output (T_ped, n_ped,
+    # rho_ped_top) stays frozen from pre_step, but transport multipliers are
+    # re-evaluated with current profiles.
+    frozen_pedestal_output = pedestal_transition_state.pedestal_model_output
+    transport_multipliers = models.pedestal_model.compute_transport_multipliers(
+        runtime_params,
+        geo,
+        core_profiles,
+        source_profiles,
+        pedestal_transition_state,
+        frozen_pedestal_output,
+    )
+    return dataclasses.replace(
+        frozen_pedestal_output, transport_multipliers=transport_multipliers
+    )
+  return None
+
+
+@jax.jit(static_argnames=['models'])
+def calc_state_globals(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    core_profiles: state.CoreProfiles,
+    explicit_source_profiles: source_profiles_lib.SourceProfiles,
+    models: models_lib.Models,
+    pedestal_transition_state: (
+        pedestal_transition_state_lib.PedestalTransitionState
+    ),
+) -> StateGlobals:
+  """The `StateGlobals` of core_profiles, as `calc_coeffs` evaluates them.
+
+  The sources and the pedestal are evaluated as in `_calc_coeffs_full`, so that
+  `calc_coeffs` with these injected equals `calc_coeffs`.
+
+  Args:
+    runtime_params: Runtime parameters at the time of core_profiles.
+    geo: Geometry at the time of core_profiles.
+    core_profiles: Core plasma profiles.
+    explicit_source_profiles: The explicit source profiles of the time step.
+    models: The physics models.
+    pedestal_transition_state: State of the pedestal transition.
+
+  Returns:
+    The quantities through which the coefficients at core_profiles couple
+    distant cells.
+  """
+  conductivity = models.neoclassical_models.conductivity.calculate_conductivity(
+      geo, core_profiles
+  )
+  source_profiles, source_globals = (
+      source_profile_builders.build_source_profiles_and_globals(
+          runtime_params,
+          geo,
+          core_profiles,
+          models.source_models,
+          models.neoclassical_models,
+          explicit_source_profiles,
+          conductivity,
+      )
+  )
+  pedestal = _evaluate_pedestal(
+      runtime_params,
+      geo,
+      core_profiles,
+      source_profiles,
+      pedestal_transition_state,
+      models,
+  )
+  if pedestal is not None:
+    pedestal_transition_state = dataclasses.replace(
+        pedestal_transition_state, pedestal_model_output=pedestal
+    )
+  references = (
+      internal_boundary_conditions_builder.internal_boundary_references(
+          runtime_params,
+          geo,
+          core_profiles,
+          pedestal_transition_state,
+          models.internal_boundary_condition_model,
+      )
+  )
+  return StateGlobals(
+      sources=source_globals,
+      pedestal=pedestal,
+      internal_boundary_references=references,
+  )
 
 
 @jax.jit(

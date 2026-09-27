@@ -21,11 +21,13 @@ See Source class docstring for more details on what a TORAX source is and how to
 use it.
 """
 import abc
+from collections.abc import Callable
 import dataclasses
 import enum
 import typing
 from typing import ClassVar, Protocol
 
+import jax
 from jax import numpy as jnp
 from torax._src import array_typing
 from torax._src import state
@@ -56,6 +58,31 @@ class SourceProfileFunction(Protocol):
       unused_conductivity: conductivity_base.Conductivity | None,
   ) -> tuple[SourceProfileElement, ...]:
     ...
+
+
+@dataclasses.dataclass(frozen=True)
+class SplitModelFunction:
+  """A model function that couples distant cells only through a few globals.
+
+  `globals_func` takes the arguments of a `SourceProfileFunction` and returns
+  the quantities of the state that the profile needs globally (volume
+  integrals, on-axis values) as an array. `profile_func` takes the same
+  arguments, under the same names, and these as `source_globals`, and returns
+  the profiles, which then depend on the state cell by cell. Calling the
+  `SplitModelFunction` composes the two. The structured Jacobian of the
+  Newton-Raphson solver differentiates them separately, and takes other model
+  functions to couple neighboring cells only.
+
+  It compares and hashes by its two functions, so that a copied or unpickled
+  `Source` equals the original, as with a plain function.
+  """
+
+  globals_func: Callable[..., jax.Array]
+  profile_func: Callable[..., tuple[SourceProfileElement, ...]]
+
+  def __call__(self, *args, **kwargs) -> tuple[SourceProfileElement, ...]:
+    source_globals = self.globals_func(*args, **kwargs)
+    return self.profile_func(*args, **kwargs, source_globals=source_globals)
 
 
 @enum.unique
@@ -176,6 +203,7 @@ class Source(static_dataclass.StaticDataclass, abc.ABC):
       core_profiles: state.CoreProfiles,
       calculated_source_profiles: source_profiles.SourceProfiles | None,
       conductivity: conductivity_base.Conductivity | None,
+      source_globals: jax.Array | None = None,
   ) -> tuple[SourceProfileElement, ...]:
     """Returns the cell grid profile for this source during one time step.
 
@@ -199,6 +227,8 @@ class Source(static_dataclass.StaticDataclass, abc.ABC):
         See source_profile_builders.py for more details.
       conductivity: Conductivity profile if it exists. It is only provided for
         implicit sources.
+      source_globals: If given, the globals of a `SplitModelFunction` to
+        evaluate its profile from.
 
     Returns:
       A tuple with one element per affected core profile. Each element is either
@@ -213,7 +243,7 @@ class Source(static_dataclass.StaticDataclass, abc.ABC):
           raise ValueError(
               'Source is in MODEL_BASED mode but has no model function.'
           )
-        res = self.model_func(
+        args = (
             runtime_params,
             geo,
             self.source_name,
@@ -221,6 +251,13 @@ class Source(static_dataclass.StaticDataclass, abc.ABC):
             calculated_source_profiles,
             conductivity,
         )
+        if source_globals is None:
+          res = self.model_func(*args)
+        else:
+          assert isinstance(self.model_func, SplitModelFunction)
+          res = self.model_func.profile_func(
+              *args, source_globals=source_globals
+          )
       case sources_runtime_params_lib.Mode.PRESCRIBED:
         expected_len = len(self.affected_core_profiles)
         prescribed_len = len(source_params.prescribed_values)
