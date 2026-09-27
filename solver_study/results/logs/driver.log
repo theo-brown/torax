@@ -1,0 +1,58 @@
+=== 23:42:04 START base_rampup config=torax.examples.iterhybrid_rampup overrides={} extra=
+=== 23:43:05 END base_rampup rc=0
+[base_rampup] DONE steps=40 t=80.0000 first_step=26.78s median_step=0.6408s run_clean=24.95s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=60.7s
+=== 23:43:05 START rampup_log config=torax.examples.iterhybrid_rampup overrides={"solver": {"log_iterations": true}} extra=--capture-log
+=== 23:44:21 END rampup_log rc=0
+[rampup_log] DONE steps=40 t=80.0000 first_step=27.51s median_step=0.8347s run_clean=39.71s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=75.2s
+=== 23:44:21 START base_basic config=torax.examples.basic_config overrides={} extra=
+=== 23:44:38 END base_basic rc=0
+[base_basic] DONE steps=21 t=5.0000 first_step=8.43s median_step=0.0058s run_clean=0.12s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=15.4s
+=== 23:44:38 START base_step config=torax.examples.step_flattop_bgb overrides={} extra=
+=== 23:45:43 END base_step rc=0
+[base_step] DONE steps=40 t=400.0000 first_step=29.79s median_step=0.6180s run_clean=25.40s inner_total=61 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=64.6s
+=== 23:45:43 START base_small_dt config=torax.benchmarks.iterhybrid_predictor_corrector_fixed_small_dt overrides={} extra=
+=== 23:46:51 END base_small_dt rc=0
+[base_small_dt] DONE steps=5000 t=5.0000 first_step=12.57s median_step=0.0058s run_clean=32.26s inner_total=10000 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=66.4s
+=== 23:46:51 START cmp_a_linear config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}} extra=
+=== 23:47:14 END cmp_a_linear rc=0
+[cmp_a_linear] DONE steps=7 t=2.0000 first_step=14.26s median_step=0.0053s run_clean=0.04s inner_total=14 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=22.3s
+=== 23:47:14 START cmp_b_newton config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "solver": {"solver_type": "newton_raphson"}} extra=
+=== 23:47:46 END cmp_b_newton rc=0
+[cmp_b_newton] DONE steps=10 t=2.0000 first_step=21.78s median_step=0.0491s run_clean=0.51s inner_total=40 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=30.5s
+=== 23:47:46 START cmp_c_newton_xold config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "solver": {"solver_type": "newton_raphson", "initial_guess_mode": "x_old"}} extra=
+=== 23:48:10 END cmp_c_newton_xold rc=0
+[cmp_c_newton_xold] DONE steps=10 t=2.0000 first_step=14.69s median_step=0.0562s run_clean=0.51s inner_total=53 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=22.8s
+=== 23:48:10 START cmp_d_newton_nopc config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "solver": {"solver_type": "newton_raphson", "use_predictor_corrector": false}} extra=
+=== 23:48:35 END cmp_d_newton_nopc rc=0
+[cmp_d_newton_nopc] DONE steps=11 t=2.0000 first_step=16.89s median_step=0.0537s run_clean=0.58s inner_total=57 outer>1=1 err2=0 err1=0 sim_error=NO_ERROR proc_total=24.2s
+=== 23:48:35 START cmp_a10_linear config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "solver": {"n_corrector_steps": 10}} extra=
+=== 23:49:02 END cmp_a10_linear rc=0
+[cmp_a10_linear] DONE steps=8 t=2.0000 first_step=16.43s median_step=0.0122s run_clean=0.09s inner_total=88 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=25.4s
+=== 23:49:02 START compile_vmapF_pcT config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "vmap_linesearch": false, "use_predictor_corrector": true}} extra=--aot --max-steps 5
+=== 23:49:43 END compile_vmapF_pcT rc=0
+[compile_vmapF_pcT] DONE steps=5 t=0.2184 first_step=1.79s median_step=1.2996s run_clean=5.49s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=39.9s
+=== 23:49:43 START compile_vmapT_pcT config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "vmap_linesearch": true, "use_predictor_corrector": true}} extra=--aot --max-steps 5
+=== 23:50:33 END compile_vmapT_pcT rc=0
+[compile_vmapT_pcT] DONE steps=5 t=0.2184 first_step=1.68s median_step=1.3161s run_clean=5.36s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=49.6s
+=== 23:50:33 START compile_vmapF_pcF config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "vmap_linesearch": false, "use_predictor_corrector": false}} extra=--aot --max-steps 5
+=== 23:51:09 END compile_vmapF_pcF rc=0
+[compile_vmapF_pcF] DONE steps=5 t=0.2184 first_step=1.65s median_step=1.3171s run_clean=5.86s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=34.9s
+=== 23:51:09 START compile_vmapT_pcF config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "vmap_linesearch": true, "use_predictor_corrector": false}} extra=--aot --max-steps 5
+=== 23:52:02 END compile_vmapT_pcF rc=0
+[compile_vmapT_pcF] DONE steps=5 t=0.2184 first_step=2.57s median_step=3.0704s run_clean=12.60s inner_total=21 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=51.4s
+=== 23:52:02 START compile_linear config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}} extra=--aot --max-steps 5
+=== 23:52:28 END compile_linear rc=0
+[compile_linear] DONE steps=5 t=0.2711 first_step=0.05s median_step=0.0078s run_clean=0.03s inner_total=10 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=25.4s
+=== 23:52:28 START scale_linear_25 config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 25}} extra=--max-steps 60
+=== 23:52:54 END scale_linear_25 rc=0
+[scale_linear_25] DONE steps=4 t=1.0000 first_step=15.60s median_step=0.0067s run_clean=0.02s inner_total=8 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=24.3s
+=== 23:52:54 START scale_newton_25 config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 25}, "solver": {"solver_type": "newton_raphson"}} extra=--max-steps 60
+=== 23:53:29 END scale_newton_25 rc=0
+[scale_newton_25] DONE steps=5 t=1.0000 first_step=26.25s median_step=0.0784s run_clean=0.30s inner_total=26 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=34.3s
+=== 23:53:29 START scale_linear_50 config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 50}} extra=--max-steps 60
+=== 23:53:59 END scale_linear_50 rc=0
+[scale_linear_50] DONE steps=14 t=1.0000 first_step=18.10s median_step=0.0074s run_clean=0.11s inner_total=28 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=28.5s
+=== 23:53:59 START scale_newton_50 config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson"}} extra=--max-steps 60
+=== 23:54:47 END scale_newton_50 rc=0
+[scale_newton_50] DONE steps=13 t=1.0000 first_step=22.84s median_step=1.1937s run_clean=14.90s inner_total=46 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=46.9s
+=== 23:54:47 START scale_linear_100 config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 100}} extra=--max-steps 60

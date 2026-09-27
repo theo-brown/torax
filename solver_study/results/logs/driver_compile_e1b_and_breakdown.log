@@ -1,0 +1,50 @@
+=== structured tests (E1b)
+[       OK ] StructuredJacobianTest.test_config_option
+[       OK ] StructuredJacobianTest.test_matches_dense_jacobian0 (n_rho=10, global_sources=False)
+[       OK ] StructuredJacobianTest.test_matches_dense_jacobian1 (n_rho=10, global_sources=True)
+[       OK ] StructuredJacobianTest.test_matches_dense_jacobian2 (n_rho=25, global_sources=False)
+[       OK ] StructuredJacobianTest.test_matches_dense_jacobian3 (n_rho=25, global_sources=True)
+[       OK ] StructuredJacobianTest.test_newton_solve_block_structured_matches_dense0 (False)
+[       OK ] StructuredJacobianTest.test_newton_solve_block_structured_matches_dense1 (True)
+[       OK ] StructuredJacobianTest.test_source_globals_split_is_exact
+[       OK ] StructuredJacobianTest.test_stencil_helpers_are_consistent
+[       OK ] StructuredJacobianTest.test_structured_rejects_implicit_pedestal
+[       OK ] StructuredJacobianTest.test_verification_passes_under_error_checking
+Ran 11 tests in 189.398s
+OK
+=== compile driver TAG=e1b
+  cmp_e1b_dense: lower 3.5 s, xla compile 17.0 s, first step (jit) 0.3 s, hlo 21.4 MB, steps 3
+  cmpg_e1b_dense: lower 3.6 s, xla compile 19.2 s, first step (jit) 0.4 s, hlo 24.0 MB, steps 3
+  cmp_e1b_structured: lower 4.3 s, xla compile 21.9 s, first step (jit) 0.1 s, hlo 21.8 MB, steps 3
+  cmpg_e1b_structured: lower 5.6 s, xla compile 28.1 s, first step (jit) 0.1 s, hlo 25.4 MB, steps 3
+DRIVER_DONE
+=== breakdown plain
+n_rho=50 globals=False N=200 seeds x/h/c/g = 20/16/8/0
+residual R(x) primal                             lower   0.70 s  xla   1.73 s  hlo   1.57 MB  run     0.94 ms
+dense jacfwd(R)                                  lower   1.72 s  xla   4.29 s  hlo   3.55 MB  run    28.59 ms
+structured Jacobian (working tree)               lower   2.78 s  xla   5.05 s  hlo   3.49 MB  run     4.59 ms
+h(x) primal                                      lower   0.16 s  xla   0.89 s  hlo   0.45 MB  run     0.78 ms
+dh/dx: vmap(jvp(h)) 16 seeds                     lower   0.82 s  xla   1.55 s  hlo   0.90 MB  run     2.66 ms
+h linearize + vmap(lin) 16 seeds                 lower   0.26 s  xla   1.64 s  hlo   0.91 MB  run     2.38 ms
+G(x,c,g) primal                                  lower   0.17 s  xla   1.46 s  hlo   1.15 MB  run     0.36 ms
+dG/dx: vmap(jvp(G)) x seeds                      lower   0.93 s  xla   3.22 s  hlo   2.59 MB  run     0.76 ms
+G linearize + vmap(lin) x seeds                  lower   0.59 s  xla   3.70 s  hlo   2.58 MB  run     1.07 ms
+DONE
+=== breakdown globals
+n_rho=50 globals=True N=200 seeds x/h/c/g = 20/16/8/10
+residual R(x) primal                             lower   0.72 s  xla   2.19 s  hlo   1.84 MB  run     1.30 ms
+dense jacfwd(R)                                  lower   2.15 s  xla   5.29 s  hlo   4.13 MB  run    26.49 ms
+structured Jacobian (working tree)               lower   3.34 s  xla   6.84 s  hlo   4.54 MB  run     4.80 ms
+h(x) primal                                      lower   0.11 s  xla   0.81 s  hlo   0.45 MB  run     0.55 ms
+dh/dx: vmap(jvp(h)) 16 seeds                     lower   0.57 s  xla   1.71 s  hlo   0.89 MB  run     2.69 ms
+h linearize + vmap(lin) 16 seeds                 lower   0.24 s  xla   1.80 s  hlo   0.91 MB  run     2.56 ms
+G(x,c,g) primal                                  lower   0.20 s  xla   1.61 s  hlo   1.27 MB  run     0.44 ms
+dG/dx: vmap(jvp(G)) x seeds                      lower   1.35 s  xla   3.76 s  hlo   2.80 MB  run     1.07 ms
+G linearize + vmap(lin) x seeds                  lower   0.74 s  xla   4.36 s  hlo   2.84 MB  run     1.24 ms
+g(x) primal                                      lower   0.12 s  xla   0.88 s  hlo   0.41 MB  run     0.33 ms
+dg/dx: vmap(vjp(g)) k seeds                      lower   1.33 s  xla   1.73 s  hlo   0.96 MB  run     0.77 ms
+g linearize + transpose k seeds                  lower   0.21 s  xla   1.82 s  hlo   0.94 MB  run     0.65 ms
+DONE
+CHAIN_DONE
+
+[exited with code 0]

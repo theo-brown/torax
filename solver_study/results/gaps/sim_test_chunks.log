@@ -1,0 +1,24 @@
+=== 11:45:16 chunk 0
+Ran 8 tests in 276.330s
+OK
+=== 11:50:02 chunk 8
+Ran 8 tests in 250.701s
+OK
+=== 11:54:23 chunk 16
+Ran 8 tests in 277.609s
+OK
+=== 11:59:08 chunk 24
+Ran 8 tests in 423.854s
+OK
+=== 12:06:22 chunk 32
+Ran 8 tests in 352.083s
+OK
+=== 12:12:26 chunk 40
+Ran 8 tests in 299.633s
+OK
+=== 12:17:39 chunk 48
+Ran 4 tests in 204.766s
+OK
+=== 12:21:12 others
+Ran 11 tests in 340.226s
+OK

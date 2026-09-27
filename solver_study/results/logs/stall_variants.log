@@ -1,0 +1,25 @@
+=== stall_variants ===
+baseline                   dt=0.02  newton it=4 conv=False final=4.73e-04 ls_extra=12 taylor err(s=1e-4,1e-3,1e-2)=['1.45e-01', '1.73e+00', '1.05e+00'] hist=['7.8e-03', '1.3e-03', '4.8e-04', '4.7e-04', '4.7e-04']
+baseline                   dt=0.05  newton it=4 conv=False final=1.31e-03 ls_extra=13 taylor err(s=1e-4,1e-3,1e-2)=['8.20e-02', '1.45e+00', '1.12e+00'] hist=['1.4e-02', '2.5e-03', '1.3e-03', '1.3e-03', '1.3e-03']
+DV_effective_off           dt=0.02  newton it=2 conv=True final=6.75e-10 ls_extra=0 taylor err(s=1e-4,1e-3,1e-2)=['9.06e-02', '9.38e-03', '8.93e-04'] hist=['4.2e-03', '2.7e-05', '6.7e-10']
+DV_effective_off           dt=0.05  newton it=2 conv=True final=1.02e-07 ls_extra=0 taylor err(s=1e-4,1e-3,1e-2)=['6.22e-04', '6.34e-05', '7.47e-06'] hist=['1.7e-02', '2.0e-04', '1.0e-07']
+avoid_big_negative_s_off   dt=0.02  newton it=6 conv=False final=5.80e-04 ls_extra=18 taylor err(s=1e-4,1e-3,1e-2)=['9.76e-02', '1.36e+00', '1.09e+00'] hist=['8.3e-03', '1.5e-03', '5.9e-04', '5.9e-04', '5.8e-04', '5.8e-04', '5.8e-04']
+avoid_big_negative_s_off   dt=0.05  newton it=5 conv=False final=1.68e-03 ls_extra=18 taylor err(s=1e-4,1e-3,1e-2)=['2.72e-02', '1.05e+00', '1.19e+00'] hist=['1.5e-02', '2.5e-03', '1.7e-03', '1.7e-03', '1.7e-03', '1.7e-03']
+Traceback (most recent call last):
+  File "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/stall_variants.py", line 21, in <module>
+    p = bc.build_problem(cfg, n_warm_steps=3, dt=dt, solver_overrides={'use_pereverzev': True})
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/bench_common.py", line 142, in build_problem
+    cfg = torax.ToraxConfig.from_dict(cfg_dict)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/torax/torax/_src/torax_pydantic/model_base.py", line 129, in from_dict
+    return cls.model_validate(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/venv/lib/python3.12/site-packages/pydantic/main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for ToraxConfig
+transport.core_transport_models.qlknn.qlknn.An_min
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+SV_DONE

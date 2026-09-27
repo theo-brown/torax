@@ -1,0 +1,123 @@
+qlknn uniform n_rho=16 stencil used: (2, 2)
+  noise 0.0: faces with non-finite rows: []
+  noise 0.05: faces with non-finite rows: []
+  offset -2: 1.9e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 1.6e-01
+qlknn skewed n_rho=16 stencil used: (2, 2)
+  noise 0.0: faces with non-finite rows: []
+  noise 0.05: faces with non-finite rows: []
+  offset -2: 1.5e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 1.5e-01
+  offset +2: 5.2e-04
+qlknn_rotation uniform n_rho=16 stencil used: (3, 4)
+  noise 0.0: faces with non-finite rows: []
+  noise 0.05: faces with non-finite rows: []
+  offset -3: 6.8e-03
+  offset -2: 3.5e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 2.9e-01
+  offset +2: 9.4e-03
+qlknn_rotation skewed n_rho=16 stencil used: (3, 4)
+  noise 0.0: faces with non-finite rows: []
+  noise 0.05: faces with non-finite rows: []
+  offset -3: 7.4e-03
+  offset -2: 3.5e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 3.1e-01
+  offset +2: 8.3e-03
+  offset +3: 3.6e-05
+  offset +4: 6.3e-08
+tglfnn_rotation uniform n_rho=16 stencil used: (3, 4)
+  noise 0.0: faces with non-finite rows: [1, 2]
+  noise 0.05: faces with non-finite rows: [1, 2]
+  offset -4: 1.1e-05
+  offset -3: 1.2e-03
+  offset -2: 1.2e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 1.1e-01
+  offset +2: 8.1e-04
+  offset +3: 1.6e-05
+  outside the stencil: face 4 offset -4: 3.9e-06
+  outside the stencil: face 5 offset -4: 1.3e-06
+  outside the stencil: face 6 offset -4: 1.5e-06
+  outside the stencil: face 7 offset -4: 5.5e-06
+  outside the stencil: face 8 offset -4: 1.1e-05
+  outside the stencil: face 9 offset -4: 1.1e-05
+  outside the stencil: face 10 offset -4: 1.0e-05
+  outside the stencil: face 11 offset -4: 8.5e-06
+  outside the stencil: face 12 offset -4: 6.3e-06
+  outside the stencil: face 13 offset -4: 5.8e-06
+  outside the stencil: face 14 offset -4: 7.5e-07
+tglfnn_rotation skewed n_rho=16 stencil used: (3, 4)
+  noise 0.0: faces with non-finite rows: [1, 2]
+  noise 0.05: faces with non-finite rows: [1, 2]
+  offset -4: 1.2e-05
+  offset -3: 1.2e-03
+  offset -2: 1.3e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 1.2e-01
+  offset +2: 1.0e-03
+  offset +3: 1.8e-05
+  offset +4: 8.4e-08
+  offset +5: 1.4e-10
+  outside the stencil: face 3 offset +5: 1.1e-11
+  outside the stencil: face 4 offset -4: 3.5e-06
+  outside the stencil: face 4 offset +5: 3.9e-11
+  outside the stencil: face 5 offset -4: 8.8e-07
+  outside the stencil: face 5 offset +5: 1.3e-11
+  outside the stencil: face 6 offset -4: 1.8e-06
+  outside the stencil: face 6 offset +5: 2.4e-11
+  outside the stencil: face 7 offset -4: 9.0e-06
+  outside the stencil: face 7 offset +5: 1.2e-10
+  outside the stencil: face 8 offset -4: 1.1e-05
+  outside the stencil: face 8 offset +5: 1.4e-10
+  outside the stencil: face 9 offset -4: 1.2e-05
+  outside the stencil: face 9 offset +5: 1.3e-10
+  outside the stencil: face 10 offset -4: 1.0e-05
+  outside the stencil: face 10 offset +5: 6.6e-11
+  outside the stencil: face 11 offset -4: 8.7e-06
+  outside the stencil: face 12 offset -4: 5.7e-06
+  outside the stencil: face 13 offset -4: 5.6e-06
+  outside the stencil: face 14 offset -4: 5.9e-07
+tglfnn_rotation uniform n_rho=30 stencil used: (3, 4)
+  noise 0.0: faces with non-finite rows: [1, 2]
+  noise 0.05: faces with non-finite rows: [1, 2]
+  offset -4: 2.5e-05
+  offset -3: 2.2e-03
+  offset -2: 2.5e-01
+  offset -1: 1.0e+00
+  offset +0: 1.0e+00
+  offset +1: 2.1e-01
+  offset +2: 1.8e-03
+  offset +3: 2.5e-05
+  offset +4: 2.8e-20
+  outside the stencil: face 5 offset -4: 6.4e-07
+  outside the stencil: face 6 offset -4: 1.2e-06
+  outside the stencil: face 7 offset -4: 1.3e-06
+  outside the stencil: face 8 offset -4: 2.3e-06
+  outside the stencil: face 9 offset -4: 2.2e-06
+  outside the stencil: face 10 offset -4: 8.6e-06
+  outside the stencil: face 11 offset -4: 1.1e-06
+  outside the stencil: face 12 offset -4: 3.5e-06
+  outside the stencil: face 13 offset -4: 1.4e-05
+  outside the stencil: face 14 offset -4: 1.9e-05
+  outside the stencil: face 15 offset -4: 2.2e-05
+  outside the stencil: face 16 offset -4: 2.5e-05
+  outside the stencil: face 17 offset -4: 2.2e-05
+  outside the stencil: face 18 offset -4: 2.0e-05
+  outside the stencil: face 19 offset -4: 1.9e-05
+  outside the stencil: face 20 offset -4: 1.8e-05
+  outside the stencil: face 21 offset -4: 1.6e-05
+  outside the stencil: face 22 offset -4: 1.3e-05
+  outside the stencil: face 23 offset -4: 1.1e-05
+  outside the stencil: face 24 offset -4: 1.1e-05
+  outside the stencil: face 25 offset -4: 8.7e-06
+  outside the stencil: face 26 offset -4: 2.5e-06

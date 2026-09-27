@@ -1,0 +1,41 @@
+=== structured block under errors, 3 fresh processes
+structured with errors: 29.3 s, iterations 7
+rc=0
+structured with errors: 27.2 s, iterations 7
+rc=0
+structured with errors: 27.0 s, iterations 7
+rc=0
+=== slim tests
+[       OK ] StructuredJacobianTest.test_config_validation
+[       OK ] StructuredJacobianTest.test_source_globals_reproduce_model_functions
+[       OK ] StructuredJacobianTest.test_structured_solve_matches_dense0 (False)
+[       OK ] StructuredJacobianTest.test_structured_solve_matches_dense1 (True)
+Ran 4 tests in 143.077s
+OK
+=== root finding tests
+Ran 3 tests in 3.977s OK 
+=== compile driver TAG=clean
+  cmp_clean_dense: lower 3.3 s, xla compile 15.8 s, first step (jit) 0.3 s, hlo 21.4 MB, steps 3
+  cmpg_clean_dense: lower 3.9 s, xla compile 18.5 s, first step (jit) 0.4 s, hlo 24.0 MB, steps 3
+  cmp_clean_structured: lower 4.5 s, xla compile 17.1 s, first step (jit) 0.3 s, hlo 21.1 MB, steps 3
+  cmpg_clean_structured: lower 5.3 s, xla compile 19.8 s, first step (jit) 0.1 s, hlo 24.8 MB, steps 3
+DRIVER_DONE
+=== benchmark v4
+=== table v4
+| case | n_rho | N | mode | steps | compile (first step) | run (excl. compile) | median step | Newton its total | ms per Newton it | final-profile rel. diff vs dense |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `iterhybrid_rampup` + cyclotron, constant-fraction radiation, ToricNN ICRH | 50 | 200 | dense | 40 | 22.5 s | 8.74 s | 206 ms | 128 | 70 | - |
+|  | 50 | 200 | structured | 40 | 28.9 s | 2.93 s | 71 ms | 128 | 24 | 2.1e-14 |
+| same, n_rho = 100 | 100 | 400 | dense | 40 | 24.0 s | 21.04 s | 492 ms | 130 | 167 | - |
+|  | 100 | 400 | structured | 40 | 28.4 s | 4.58 s | 112 ms | 130 | 36 | 4.1e-14 |
+| `iterhybrid_rampup` (dt = 2 s, 40 steps) | 50 | 200 | dense | 40 | 20.1 s | 7.59 s | 178 ms | 109 | 72 | - |
+|  | 50 | 200 | structured | 40 | 20.7 s | 2.15 s | 54 ms | 109 | 20 | 2.2e-14 |
+| `iterhybrid_rampup`, n_rho = 100 | 100 | 400 | dense | 40 | 19.9 s | 21.80 s | 510 ms | 139 | 162 | - |
+|  | 100 | 400 | structured | 40 | 22.0 s | 4.17 s | 97 ms | 139 | 31 | 2.6e-14 |
+| `iterhybrid_predictor_corrector`, Newton, chi dt, t_final = 1 s | 25 | 100 | dense | 5 | 18.1 s | 0.32 s | 80 ms | 26 | 16 | - |
+|  | 25 | 100 | structured | 5 | 19.6 s | 0.16 s | 40 ms | 26 | 8 | 3.8e-15 |
+| same, n_rho = 50 | 50 | 200 | dense | 13 | 18.7 s | 2.48 s | 204 ms | 46 | 61 | - |
+|  | 50 | 200 | structured | 13 | 20.2 s | 0.68 s | 52 ms | 46 | 16 | 8.3e-15 |
+| same, n_rho = 100 | 100 | 400 | dense | 49 | 18.7 s | 20.97 s | 361 ms | 127 | 172 | - |
+|  | 100 | 400 | structured | 49 | 20.7 s | 3.60 s | 69 ms | 127 | 30 | 3.9e-14 |
+CHAIN5_DONE
