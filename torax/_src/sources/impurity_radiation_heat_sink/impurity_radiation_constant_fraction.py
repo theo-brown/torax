@@ -33,18 +33,28 @@ from torax._src.torax_pydantic import torax_pydantic
 
 
 # pylint: disable=invalid-name
-def radially_constant_fraction_of_Pin(
+def _radially_constant_fraction_of_Pin_globals(
     runtime_params: runtime_params_lib.RuntimeParams,
     geo: geometry.Geometry,
     source_name: str,
     unused_core_profiles: state.CoreProfiles,
     calculated_source_profiles: source_profiles_lib.SourceProfiles | None,
     unused_conductivity: conductivity_base.Conductivity | None,
-) -> tuple[array_typing.FloatVectorCell, ...]:
-  """Model function for radiation heat sink from impurities."""
-  source_params = runtime_params.sources[source_name]
-  assert isinstance(source_params, RuntimeParams)
+) -> jax.Array:
+  """The globals of `radially_constant_fraction_of_Pin`.
 
+  Args:
+    runtime_params: Unused.
+    geo: The geometry.
+    source_name: Unused.
+    unused_core_profiles: Unused.
+    calculated_source_profiles: The source profiles calculated so far.
+    unused_conductivity: Unused.
+
+  Returns:
+    The total heating power [W] of the calculated sources.
+  """
+  del runtime_params, source_name  # Unused.
   if calculated_source_profiles is None:
     raise ValueError(
         'calculated_source_profiles is a required argument for'
@@ -58,24 +68,56 @@ def radially_constant_fraction_of_Pin(
 
   # TODO(b/383061556) Move away from using brittle source names to identify
   # sinks/sources.
-  source_profiles = jnp.zeros_like(geo.rho)
-  for source_name in calculated_source_profiles.T_e:
-    if 'sink' not in source_name:
-      source_profiles += calculated_source_profiles.T_e[source_name]
-  for source_name in calculated_source_profiles.T_i:
-    if 'sink' not in source_name:
-      source_profiles += calculated_source_profiles.T_i[source_name]
+  Q_total_in = jnp.zeros_like(geo.rho)
+  for name in calculated_source_profiles.T_e:
+    if 'sink' not in name:
+      Q_total_in += calculated_source_profiles.T_e[name]
+  for name in calculated_source_profiles.T_i:
+    if 'sink' not in name:
+      Q_total_in += calculated_source_profiles.T_i[name]
+  return math_utils.volume_integration(Q_total_in, geo)
 
-  Q_total_in = source_profiles
-  P_total_in = math_utils.volume_integration(Q_total_in, geo)
 
-  # Calculate the heat sink as a fraction of the total power input
+def _radially_constant_fraction_of_Pin_from_globals(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    source_name: str,
+    unused_core_profiles: state.CoreProfiles,
+    calculated_source_profiles: source_profiles_lib.SourceProfiles | None,
+    unused_conductivity: conductivity_base.Conductivity | None,
+    source_globals: jax.Array,
+) -> tuple[array_typing.FloatVectorCell, ...]:
+  """The heat sink of `radially_constant_fraction_of_Pin`, given its globals.
+
+  Args:
+    runtime_params: The runtime parameters.
+    geo: The geometry.
+    source_name: The name of the source.
+    unused_core_profiles: Unused.
+    calculated_source_profiles: Unused: only through source_globals.
+    unused_conductivity: Unused.
+    source_globals: The globals of core_profiles, or injected ones.
+
+  Returns:
+    A flat heat sink absorbing the fraction `fraction_P_heating` of the total
+    heating power.
+  """
+  del calculated_source_profiles  # Only through source_globals.
+  source_params = runtime_params.sources[source_name]
+  assert isinstance(source_params, RuntimeParams)
   return (
       -source_params.fraction_P_heating
-      * P_total_in
+      * source_globals
       / geo.volume_face[-1]
       * jnp.ones_like(geo.rho),
   )
+
+
+# Model function for radiation heat sink from impurities.
+radially_constant_fraction_of_Pin = source_lib.SplitModelFunction(
+    globals_func=_radially_constant_fraction_of_Pin_globals,
+    profile_func=_radially_constant_fraction_of_Pin_from_globals,
+)
 
 
 @jax.tree_util.register_dataclass

@@ -15,6 +15,8 @@
 """Output of the pedestal model."""
 
 import dataclasses
+from typing import TypeVar
+
 import jax
 from jax import numpy as jnp
 from torax._src import array_typing
@@ -27,6 +29,10 @@ from torax._src.pedestal_model import runtime_params as pedestal_runtime_params_
 from torax._src.transport_model import transport_coeffs as transport_coeffs_lib
 
 # pylint: disable=invalid-name
+
+_TransportCoeffsT = TypeVar(
+    "_TransportCoeffsT", bound=transport_coeffs_lib.TransportCoeffs
+)
 
 
 @jax.tree_util.register_dataclass
@@ -110,6 +116,7 @@ class PedestalModelOutput:
       pedestal_profile_form: pedestal_runtime_params_lib.PedestalProfileForm = (
           pedestal_runtime_params_lib.PedestalProfileForm.SET_AT_PED_TOP
       ),
+      references: jax.Array | None = None,
   ) -> internal_boundary_conditions_lib.InternalBoundaryConditions:
     """Convert the pedestal model output to internal boundary conditions.
 
@@ -128,6 +135,8 @@ class PedestalModelOutput:
       core_profiles: Core profiles, needed for ψ_N mapping and separatrix values
         when using mtanh profiles.
       pedestal_profile_form: Controls the shape of the pedestal profile.
+      references: The `mtanh_references` to use, if not those of
+        core_profiles.
 
     Returns:
       Internal boundary conditions for T_i, T_e, n_e.
@@ -139,7 +148,9 @@ class PedestalModelOutput:
               "core_profiles must be provided when pedestal_profile_form"
               " is MTANH."
           )
-        return self._tanh_internal_boundary_conditions(geo, core_profiles)
+        return self._tanh_internal_boundary_conditions(
+            geo, core_profiles, references
+        )
       case pedestal_runtime_params_lib.PedestalProfileForm.SET_AT_PED_TOP:
         # Single-point mask: pin values at the nearest cell to ped top.
         rho_norm_ped_top_idx = jnp.argmin(
@@ -156,10 +167,54 @@ class PedestalModelOutput:
             n_e=jnp.where(pedestal_mask, self.n_e_ped, 0.0),
         )
 
+  def mtanh_references(
+      self,
+      geo: geometry.Geometry,
+      core_profiles: state.CoreProfiles,
+  ) -> jax.Array:
+    """The values of the state that the whole MTANH profile depends on.
+
+    Args:
+      geo: Geometry object for the grid.
+      core_profiles: Core profiles.
+
+    Returns:
+      psi on the axis and at the separatrix, ψ_N at the cell nearest to the
+      pedestal top, and T_i, T_e and n_e at the separatrix.
+    """
+    _, references = self._mtanh_inputs(geo, core_profiles)
+    return jnp.concatenate([jnp.atleast_1d(v) for v in references])
+
+  def _mtanh_inputs(
+      self,
+      geo: geometry.Geometry,
+      core_profiles: state.CoreProfiles,
+  ) -> tuple[jax.Array, tuple[jax.Array, ...]]:
+    """ψ_N on the cell grid and the `mtanh_references`, unstacked."""
+    psi_face = core_profiles.psi.face_value()
+    psi_norm_cell = (core_profiles.psi.value - psi_face[0]) / (  # pyrefly: ignore[bad-index]
+        psi_face[-1] - psi_face[0]  # pyrefly: ignore[bad-index]
+    )
+    # Use psi at the nearest cell to rho_ped_top (not interpolated) so that
+    # the mtanh formula evaluates to exactly q_top at that cell.
+    rho_norm_ped_top_idx = jnp.argmin(
+        jnp.abs(geo.rho_norm - self.rho_norm_ped_top)
+    )
+    return psi_norm_cell, (
+        psi_face[0],  # pyrefly: ignore[bad-index]
+        psi_face[-1],  # pyrefly: ignore[bad-index]
+        psi_norm_cell[rho_norm_ped_top_idx],
+        # Separatrix values from the rightmost face of core_profiles.
+        core_profiles.T_i.right_face_value,
+        core_profiles.T_e.right_face_value,
+        core_profiles.n_e.right_face_value,
+    )
+
   def _tanh_internal_boundary_conditions(
       self,
       geo: geometry.Geometry,
       core_profiles: state.CoreProfiles,
+      references: jax.Array | None = None,
   ) -> internal_boundary_conditions_lib.InternalBoundaryConditions:
     """Compute mtanh-shaped internal boundary conditions.
 
@@ -179,30 +234,26 @@ class PedestalModelOutput:
     Args:
       geo: Geometry object for the grid.
       core_profiles: Core profiles for ψ_N mapping and separatrix values.
+      references: The `mtanh_references` to use, if not those of
+        core_profiles.
 
     Returns:
       Internal boundary conditions with mtanh-shaped profiles for T_i, T_e, n_e.
     """
     # Get ψ_N at each cell grid point.
-    psi_face = core_profiles.psi.face_value()
-    psi_norm_cell = (core_profiles.psi.value - psi_face[0]) / (  # pyrefly: ignore[bad-index]
-        psi_face[-1] - psi_face[0]  # pyrefly: ignore[bad-index]
-    )
+    if references is None:
+      psi_norm_cell, (_, _, psi_top, T_i_sep, T_e_sep, n_e_sep) = (
+          self._mtanh_inputs(geo, core_profiles)
+      )
+    else:
+      psi_axis, psi_sep, psi_top, T_i_sep, T_e_sep, n_e_sep = references
+      psi_norm_cell = (core_profiles.psi.value - psi_axis) / (
+          psi_sep - psi_axis
+      )
 
     # Derive Δ from rho_norm_ped_top via ψ_N mapping.
-    # Use psi at the nearest cell to rho_ped_top (not interpolated) so that
-    # the mtanh formula evaluates to exactly q_top at that cell.
-    rho_norm_ped_top_idx = jnp.argmin(
-        jnp.abs(geo.rho_norm - self.rho_norm_ped_top)
-    )
-    psi_top = psi_norm_cell[rho_norm_ped_top_idx]
     delta = (1.0 - psi_top) / 1.5
     psi_mid = 1.0 - delta / 2.0
-
-    # Separatrix values from the rightmost face of core_profiles.
-    T_i_sep = core_profiles.T_i.right_face_value
-    T_e_sep = core_profiles.T_e.right_face_value
-    n_e_sep = core_profiles.n_e.right_face_value
 
     # Pedestal region mask: cells at or beyond rho_norm_ped_top.
     ped_mask = geo.rho_norm >= self.rho_norm_ped_top
@@ -223,26 +274,23 @@ class PedestalModelOutput:
         n_e=_mtanh_profile(self.n_e_ped, n_e_sep),
     )
 
-  def modify_core_transport(
+  def scale_transport_coeffs(
       self,
-      core_transport: state.CoreTransport,
+      coeffs: _TransportCoeffsT,
       geo: geometry.Geometry,
       pedestal_runtime_params: pedestal_runtime_params_lib.RuntimeParams,
-  ) -> state.CoreTransport:
-    """Modify transport coefficients in the entire pedestal region.
-
-    Scales the turbulent total and Pereverzev transport coefficients in the
-    pedestal region by the multipliers in the pedestal model output. Transport
-    coefficients from neoclassical, core, and pedestal transport
-    models are not affected.
+  ) -> _TransportCoeffsT:
+    """Scales transport coefficients in the entire pedestal region.
 
     Args:
-      core_transport: The core transport coefficients to modify.
+      coeffs: The transport coefficients to scale.
       geo: The geometry of the torus.
       pedestal_runtime_params: The runtime parameters of the pedestal model.
 
     Returns:
-      The modified core transport coefficients.
+      The four transport channels of coeffs, clipped and scaled by the
+      multipliers in the pedestal region where the multipliers are not 1, and
+      smoothed around the pedestal top; other fields of coeffs unchanged.
     """
     # We are using the face grid here, since transport coefficients are
     # applied on the face grid.
@@ -279,57 +327,27 @@ class PedestalModelOutput:
       # Apply smoothing to the pedestal top.
       return jnp.dot(smoothing_matrix, modified)
 
-    def _scale_coeffs(coeffs):
-      """Scales standard transport channels using pedestal multipliers."""
-      return dataclasses.replace(
-          coeffs,
-          chi_face_ion=_scale_channel(
-              coeffs.chi_face_ion,
-              self.transport_multipliers.chi_i_multiplier,
-              clip_max=pedestal_runtime_params.chi_max,
-          ),
-          chi_face_el=_scale_channel(
-              coeffs.chi_face_el,
-              self.transport_multipliers.chi_e_multiplier,
-              clip_max=pedestal_runtime_params.chi_max,
-          ),
-          d_face_el=_scale_channel(
-              coeffs.d_face_el,
-              self.transport_multipliers.D_e_multiplier,
-              clip_max=pedestal_runtime_params.D_e_max,
-          ),
-          v_face_el=_scale_channel(
-              coeffs.v_face_el,
-              self.transport_multipliers.v_e_multiplier,
-              clip_min=pedestal_runtime_params.V_e_min,
-              clip_max=pedestal_runtime_params.V_e_max,
-          ),
-      )
-
-    # Scale turbulent total. Core and pedestal transport
-    # coefficients are preserved unscaled so raw model outputs remain
-    # accessible in output trees and diagnostics.
-    modified_turbulent = transport_coeffs_lib.TurbulentTransport(
-        total=_scale_coeffs(core_transport.turbulent.total),
-        core_coefficients=core_transport.turbulent.core_coefficients,
-        pedestal_coefficients=core_transport.turbulent.pedestal_coefficients,
-    )
-
-    # Scale Pereverzev transport if present.
-    if core_transport.pereverzev is not None:
-      modified_pereverzev = _scale_coeffs(core_transport.pereverzev)
-    else:
-      modified_pereverzev = None
-
-    # Neoclassical transport is not affected by scaling from an
-    # ADAPTIVE_TRANSPORT pedestal model.
-    coeffs_to_sum = [modified_turbulent.total, core_transport.neoclassical]
-    if modified_pereverzev is not None:
-      coeffs_to_sum.append(modified_pereverzev)
-    total = transport_coeffs_lib.sum_transport_coeffs(*coeffs_to_sum)
-    return state.CoreTransport(
-        total=total,
-        turbulent=modified_turbulent,
-        neoclassical=core_transport.neoclassical,
-        pereverzev=modified_pereverzev,
+    return dataclasses.replace(
+        coeffs,
+        chi_face_ion=_scale_channel(
+            coeffs.chi_face_ion,
+            self.transport_multipliers.chi_i_multiplier,
+            clip_max=pedestal_runtime_params.chi_max,
+        ),
+        chi_face_el=_scale_channel(
+            coeffs.chi_face_el,
+            self.transport_multipliers.chi_e_multiplier,
+            clip_max=pedestal_runtime_params.chi_max,
+        ),
+        d_face_el=_scale_channel(
+            coeffs.d_face_el,
+            self.transport_multipliers.D_e_multiplier,
+            clip_max=pedestal_runtime_params.D_e_max,
+        ),
+        v_face_el=_scale_channel(
+            coeffs.v_face_el,
+            self.transport_multipliers.v_e_multiplier,
+            clip_min=pedestal_runtime_params.V_e_min,
+            clip_max=pedestal_runtime_params.V_e_max,
+        ),
     )

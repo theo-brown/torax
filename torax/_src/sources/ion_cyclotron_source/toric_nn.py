@@ -359,42 +359,63 @@ def _get_minority_concentration_from_composition(
   )
 
 
-def icrh_model_func(
+def _minority_concentration(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    core_profiles: state.CoreProfiles,
+    source_params: RuntimeParams,
+) -> tuple[
+    array_typing.FloatVectorCell | array_typing.FloatScalar,
+    array_typing.FloatScalar,
+]:
+  """The minority concentration profile and the scalar ToricNN input."""
+  # Get minority concentration: either from plasma composition or from params
+  if source_params.minority_species is not None:
+    # Extract minority concentration from plasma composition
+    profile = _get_minority_concentration_from_composition(
+        runtime_params.plasma_composition,
+        core_profiles,
+        source_params.minority_species,
+    )
+    # Use first cell point value as assumption for relevant locations for
+    # extracting scalar ToricNN input, since deposition tends to be near-axis.
+    return profile, profile[0]
+  # Use legacy parameter (backward compatibility), also for profile-dependent
+  # calculations.
+  # TODO(b/434175938): Remove backward compatibility in V2.
+  return (
+      source_params.minority_concentration,
+      source_params.minority_concentration,
+  )
+
+
+def _icrh_globals(
     runtime_params: runtime_params_lib.RuntimeParams,
     geo: geometry.Geometry,
     source_name: str,
     core_profiles: state.CoreProfiles,
     unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
     unused_conductivity: conductivity_base.Conductivity | None,
-    toric_nn: ToricNNWrapper,
-) -> tuple[
-    array_typing.FloatVectorCell,
-    array_typing.FloatVectorCell,
-    tuple[fast_ion_lib.FastIon, ...],
-]:
-  """Compute ion/electron heat source terms."""
+) -> jax.Array:
+  """The globals of the ToricNN ICRH model function: its scalar inputs.
+
+  Args:
+    runtime_params: The runtime parameters.
+    geo: The geometry.
+    source_name: The name of the source.
+    core_profiles: The core profiles.
+    unused_calculated_source_profiles: Unused.
+    unused_conductivity: Unused.
+
+  Returns:
+    `[volume_average_temperature, volume_average_density,
+    minority_concentration, temperature_peaking_factor,
+    density_peaking_factor]`, in the units of `core_profiles`.
+  """
   source_params = runtime_params.sources[source_name]
   assert isinstance(source_params, RuntimeParams)
-
-  # Get minority concentration: either from plasma composition or from params
-  if source_params.minority_species is not None:
-    # Extract minority concentration from plasma composition
-    minority_concentration_profile = (
-        _get_minority_concentration_from_composition(
-            runtime_params.plasma_composition,
-            core_profiles,
-            source_params.minority_species,
-        )
-    )
-    # Use first cell point value as assumption for relevant locations for
-    # extracting scalar ToricNN input, since deposition tends to be near-axis.
-    minority_concentration_scalar = minority_concentration_profile[0]
-  else:
-    # Use legacy parameter (backward compatibility)
-    # TODO(b/434175938): Remove backward compatibility in V2.
-    minority_concentration_scalar = source_params.minority_concentration
-    # For profile-dependent calculations, use constant value
-    minority_concentration_profile = source_params.minority_concentration
+  _, minority_concentration_scalar = _minority_concentration(
+      runtime_params, core_profiles, source_params
+  )
 
   # Construct inputs for ToricNN.
   volume_average_temperature = math_utils.volume_average(
@@ -409,6 +430,57 @@ def icrh_model_func(
       core_profiles.T_e.value[0] / volume_average_temperature  # pyrefly: ignore[bad-index]
   )
   density_peaking_factor = core_profiles.n_e.value[0] / volume_average_density  # pyrefly: ignore[bad-index]
+  return jnp.stack([
+      volume_average_temperature,
+      volume_average_density,
+      minority_concentration_scalar,
+      temperature_peaking_factor,
+      density_peaking_factor,
+  ])
+
+
+def _icrh_model_func_from_globals(
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    source_name: str,
+    core_profiles: state.CoreProfiles,
+    unused_calculated_source_profiles: source_profiles.SourceProfiles | None,
+    unused_conductivity: conductivity_base.Conductivity | None,
+    source_globals: jax.Array,
+    toric_nn: ToricNNWrapper,
+) -> tuple[
+    array_typing.FloatVectorCell,
+    array_typing.FloatVectorCell,
+    tuple[fast_ion_lib.FastIon, ...],
+]:
+  """Compute ion/electron heat source terms, given `_icrh_globals`.
+
+  Args:
+    runtime_params: The runtime parameters.
+    geo: The geometry.
+    source_name: The name of the source.
+    core_profiles: The core profiles.
+    unused_calculated_source_profiles: Unused.
+    unused_conductivity: Unused.
+    source_globals: The globals of core_profiles, or injected ones.
+    toric_nn: The ToricNN model.
+
+  Returns:
+    The ion and electron heat sources and the fast ions.
+  """
+  source_params = runtime_params.sources[source_name]
+  assert isinstance(source_params, RuntimeParams)
+  minority_concentration_profile, _ = _minority_concentration(
+      runtime_params, core_profiles, source_params
+  )
+  (
+      volume_average_temperature,
+      volume_average_density,
+      minority_concentration_scalar,
+      temperature_peaking_factor,
+      density_peaking_factor,
+  ) = source_globals
+
   Router = geo.R_out_face[-1]  # Use LCFS outboard radius
   Rinner = geo.R_in_face[-1]  # Use LCFS inboard radius
   # Assumption: inner and outer gaps are not functions of z0.
@@ -532,12 +604,14 @@ def icrh_model_func(
 @functools.lru_cache(maxsize=1)
 def _icrh_model_func_with_toric_nn(
     model_path: str,
-) -> source.SourceProfileFunction:
+) -> source.SplitModelFunction:
   """Returns a function that computes the ICRH source terms given a ToricNN."""
   toric_nn = ToricNNWrapper(model_path)
-  return functools.partial(
-      icrh_model_func,
-      toric_nn=toric_nn,
+  return source.SplitModelFunction(
+      globals_func=_icrh_globals,
+      profile_func=functools.partial(
+          _icrh_model_func_from_globals, toric_nn=toric_nn
+      ),
   )
 
 

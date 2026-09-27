@@ -283,6 +283,16 @@ class SimTest(sim_test_case.SimTestCase):
           'test_iterhybrid_rampup',
           'test_iterhybrid_rampup.py',
       ),
+      # Same with the structured Jacobian of the Newton-Raphson solver, which
+      # equals the dense one to round-off.
+      (
+          'test_iterhybrid_rampup_structured_jacobian',
+          'test_iterhybrid_rampup_structured_jacobian.py',
+          _ALL_PROFILES,
+          None,
+          None,
+          'test_iterhybrid_rampup.nc',
+      ),
       # Modified version of test_iterhybrid_rampup with sawtooth model.
       # Has an initial peaked current density, no heating, no current drive,
       # resistivity is artificially increased to help induce more sawteeth,

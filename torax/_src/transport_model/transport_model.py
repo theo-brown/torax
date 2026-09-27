@@ -53,6 +53,7 @@ class TransportModel(static_dataclass.StaticDataclass):
       core_profiles: state.CoreProfiles,
       pedestal_model_output: pedestal_model_output_lib.PedestalModelOutput,
       two_point_mask: array_typing.BoolVectorFace,
+      apply_smoothing: bool = True,
   ) -> transport_coeffs.TurbulentTransport:
     r"""Calculates transport coefficients using the TransportModel.
 
@@ -65,6 +66,8 @@ class TransportModel(static_dataclass.StaticDataclass):
       core_profiles: Core plasma profiles at the current time.
       pedestal_model_output: Outputs from the pedestal model.
       two_point_mask: Boolean mask indicating the two-point model region.
+      apply_smoothing: If False, skips the Gaussian smoothing (see
+        `smooth_coeffs`).
 
     Returns:
       TurbulentTransport containing the combined 4-channel coefficients and
@@ -104,12 +107,15 @@ class TransportModel(static_dataclass.StaticDataclass):
     )
 
     # Apply smoothing.
-    total_coeffs = self._smooth_coeffs(
-        runtime_params,
-        geo,
-        clipped_coeffs,
-        pedestal_model_output,
-    )
+    if apply_smoothing:
+      total_coeffs = self.smooth_coeffs(
+          runtime_params,
+          geo,
+          clipped_coeffs,
+          pedestal_model_output,
+      )
+    else:
+      total_coeffs = clipped_coeffs
 
     return transport_coeffs.TurbulentTransport(
         total=total_coeffs,
@@ -238,14 +244,24 @@ class TransportModel(static_dataclass.StaticDataclass):
         v_face_el=v_face_el,
     )
 
-  def _smooth_coeffs(
+  def smooth_coeffs(
       self,
       runtime_params: runtime_params_lib.RuntimeParams,
       geo: geometry.Geometry,
       input_coeffs: transport_coeffs.TransportCoeffs,
       pedestal_model_output: pedestal_model_output_lib.PedestalModelOutput,
   ) -> transport_coeffs.TransportCoeffs:
-    """Gaussian smoothing of turbulent transport coefficients."""
+    """Gaussian smoothing of turbulent transport coefficients.
+
+    Args:
+      runtime_params: Runtime parameters for the simulation at the current time.
+      geo: Geometry of the torus at the current time.
+      input_coeffs: The coefficients to smooth.
+      pedestal_model_output: Outputs from the pedestal model.
+
+    Returns:
+      The smoothed coefficients.
+    """
     smoothing_matrix = _build_smoothing_matrix(
         runtime_params.transport,
         runtime_params,

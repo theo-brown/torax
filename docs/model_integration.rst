@@ -297,6 +297,16 @@ source being registered against (e.g. for ``generic_heat``, the tuple must be
       el_heat = jnp.ones_like(geo.rho_norm) * 0.5e6
       return (ion_heat, el_heat)
 
+If the profile depends on global quantities of the state, such as volume
+integrals or on-axis values, and the model is to be used with the structured
+Jacobian of the Newton-Raphson solver (``jacobian_mode='structured'``), make
+the model function a ``torax.sources.SplitModelFunction``. It composes a
+function that returns these quantities as an array and a function that
+computes the profile from them, given as the extra keyword argument
+``source_globals``; both take the arguments above, under the same names.
+Otherwise the structured Jacobian takes the profile to depend on the state cell
+by cell, and misses the coupling of the global quantities.
+
 
 Step 2: Define the pydantic config
 ------------------------------------
