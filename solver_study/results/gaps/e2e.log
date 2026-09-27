@@ -1,0 +1,42 @@
+=== 11:15:33 baseline 25 2
+RESULT baseline n_rho=25 mode=dense steps=10 t_end=2.000 newton=50 wall=35.2s SimError.NO_ERROR
+RESULT baseline n_rho=25 mode=structured steps=10 t_end=2.000 newton=50 wall=52.3s SimError.NO_ERROR
+=== 11:17:10 implicit_mtanh_grid 25 2
+RESULT implicit_mtanh_grid n_rho=25 mode=dense steps=11 t_end=2.000 newton=47 wall=36.1s SimError.NO_ERROR
+RESULT implicit_mtanh_grid n_rho=25 mode=structured steps=11 t_end=2.000 newton=47 wall=58.1s SimError.NO_ERROR
+=== 11:18:54 beta_pol 25 2
+RESULT beta_pol n_rho=25 mode=dense steps=33 t_end=2.000 newton=69 wall=39.5s SimError.NO_ERROR
+RESULT beta_pol n_rho=25 mode=structured steps=33 t_end=2.000 newton=69 wall=60.6s SimError.NO_ERROR
+=== 11:20:44 global_rotation 25 2
+RESULT global_rotation n_rho=25 mode=dense steps=17 t_end=2.000 newton=177 wall=46.8s SimError.NO_ERROR
+RESULT global_rotation n_rho=25 mode=structured steps=17 t_end=2.000 newton=177 wall=73.8s SimError.NO_ERROR
+=== 11:22:55 rotation_grid 25 2
+RESULT rotation_grid n_rho=25 mode=dense steps=9 t_end=2.000 newton=72 wall=40.0s SimError.NO_ERROR
+RESULT rotation_grid n_rho=25 mode=structured steps=9 t_end=2.000 newton=72 wall=62.1s SimError.NO_ERROR
+=== 11:24:47 axis_020 16 2
+RESULT axis_020 n_rho=16 mode=dense steps=9 t_end=2.000 newton=53 wall=35.3s SimError.NO_ERROR
+RESULT axis_020 n_rho=16 mode=structured steps=9 t_end=2.000 newton=53 wall=53.8s SimError.NO_ERROR
+=== 11:26:26 axis_050 10 2
+RESULT axis_050 n_rho=10 mode=dense steps=5 t_end=2.000 newton=23 wall=34.8s SimError.NO_ERROR
+RESULT axis_050 n_rho=10 mode=structured steps=5 t_end=2.000 newton=23 wall=53.9s SimError.NO_ERROR
+=== 11:28:05 prescribed_timedependent_ne 25 10
+RESULT prescribed_timedependent_ne n_rho=25 mode=dense steps=23 t_end=10.000 newton=85 wall=31.3s SimError.NO_ERROR
+RESULT prescribed_timedependent_ne n_rho=25 mode=structured steps=23 t_end=10.000 newton=85 wall=44.7s SimError.NO_ERROR
+=== 11:29:31 lh_transition 25 60
+RESULT lh_transition n_rho=25 mode=dense steps=945 t_end=60.000 newton=5850 wall=158.9s SimError.NO_ERROR
+RESULT lh_transition n_rho=25 mode=structured steps=945 t_end=60.000 newton=5850 wall=288.3s SimError.NO_ERROR
+=== 11:37:11 lh_transition_implicit 25 60
+RESULT lh_transition_implicit n_rho=25 mode=dense steps=945 t_end=60.000 newton=5850 wall=160.8s SimError.NO_ERROR
+RESULT lh_transition_implicit n_rho=25 mode=structured steps=945 t_end=60.000 newton=5850 wall=292.6s SimError.NO_ERROR
+axis_020                     n_rho= 16 steps 9/9 newton 53/53 coarse 0/0 t_end 2.00/2.00 max rel diff 3.3e-14 steps with chi_e<0.99 above rho 0.9: 10 wall 35/54 s
+axis_050                     n_rho= 10 steps 5/5 newton 23/23 coarse 0/0 t_end 2.00/2.00 max rel diff 9.5e-15 steps with chi_e<0.99 above rho 0.9: 6 wall 35/54 s
+baseline                     n_rho= 25 steps 10/10 newton 50/50 coarse 0/0 t_end 2.00/2.00 max rel diff 1.7e-14 steps with chi_e<0.99 above rho 0.9: 11 wall 35/52 s
+beta_pol                     n_rho= 25 steps 33/33 newton 69/69 coarse 0/0 t_end 2.00/2.00 max rel diff 4.3e-14 steps with chi_e<0.99 above rho 0.9: 0 wall 39/61 s
+global_rotation              n_rho= 25 steps 17/17 newton 177/177 coarse 0/0 t_end 2.00/2.00 max rel diff 1.7e-13 steps with chi_e<0.99 above rho 0.9: 18 wall 47/74 s
+implicit_mtanh_grid          n_rho= 25 steps 11/11 newton 47/47 coarse 0/0 t_end 2.00/2.00 max rel diff 2.0e-14 steps with chi_e<0.99 above rho 0.9: 12 wall 36/58 s
+lh_transition                n_rho= 25 steps 945/945 newton 5850/5850 coarse 0/0 t_end 60.00/60.00 max rel diff 3.6e-13 steps with chi_e<0.99 above rho 0.9: 344 wall 159/288 s
+lh_transition_implicit       n_rho= 25 steps 945/945 newton 5850/5850 coarse 0/0 t_end 60.00/60.00 max rel diff 1.4e-12 steps with chi_e<0.99 above rho 0.9: 344 wall 161/293 s
+prescribed_timedependent_ne  n_rho= 25 steps 23/23 newton 85/85 coarse 0/0 t_end 10.00/10.00 max rel diff 1.3e-14 steps with chi_e<0.99 above rho 0.9: 24 wall 31/45 s
+rotation_grid                n_rho= 25 steps 9/9 newton 72/72 coarse 0/0 t_end 2.00/2.00 max rel diff 3.8e-14 steps with chi_e<0.99 above rho 0.9: 10 wall 40/62 s
+E2E_DONE
+QUEUE1_DONE

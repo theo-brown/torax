@@ -1,0 +1,38 @@
+=== 15:37:22 chunk 0
+Ran 8 tests in 128.425s
+OK
+=== 15:39:35 chunk 8
+Ran 8 tests in 120.340s
+OK
+=== 15:41:40 chunk 16
+Ran 8 tests in 144.449s
+OK
+=== 15:44:10 chunk 24
+Ran 8 tests in 198.023s
+OK
+=== 15:47:34 chunk 32
+Ran 8 tests in 214.932s
+OK
+=== 15:51:16 chunk 40
+Ran 8 tests in 176.907s
+OK
+=== 15:54:19 chunk 48
+Ran 4 tests in 120.649s
+OK
+=== 15:56:25 others
+FATAL Flags parsing error: Unknown command line flag 'k'
+SIMCHUNKS_DONE
+[       OK ] SimTest.test_fail
+[       OK ] SimTest.test_full_output_matches_reference
+[       OK ] SimTest.test_ip_bc_v_loop_bc_equivalence
+[       OK ] SimTest.test_low_temperature_error
+[       OK ] SimTest.test_nans_trigger_error
+[       OK ] SimTest.test_no_op
+[       OK ] SimTest.test_prescribed_psidot
+[       OK ] SimTest.test_simulation_with_restart0 ('test_psi_heat_dens')
+[       OK ] SimTest.test_simulation_with_restart1 ('test_psichease_prescribed_jtot')
+[       OK ] SimTest.test_simulation_with_restart2 ('test_psichease_prescribed_johm')
+[       OK ] SimTest.test_simulation_with_restart3 ('test_iterhybrid_rampup')
+Ran 11 tests in 221.785s
+OK
+OTHERS_DONE

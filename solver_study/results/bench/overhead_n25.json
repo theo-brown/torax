@@ -1,0 +1,11 @@
+{
+ "residual": 0.5012309993617237,
+ "jacfwd": 4.682036000303924,
+ "root_newton_raphson": 23.484122997615486,
+ "newton_raphson_solve_block (guess + newton)": 25.25209399755113,
+ "full step (newton config)": 48.77522999595385,
+ "full step (linear config, same state)": 9.517628997855354,
+ "tree_flatten(state, ppo) x1": 0.08976094977697358,
+ "its": 4,
+ "leaves": 302
+}

@@ -1,0 +1,39 @@
+N=200 n_rho=50 dt=2.0 t=6.0
+gmres(40, tol 1e-4, prec P) direction rel err vs exact: 0.0008825738685034128
+
+=== timings (best, median) in ms ===
+residual                              0.723      0.827
+jacfwd_full                          26.367     26.697
+jacrev_full                          20.719     23.083
+jvp_single                            1.039      1.165
+vjp_single                            1.264      1.368
+batched_jvp_k2                        1.357      1.621
+batched_jvp_k4                        1.819      2.045
+batched_jvp_k8                        2.340      2.392
+batched_jvp_k16                       2.732      2.881
+batched_jvp_k32                       3.741      4.019
+batched_jvp_k64                       6.828      8.117
+batched_jvp_k128                     11.223     11.601
+batched_jvp_k200                     23.527     24.468
+dense_solve                           0.503      0.571
+dense_lu_factor                       0.429      0.646
+thomas_block_solve                    0.228      0.256
+jfnk_gmres40_prec_solve              12.694     12.941
+jfnk_gmres20_prec_solve              14.465     14.732
+picard_matrix_build                   0.938      1.065
+picard_lu                             0.412      0.584
+update_core_profiles                  0.564      0.599
+calc_coeffs_full                      0.768      1.005
+conductivity                          0.075      0.088
+implicit_sources                      0.168      0.211
+transport_coeffs_all                  0.853      1.057
+transport_model_only                  0.710      0.789
+newton_solve_custom_root            177.372    187.866
+newton_solve_no_custom_root         188.720    189.268
+newton_solve_vmap_ls8               230.738    240.515
+full_step_fn                        252.080    268.787
+predictor_corrector_10                9.332      9.931
+compile times (s): {'compile_newton_custom_root': 8.79, 'compile_newton_no_custom_root': 8.78, 'compile_newton_vmap_ls8': 11.38}
+newton iterations: 4
+ratio jacfwd/residual: 36.47781157898227  jacfwd/jvp_single: 25.38531899269432
+DONE

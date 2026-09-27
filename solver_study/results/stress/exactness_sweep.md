@@ -1,0 +1,113 @@
+| case | n_cells | channels | validator | max row-rel err (state) | probe check | states |
+|---|---|---|---|---|---|---|
+| baseline:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 0e+00 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| qlknn_rotation_half:16 | 16 | T_i,T_e,psi,n_e | accepted | 5.2e-03 (x0) | 0e+00 | x0:5e-03 n1:5e-03 n20:5e-04 smooth:NaN |
+| pedestal_mtanh:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 0e+00 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| ibc_beta_poloidal_prime:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.6e-02 (n20) | 0e+00 | x0:5e-03 n1:7e-03 n20:2e-02 smooth:8e-03 |
+| tglfnn_rotation:16 | 16 | T_i,T_e,psi,n_e | accepted | n/a (NaN) | 0e+00 | x0:NaN n1:NaN n20:NaN smooth:NaN |
+| tglfnn_rotation_nosmooth:16 | 16 | T_i,T_e,psi,n_e | accepted | n/a (NaN) | 0e+00 | x0:NaN n1:NaN n20:NaN smooth:NaN |
+| tglfnn_nosmooth:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.1e-14 (n20) | 0e+00 | x0:2e-15 n1:1e-15 n20:1e-14 smooth:7e-15 |
+| qlknn_rotation_full:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.0e-03 (smooth) | 0e+00 | x0:5e-03 n1:5e-03 n20:8e-04 smooth:6e-03 |
+| pedestal_mtanh:30 | 30 | T_i,T_e,psi,n_e | accepted | 2.0e-01 (n20) | 0e+00 | x0:1e-01 n1:1e-01 n20:2e-01 smooth:1e-01 |
+| x_050:4 | 4 | T_i,T_e,psi,n_e | accepted | 5.2e-15 (smooth) | 2e-15 | x0:5e-16 n1:3e-16 n20:6e-16 smooth:5e-15 |
+| x_050:10 | 10 | T_i,T_e,psi,n_e | accepted | 2.9e-14 (n20) | 3e-15 | x0:1e-15 n1:1e-15 n20:3e-14 smooth:1e-15 |
+| x_050:11 | 11 | T_i,T_e,psi,n_e | accepted | 2.2e-15 (smooth) | 1e-15 | x0:2e-15 n1:2e-15 n20:1e-15 smooth:2e-15 |
+| x_050:30 | 30 | T_i,T_e,psi,n_e | accepted | 2.8e-14 (n1) | 4e-15 | x0:2e-14 n1:3e-14 n20:9e-15 smooth:2e-14 |
+| x_050:31 | 31 | T_i,T_e,psi,n_e | accepted | 2.5e-14 (n1) | 8e-15 | x0:2e-14 n1:3e-14 n20:1e-14 smooth:2e-14 |
+| x_050:50 | 50 | T_i,T_e,psi,n_e | accepted | 1.1e-13 (n1) | 2e-14 | x0:6e-14 n1:1e-13 n20:6e-15 smooth:3e-14 |
+| x_050:51 | 51 | T_i,T_e,psi,n_e | accepted | 5.3e-14 (x0) | 1e-14 | x0:5e-14 n1:3e-14 n20:5e-15 smooth:2e-14 |
+| x_050:100 | 100 | T_i,T_e,psi,n_e | accepted | 9.8e-14 (x0) | 2e-14 | x0:1e-13 n1:6e-14 n20:1e-14 smooth:5e-14 |
+| x_000:11 | 11 | T_i,T_e,psi,n_e | accepted | 2.2e-15 (smooth) | 1e-15 | x0:2e-15 n1:2e-15 n20:1e-15 smooth:2e-15 |
+| pedestal_mtanh:50 | 50 | T_i,T_e,psi,n_e | accepted | 3.5e-01 (n1) | 1e-03 | x0:3e-01 n1:4e-01 n20:2e-01 smooth:3e-01 |
+| a_float32_grid:25 | 25 | T_i,T_e,psi,n_e | accepted | 4.9e-08 (x0) | 3e-08 | x0:5e-08 n1:1e-08 n20:1e-08 smooth:9e-09 |
+| t_constant:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.2e-15 (smooth) | 5e-16 | x0:9e-16 n1:6e-16 n20:1e-15 smooth:1e-15 |
+| t_cgm_smooth:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.8e-15 (smooth) | 2e-15 | x0:1e-15 n1:2e-15 n20:2e-15 smooth:3e-15 |
+| t_bgb_zones:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.2e-15 (n20) | 3e-15 | x0:5e-16 n1:7e-16 n20:2e-15 smooth:2e-15 |
+| t_qlknn_whole_noclip_opts:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.5e-14 (n1) | 3e-15 | x0:5e-15 n1:2e-14 n20:3e-15 smooth:8e-15 |
+| t_qlknn_active_clipping:16 | 16 | T_i,T_e,psi,n_e | accepted | 7.8e-15 (n1) | 5e-15 | x0:2e-15 n1:8e-15 n20:1e-15 smooth:2e-15 |
+| t_qlknn_overwrite_domains:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.1e-15 (n1) | 8e-15 | x0:4e-15 n1:6e-15 n20:4e-15 smooth:3e-15 |
+| t_pedestal_transport_models:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 8e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| t_fast_ion_stab:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.4e-15 (smooth) | 5e-15 | x0:5e-15 n1:6e-15 n20:5e-15 smooth:6e-15 |
+| s_all_explicit_mix:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.0e-14 (n1) | 3e-15 | x0:4e-15 n1:1e-14 n20:1e-15 smooth:4e-15 |
+| s_icrh_scaled_profile:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.8e-15 (smooth) | 9e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| s_ohmic_toricnn_minority:16 | 16 | T_i,T_e,psi,n_e | accepted | 5.0e-15 (n1) | 2e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:3e-15 |
+| p_time_dependent:16 | 16 | T_i,T_e,psi,n_e | accepted | 7.7e-15 (n1) | 6e-15 | x0:3e-15 n1:8e-15 n20:3e-15 smooth:7e-15 |
+| p_pped:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 9e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| b_vloop:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 9e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| b_theta_half_conv_modes:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.4e-15 (smooth) | 6e-15 | x0:4e-15 n1:4e-15 n20:2e-15 smooth:6e-15 |
+| b_conv_direct:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 9e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| e_Ti:16 | 16 | T_i | accepted | 3.2e-15 (n1) | 4e-15 | x0:2e-15 n1:3e-15 n20:3e-16 smooth:2e-15 |
+| e_Te:16 | 16 | T_e | accepted | 1.9e-15 (smooth) | 1e-15 | x0:2e-15 n1:2e-15 n20:3e-16 smooth:2e-15 |
+| e_psi:16 | 16 | psi | accepted | 2.6e-16 (smooth) | 2e-16 | x0:0e+00 n1:0e+00 n20:1e-16 smooth:3e-16 |
+| e_ne:16 | 16 | n_e | accepted | 3.4e-15 (n1) | 3e-15 | x0:3e-15 n1:3e-15 n20:6e-16 smooth:3e-15 |
+| e_Te_psi:16 | 16 | T_e,psi | accepted | 1.2e-15 (x0) | 2e-15 | x0:1e-15 n1:9e-16 n20:4e-16 smooth:6e-16 |
+| e_Ti_Te_ne:16 | 16 | T_i,T_e,n_e | accepted | 9.8e-15 (smooth) | 1e-14 | x0:4e-15 n1:9e-15 n20:5e-15 smooth:1e-14 |
+| g_timedep_circular:16 | 16 | T_i,T_e,psi,n_e | accepted | 9.6e-15 (n1) | 9e-15 | x0:4e-15 n1:1e-14 n20:3e-15 smooth:5e-15 |
+| g_eqdsk_step:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.7e-15 (smooth) | 1e-14 | x0:1e-15 n1:3e-15 n20:3e-15 smooth:7e-15 |
+| r_implicit_pedestal:16 | 16 | T_i,T_e,psi,n_e | rejected: the pedestal is implicit or adaptive_transport | 6.9e-15 (smooth) | 9e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| r_adaptive_no_pedestal:16 | 16 | T_i,T_e,psi,n_e | rejected: the pedestal is implicit or adaptive_transport | 1.1e-13 (smooth) | 8e-15 | x0:6e-15 n1:7e-15 n20:3e-15 smooth:1e-13 |
+| r_adaptive:16 | 16 | T_i,T_e,psi,n_e | rejected: the pedestal is implicit or adaptive_transport | 3.5e-01 (smooth) | 1e-03 | x0:3e-02 n1:2e-02 n20:7e-03 smooth:3e-01 |
+| r_minrho_010:16 | 16 | T_i,T_e,psi,n_e | rejected: numerics | 6.9e-15 (smooth) | 6e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| r_minrho_020:16 | 16 | T_i,T_e,psi,n_e | rejected: numerics | 2.1e-02 (n20) | 3e-03 | x0:7e-03 n1:8e-03 n20:2e-02 smooth:1e-02 |
+| r_nonuniform:16 | 16 | T_i,T_e,psi,n_e | rejected: the radial grid is not uniform | 2.7e-04 (x0) | 8e-04 | x0:3e-04 n1:2e-04 n20:3e-15 smooth:6e-05 |
+| a_float32_grid:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.9e-15 (smooth) | 6e-15 | x0:4e-15 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| ex_basic_config | 25 | T_i,T_e | accepted | 2.5e-19 (n1) | 0e+00 | x0:9e-20 n1:3e-19 n20:2e-20 smooth:3e-20 |
+| ex_iterhybrid_rampup:16 | 16 | T_i,T_e,psi,n_e | accepted | 9.3e-15 (n20) | 4e-15 | x0:4e-15 n1:8e-15 n20:9e-15 smooth:3e-15 |
+| ex_step_flattop_bgb:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.2e-15 (n1) | 1e-15 | x0:1e-15 n1:1e-15 n20:6e-16 smooth:9e-16 |
+| mtanh_wide:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.6e-01 (n20) | 3e-03 | x0:6e-02 n1:6e-02 n20:5e-01 smooth:2e-02 |
+| mtanh_wide:30 | 30 | T_i,T_e,psi,n_e | accepted | 6.6e-01 (smooth) | 1e-02 | x0:2e-01 n1:3e-01 n20:6e-01 smooth:7e-01 |
+| td_test_all_transport_fusion_qlknn:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.5e-14 (x0) | 0e+00 | x0:2e-14 n1:1e-14 n20:3e-15 smooth:1e-14 |
+| td_test_bohmgyrobohm_all:16 | 16 | T_i,T_e,psi,n_e | accepted | 3.0e-15 (smooth) | 0e+00 | x0:1e-15 n1:1e-15 n20:3e-15 smooth:3e-15 |
+| td_test_bremsstrahlung_time_dependent_Zimp:16 | 16 | T_i,T_e | accepted | 1.9e-16 (n1) | 0e+00 | x0:2e-17 n1:2e-16 n20:0e+00 smooth:2e-16 |
+| td_test_changing_config_after:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.3e-15 (smooth) | 0e+00 | x0:4e-15 n1:4e-15 n20:2e-15 smooth:6e-15 |
+| td_test_changing_config_before:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 0e+00 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_chease:16 | 16 | T_i,T_e | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_combined_transport:16 | 16 | T_i,T_e,psi,n_e | accepted | 5.6e-15 (smooth) | 0e+00 | x0:3e-15 n1:3e-15 n20:1e-15 smooth:6e-15 |
+| td_test_crank_nicolson:16 | 16 | T_i,T_e | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_fixed_dt:16 | 16 | T_i,T_e | accepted | 4.6e-15 (x0) | 0e+00 | x0:5e-15 n1:4e-15 n20:2e-15 smooth:3e-15 |
+| td_test_imas_profiles_and_geo:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.2e-15 (n1) | 0e+00 | x0:2e-15 n1:4e-15 n20:2e-15 smooth:1e-15 |
+| td_test_implicit:16 | 16 | T_i,T_e | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_implicit_short_optimizer:16 | 16 | T_i,T_e | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_iterbaseline_mockup:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.6e-15 (n1) | 1e-14 | x0:3e-15 n1:7e-15 n20:3e-15 smooth:4e-15 |
+| td_test_iterhybrid_lh_transition:16 | 16 | T_i,T_e,psi | rejected: the pedestal is implicit or adaptive_transport | 1.4e-01 (n1) | 4e-02 | x0:1e-01 n1:1e-01 n20:1e-01 smooth:1e-01 |
+| td_test_iterhybrid_lh_transition_internal_boundary_condition:16 | 16 | T_i,T_e,psi | accepted | 2.2e-15 (x0) | 9e-16 | x0:2e-15 n1:8e-16 n20:4e-16 smooth:6e-16 |
+| td_test_iterhybrid_makenans:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_mockup:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_Lmode_combined:16 | 16 | T_i,T_e,psi,n_e | accepted | 3.5e-13 (smooth) | 5e-15 | x0:2e-15 n1:2e-15 n20:2e-14 smooth:3e-13 |
+| td_test_iterhybrid_predictor_corrector_clip_inputs:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.9e-14 (smooth) | 7e-15 | x0:3e-15 n1:8e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_constant_fraction_impurity_radiation:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_cyclotron:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_ec_linliu:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_eqdsk:16 | 16 | T_i,T_e,psi,n_e | accepted | 5.7e-15 (n1) | 6e-15 | x0:6e-15 n1:6e-15 n20:4e-15 smooth:4e-15 |
+| td_test_iterhybrid_predictor_corrector_imas:16 | 16 | T_i,T_e,psi,n_e | accepted | 9.2e-15 (smooth) | 9e-15 | x0:5e-15 n1:7e-15 n20:2e-15 smooth:9e-15 |
+| td_test_iterhybrid_predictor_corrector_mavrin_impurity_radiation:16 | 16 | T_i,T_e,psi,n_e | accepted | 5.1e-15 (n1) | 6e-15 | x0:5e-15 n1:5e-15 n20:3e-15 smooth:5e-15 |
+| td_test_iterhybrid_predictor_corrector_mavrin_n_e_ratios:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.4e-15 (n20) | 6e-15 | x0:3e-15 n1:4e-15 n20:4e-15 smooth:3e-15 |
+| td_test_iterhybrid_predictor_corrector_mavrin_n_e_ratios_lengyel:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.4e-15 (n20) | 6e-15 | x0:3e-15 n1:4e-15 n20:4e-15 smooth:3e-15 |
+| td_test_iterhybrid_predictor_corrector_mavrin_n_e_ratios_z_eff:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.4e-14 (smooth) | 9e-15 | x0:7e-15 n1:6e-15 n20:3e-15 smooth:4e-14 |
+| td_test_iterhybrid_predictor_corrector_neoclassical:16 | 16 | T_i,T_e,psi,n_e | accepted | 3.8e-14 (smooth) | 7e-15 | x0:4e-15 n1:5e-15 n20:3e-15 smooth:4e-14 |
+| td_test_iterhybrid_predictor_corrector_set_pped_tpedratio_nped:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_tglfnn_ukaea:16 | 16 | T_i,T_e,psi,n_e | accepted | 7.1e-15 (smooth) | 5e-15 | x0:2e-15 n1:2e-15 n20:3e-15 smooth:7e-15 |
+| td_test_iterhybrid_predictor_corrector_timedependent_isotopes:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.4e-14 (smooth) | 8e-15 | x0:4e-15 n1:4e-15 n20:5e-15 smooth:2e-14 |
+| td_test_iterhybrid_predictor_corrector_tungsten:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.5e-15 (smooth) | 8e-15 | x0:4e-15 n1:3e-15 n20:4e-15 smooth:7e-15 |
+| td_test_iterhybrid_predictor_corrector_zeffprofile:16 | 16 | T_i,T_e,psi,n_e | accepted | 2.7e-14 (x0) | 1e-14 | x0:3e-14 n1:5e-15 n20:2e-15 smooth:7e-15 |
+| td_test_iterhybrid_radiation_collapse:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.4e-15 (x0) | 2e-15 | x0:1e-15 n1:2e-16 n20:1e-16 smooth:3e-16 |
+| td_test_iterhybrid_rampup:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.1e-15 (n20) | 8e-15 | x0:3e-15 n1:5e-15 n20:6e-15 smooth:2e-15 |
+| td_test_iterhybrid_rampup_restart:16 | | | | BUILD ERROR: config: UnparsedFlagAccessError('Trying to access flag --test_srcdir before flags were parsed.') | | |
+| td_test_iterhybrid_rampup_sawtooth:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.0e-14 (x0) | 8e-15 | x0:1e-14 n1:6e-15 n20:3e-15 smooth:7e-15 |
+| td_test_iterhybrid_rampup_short:16 | 16 | T_i,T_e,psi,n_e | accepted | 6.1e-15 (n20) | 8e-15 | x0:3e-15 n1:5e-15 n20:6e-15 smooth:2e-15 |
+| td_test_ne_qlknn_deff_veff:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.8e-15 (x0) | 4e-15 | x0:5e-15 n1:4e-15 n20:2e-15 smooth:4e-15 |
+| td_test_ne_qlknn_defromchie:16 | 16 | T_i,T_e,psi,n_e | accepted | 4.8e-15 (x0) | 4e-15 | x0:5e-15 n1:3e-15 n20:1e-15 smooth:4e-15 |
+| td_test_particle_sources_cgm:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.2e-15 (n1) | 3e-15 | x0:1e-15 n1:1e-15 n20:5e-16 smooth:8e-16 |
+| td_test_prescribed_generic_current_source:16 | 16 | T_i,T_e,psi,n_e | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_prescribed_timedependent_ne:16 | 16 | T_i,T_e,psi | rejected: the pedestal is implicit or adaptive_transport | 2.8e-15 (x0) | 9e-15 | x0:3e-15 n1:2e-15 n20:1e-15 smooth:2e-15 |
+| td_test_psi_and_heat:16 | 16 | T_i,T_e,psi | accepted | 1.2e-14 (smooth) | 6e-15 | x0:6e-15 n1:3e-15 n20:2e-15 smooth:1e-14 |
+| td_test_psi_heat_dens:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.4e-16 (n20) | 1e-17 | x0:8e-17 n1:6e-17 n20:1e-16 smooth:7e-17 |
+| td_test_psichease_ip_chease_vloop:16 | 16 | psi | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_psichease_ip_parameters_vloop_varying:16 | 16 | psi | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_psichease_prescribed_johm:16 | 16 | psi | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_psichease_prescribed_jtot:16 | 16 | psi | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_psichease_prescribed_jtot_vloop:16 | 16 | psi | accepted | 0.0e+00 (x0) | 0e+00 | x0:0e+00 n1:0e+00 n20:0e+00 smooth:0e+00 |
+| td_test_semiimplicit_convection:16 | 16 | T_i,T_e | accepted | 1.8e-15 (x0) | 1e-15 | x0:2e-15 n1:2e-15 n20:5e-16 smooth:1e-15 |
+| td_test_step_flattop_bgb:16 | 16 | T_i,T_e,psi,n_e | accepted | 1.2e-15 (n1) | 1e-15 | x0:1e-15 n1:1e-15 n20:6e-16 smooth:9e-16 |
+| td_test_timedependence:16 | 16 | T_i,T_e,psi | accepted | 3.7e-15 (x0) | 5e-15 | x0:4e-15 n1:3e-15 n20:1e-15 smooth:2e-15 |

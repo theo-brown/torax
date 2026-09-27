@@ -1,0 +1,8 @@
+{
+ "residual": 0.9667779959272593,
+ "jacfwd": 90.56704600516241,
+ "dense_solve": 2.282749999722,
+ "one_newton_iteration_body (jit)": 169.70984200452222,
+ "jacfwd+solve+residual (jit, no linesearch loop)": 166.68018299969845,
+ "root_newton_raphson (5 iterations)": 801.0117710000486
+}

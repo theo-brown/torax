@@ -1,0 +1,4 @@
+# Written by make_toric.py, components.py, sims.py and compare runs.
+toricnn.json
+*.npz
+*.npz.config.json
