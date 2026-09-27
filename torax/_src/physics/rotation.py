@@ -170,7 +170,13 @@ def calculate_rotation(
   B_pol_squared_face = psi_calculations.calc_bpol_squared(
       geo, psi
   )  # On the face grid.
-  B_pol_face = jnp.sqrt(B_pol_squared_face)  # Tesla
+  # Safe square root: B_pol vanishes on the magnetic axis, where the
+  # derivative of jnp.sqrt is infinite and would make the tangent NaN.
+  B_pol_face = jnp.where(
+      B_pol_squared_face > 0.0,
+      jnp.sqrt(jnp.where(B_pol_squared_face > 0.0, B_pol_squared_face, 1.0)),
+      0.0,
+  )  # Tesla
   B_total_squared_face = B_pol_squared_face + B_tor_face**2
   B_total_face = jnp.sqrt(B_total_squared_face)
 
