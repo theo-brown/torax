@@ -247,7 +247,18 @@ def newton_raphson_solve_block(
     case 'dense':
       custom_jac = None
     case 'structured':
-      custom_jac = structured_jacobian.jacobian_fn(residual_fun)
+      custom_jac = structured_jacobian.jacobian_fn(
+          residual_fun,
+          dt=dt,
+          runtime_params=runtime_params_t_plus_dt,
+          geo=geo_t_plus_dt,
+          core_profiles_t=core_profiles_t,
+          core_profiles_t_plus_dt=core_profiles_t_plus_dt,
+          explicit_source_profiles=explicit_source_profiles,
+          models=models,
+          evolving_names=evolving_names,
+          pedestal_transition_state=pedestal_transition_state,
+      )
     case _:
       raise ValueError(f'Unknown jacobian_mode: {jacobian_mode}')
 

@@ -337,6 +337,14 @@ def _cyclotron_radiation_albajar_from_globals(
 ) -> tuple[array_typing.FloatVector, ...]:
   """The cyclotron radiation heat sink, given `_cyclotron_radiation_globals`.
 
+  Total cyclotron radiation is from:
+  F. Albajar et al 2001 Nucl. Fusion 41 665
+  https://doi.org/10.1088/0029-5515/41/6/301
+
+  Radial profile of the cyclotron radiation is from:
+  J.F. Artaud et al 2018 Nucl. Fusion 58 105001
+  https://doi.org/10.1088/1741-4326/aad5b1
+
   Args:
     runtime_params: A slice of runtime parameters.
     geo: The geometry object.
@@ -387,16 +395,9 @@ def _cyclotron_radiation_albajar_from_globals(
   return (-Q_cycl,)
 
 
-# Calculates the cyclotron radiation heat sink contribution to the electron
-# heat equation.
-#
-# Total cyclotron radiation is from:
-# F. Albajar et al 2001 Nucl. Fusion 41 665
-# https://doi.org/10.1088/0029-5515/41/6/301
-#
-# Radial profile of the cyclotron radiation is from:
-# J.F. Artaud et al 2018 Nucl. Fusion 58 105001
-# https://doi.org/10.1088/1741-4326/aad5b1
+#: Calculates the cyclotron radiation heat sink contribution to the electron
+#: heat equation (Albajar's total power on Artaud's profile shape; see
+#: `_cyclotron_radiation_albajar_from_globals`).
 cyclotron_radiation_albajar = source.SplitModelFunction(
     globals_func=_cyclotron_radiation_globals,
     profile_func=_cyclotron_radiation_albajar_from_globals,

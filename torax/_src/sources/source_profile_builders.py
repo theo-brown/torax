@@ -152,6 +152,8 @@ def _build_source_profiles(
   """`build_source_profiles`, optionally collecting the source globals.
 
   See `build_standard_source_profiles` for `source_globals` and `globals_out`.
+  Not jitted, unlike `build_source_profiles`, so that `globals_out` can be
+  filled in place.
   """
   if not explicit and explicit_source_profiles is None:
     raise ValueError(
@@ -242,7 +244,8 @@ def build_standard_source_profiles(
             conductivity,
         )
         globals_out[source_name] = this_source_globals
-      # Passed only if any, for overrides of `get_value` without the argument.
+      # Passed only if any: a registered source may override `get_value`
+      # without the argument.
       kwargs = (
           {}
           if this_source_globals is None

@@ -113,7 +113,7 @@ def _radially_constant_fraction_of_Pin_from_globals(
   )
 
 
-# Model function for radiation heat sink from impurities.
+#: Model function for radiation heat sink from impurities.
 radially_constant_fraction_of_Pin = source_lib.SplitModelFunction(
     globals_func=_radially_constant_fraction_of_Pin_globals,
     profile_func=_radially_constant_fraction_of_Pin_from_globals,

@@ -146,7 +146,7 @@ def _calc_puff_feedback_source_from_globals(
   )
 
 
-# Calculates external source term for n from puffs with feedback.
+#: Calculates external source term for n from puffs with feedback.
 calc_puff_feedback_source = source.SplitModelFunction(
     globals_func=_calc_puff_feedback_globals,
     profile_func=_calc_puff_feedback_source_from_globals,

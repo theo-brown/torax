@@ -56,8 +56,8 @@ class InternalBoundaryConditionModel(static_dataclass.StaticDataclass, abc.ABC):
     """The values of the state that the whole profile depends on, if any.
 
     The structured Jacobian of the Newton-Raphson solver treats them as global
-    quantities of the state. A model whose profile depends on the state in
-    other than cell by cell must return them.
+    quantities of the state. A model whose profile depends on the state other
+    than cell by cell must return them.
 
     Args:
       runtime_params: Runtime parameters.

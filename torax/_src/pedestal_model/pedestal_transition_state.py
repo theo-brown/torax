@@ -297,7 +297,8 @@ class PedestalTransitionState:
         pedestal_runtime_params.mode
         == runtime_params_lib.Mode.INTERNAL_BOUNDARY_CONDITION
     ):
-      # Passed only if given, for overrides of the method without it.
+      # Passed only if given: a registered pedestal model may return a
+      # PedestalModelOutput subclass that overrides the method without it.
       kwargs = {} if references is None else {'references': references}
       return self._internal_boundary_output(
           t, pedestal_runtime_params

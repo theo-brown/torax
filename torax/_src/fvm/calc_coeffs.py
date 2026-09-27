@@ -307,8 +307,8 @@ def _calc_coeffs_full(
           geo,
           core_profiles,
           merged_source_profiles,
-          pedestal_transition_state,
           models,
+          pedestal_transition_state,
       )
       if state_globals is None
       else state_globals.pedestal
@@ -580,10 +580,10 @@ def _evaluate_pedestal(
     geo: geometry.Geometry,
     core_profiles: state.CoreProfiles,
     source_profiles: source_profiles_lib.SourceProfiles,
+    models: models_lib.Models,
     pedestal_transition_state: (
         pedestal_transition_state_lib.PedestalTransitionState
     ),
-    models: models_lib.Models,
 ) -> pedestal_model_output_lib.PedestalModelOutput | None:
   """The pedestal model output at core_profiles, if it depends on them."""
   # When explicit_pedestal is False, fully re-evaluate the pedestal model every
@@ -672,8 +672,8 @@ def calc_state_globals(
       geo,
       core_profiles,
       source_profiles,
-      pedestal_transition_state,
       models,
+      pedestal_transition_state,
   )
   if pedestal is not None:
     pedestal_transition_state = dataclasses.replace(

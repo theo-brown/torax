@@ -14,6 +14,7 @@
 
 """Tests for the structured Jacobian of the Newton-Raphson solver."""
 
+from collections.abc import Callable
 import copy
 import dataclasses
 import functools
@@ -150,6 +151,21 @@ class StructuredJacobianTest(parameterized.TestCase):
             'beta_poloidal_prime': 0.3,
             'Ti_Te_ratio': 1.0,
         }
+      case 'tglf_rotation':
+        # The widest transport reach (_TRANSPORT_REACH_WITH_TGLF_ROTATION).
+        core_models = config['transport']['core_transport_models']
+        del core_models['qlknn']
+        core_models['tglfnn-ukaea'] = {
+            'model_name': 'tglfnn-ukaea',
+            'machine': 'multimachine',
+            'use_rotation': True,
+            'rho_min': 0.15,
+            'rho_max': 0.95,
+        }
+        config['profile_conditions']['toroidal_angular_velocity'] = {
+            0.0: 2.7e5,
+            1.0: 0.0,
+        }
       case _:
         raise ValueError(f'Unknown variant: {variant}')
     return config
@@ -247,6 +263,26 @@ class StructuredJacobianTest(parameterized.TestCase):
         },
     )
 
+  def _jacobian_fn(self, kwargs: dict) -> Callable[[jax.Array], jax.Array]:
+    """The structured Jacobian of the Newton solve block, as it builds it."""
+    return structured_jacobian.jacobian_fn(
+        self._residual_fun(kwargs),
+        dt=kwargs['dt'],
+        runtime_params=kwargs['runtime_params_t_plus_dt'],
+        geo=kwargs['geo_t_plus_dt'],
+        **{
+            k: kwargs[k]
+            for k in (
+                'core_profiles_t',
+                'core_profiles_t_plus_dt',
+                'explicit_source_profiles',
+                'models',
+                'evolving_names',
+                'pedestal_transition_state',
+            )
+        },
+    )
+
   @parameterized.parameters(
       'local',
       'global_sources',
@@ -254,17 +290,18 @@ class StructuredJacobianTest(parameterized.TestCase):
       'adaptive_pedestal',
       'adaptive_pedestal_off',
       'beta_poloidal_prime',
+      'tglf_rotation',
   )
   def test_jacobian_matches_jacfwd(self, variant: str):
     kwargs = self._solve_block_kwargs(self._config(variant))
-    residual_fun = self._residual_fun(kwargs)
     x = fvm_conversions.cell_variable_tuple_to_vec(kwargs['x_old'])
     x = x * (1.0 + 0.05 * np.random.default_rng(0).standard_normal(x.shape))
-    dense = np.asarray(jax.jit(jax.jacfwd(residual_fun))(x))
-    structured = np.asarray(structured_jacobian.jacobian_fn(residual_fun)(x))
+    dense = np.asarray(jax.jit(jax.jacfwd(self._residual_fun(kwargs)))(x))
+    structured = np.asarray(self._jacobian_fn(kwargs)(x))
+    # Row by row; a row that is exactly zero in dense must be so in structured.
     np.testing.assert_array_less(
         np.abs(structured - dense).max(axis=1),
-        1e-10 * np.linalg.norm(dense, axis=1),
+        1e-10 * np.linalg.norm(dense, axis=1) + np.finfo(np.float64).tiny,
     )
 
   # Through the jitted solve block, as in a simulation: the grid and
@@ -382,7 +419,7 @@ class StructuredJacobianTest(parameterized.TestCase):
         mock.patch.object(structured_jacobian, target, **patch),
         jax_utils.enable_errors(True),
     ):
-      jac_fn = structured_jacobian.jacobian_fn(self._residual_fun(kwargs))
+      jac_fn = self._jacobian_fn(kwargs)
       with self.assertRaisesRegex(
           jax.errors.JaxRuntimeError, 'does not match the residual'
       ):

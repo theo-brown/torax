@@ -46,12 +46,16 @@ import jax.numpy as jnp
 import numpy as np
 from torax._src import jax_utils
 from torax._src import models as models_lib
+from torax._src import state
 from torax._src.config import runtime_params as runtime_params_lib
 from torax._src.core_profiles import updaters
 from torax._src.fvm import calc_coeffs
 from torax._src.fvm import fvm_conversions
+from torax._src.geometry import geometry
+from torax._src.pedestal_model import pedestal_transition_state as pedestal_transition_state_lib
 from torax._src.sources import runtime_params as sources_runtime_params_lib
 from torax._src.sources import source as source_lib
+from torax._src.sources import source_profiles as source_profiles_lib
 from torax._src.transport_model import qualikiz_based_transport_model
 from torax._src.transport_model import runtime_params as transport_runtime_params_lib
 from torax._src.transport_model import tglf_based_transport_model
@@ -78,21 +82,42 @@ _TRANSPORT_REACH_WITH_TGLF_ROTATION = (4, 5)
 
 
 def jacobian_fn(
-    residual_fun: functools.partial,
+    residual_fun: Callable[..., jax.Array],
+    *,
+    dt: jax.Array,
+    runtime_params: runtime_params_lib.RuntimeParams,
+    geo: geometry.Geometry,
+    core_profiles_t: state.CoreProfiles,
+    core_profiles_t_plus_dt: state.CoreProfiles,
+    explicit_source_profiles: source_profiles_lib.SourceProfiles,
+    models: models_lib.Models,
+    evolving_names: tuple[str, ...],
+    pedestal_transition_state: (
+        pedestal_transition_state_lib.PedestalTransitionState
+    ),
 ) -> Callable[[jax.Array], jax.Array]:
   """Returns a jitted x -> dR/dx for `residual_fun`.
 
   Args:
     residual_fun: `residual_and_loss.theta_method_block_residual` with every
-      argument but the state bound by keyword, as `newton_raphson_solve_block`
-      builds it. The bound arguments define the physics of the step.
+      argument but the state bound, as `newton_raphson_solve_block` builds it.
+      The other arguments are the bound ones that define the physics of the
+      step, at t + dt.
+    dt: Time step.
+    runtime_params: Runtime parameters at t + dt.
+    geo: Geometry at t + dt.
+    core_profiles_t: Core profiles at t.
+    core_profiles_t_plus_dt: Core profiles at t + dt with the known quantities
+      (boundary conditions and prescribed profiles).
+    explicit_source_profiles: The explicit source profiles of the step.
+    models: The physics models.
+    evolving_names: The names of the evolving profiles, in the order of x.
+    pedestal_transition_state: State of the pedestal transition.
 
   Returns:
     The Jacobian function, equal to `jax.jacfwd(residual_fun)` to round-off.
   """
-  kw = residual_fun.keywords
-  models, geo = kw['models'], kw['geo_t_plus_dt']
-  runtime_params, names = kw['runtime_params_t_plus_dt'], kw['evolving_names']
+  names = evolving_names
   n_cells = int(geo.torax_mesh.nx)
   user_models = _user_defined_models(models, runtime_params)
   if user_models and not jax_utils.errors_enabled():
@@ -107,15 +132,15 @@ def jacobian_fn(
 
   def core_profiles(x):
     x_tuple = fvm_conversions.vec_to_cell_variable_tuple(
-        x, kw['core_profiles_t_plus_dt'], names
+        x, core_profiles_t_plus_dt, names
     )
     return updaters.update_core_profiles_during_step(
         x_tuple,
         runtime_params,
         geo,
-        kw['core_profiles_t_plus_dt'],
-        prev_core_profiles=kw['core_profiles_t'],
-        dt=kw['dt'],
+        core_profiles_t_plus_dt,
+        prev_core_profiles=core_profiles_t,
+        dt=dt,
         evolving_names=names,
     )
 
@@ -125,16 +150,16 @@ def jacobian_fn(
         runtime_params,
         geo,
         core_profiles(x),
-        kw['explicit_source_profiles'],
+        explicit_source_profiles,
         models,
-        kw['pedestal_transition_state'],
+        pedestal_transition_state,
     )
 
-  def pedestal_transition_state(q):
+  def transition_state(q):
     if q.pedestal is None:
-      return kw['pedestal_transition_state']
+      return pedestal_transition_state
     return dataclasses.replace(
-        kw['pedestal_transition_state'], pedestal_model_output=q.pedestal
+        pedestal_transition_state, pedestal_model_output=q.pedestal
     )
 
   def raw_transport(x, q):
@@ -143,6 +168,9 @@ def jacobian_fn(
     The transport model sees the pedestal only through the location of its
     top, so h does not depend on q differentiably.
     """
+    # This also evaluates the neoclassical coefficients and the internal
+    # boundary conditions, which are cheap, to keep the pedestal override and
+    # the two-point mask of the builder in one place.
     transport = transport_coefficients_builder.calculate_all_transport_coeffs(
         models.transport_model,
         models.neoclassical_models,
@@ -150,7 +178,7 @@ def jacobian_fn(
         runtime_params,
         geo,
         core_profiles(x),
-        pedestal_transition_state(q),
+        transition_state(q),
         postprocess=False,
     )
     return _coeffs_to_vec(transport.turbulent.total)
@@ -162,7 +190,7 @@ def jacobian_fn(
             models.transport_model,
             runtime_params,
             geo,
-            pedestal_transition_state(q),
+            transition_state(q),
             _vec_to_coeffs(h),
         )
     )
