@@ -119,6 +119,32 @@ class NewtonRaphsonSolveBlockTest(parameterized.TestCase):
     chex.assert_trees_all_close(sol_np.x, sol_jax, atol=1e-9)
     self.assertEqual(int(metadata.error), 0)
 
+  def test_root_newton_raphson_custom_jac(self):
+    x_init = np.array((0.0, 0.0), dtype=np.float64)
+    custom_jac_calls = []
+
+    def loss(a, use_custom_jac):
+      f = functools.partial(function_to_find_root, a=a, b=0.1)
+
+      def custom_jac(x):
+        custom_jac_calls.append(x)
+        return jax.jacrev(f)(x)
+
+      root, _ = jax_root_finding.root_newton_raphson(
+          f,
+          x_init,
+          tol=1e-9,
+          custom_jac=custom_jac if use_custom_jac else None,
+      )
+      return jnp.sum(root**2)
+
+    # Through jax.lax.custom_root, the default: the root and its derivative.
+    value, grad = jax.value_and_grad(loss)(0.5, True)
+    self.assertNotEmpty(custom_jac_calls)
+    expected_value, expected_grad = jax.value_and_grad(loss)(0.5, False)
+    np.testing.assert_allclose(value, expected_value, rtol=1e-9)
+    np.testing.assert_allclose(grad, expected_grad, rtol=1e-9)
+
 
 if __name__ == '__main__':
   absltest.main()

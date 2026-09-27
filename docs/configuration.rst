@@ -2678,6 +2678,32 @@ newton_raphson
   significant speedup when many linesearch steps are required, at the cost of
   higher peak memory usage and compilation time.
 
+``jacobian_mode`` (str [default = 'dense'])
+  How the Jacobian of the residual is computed in each Newton iteration.
+
+* ``dense``
+    Differentiate the full residual with ``jax.jacfwd``, i.e. one forward-mode
+    pass per unknown (``N = channels * n_rho``).
+
+* ``structured``
+    Assemble the same Jacobian, exact to round-off, from batched forward-mode
+    passes through the transport model and the residual whose number does not
+    grow with the grid. The assembly uses the banded structure of the
+    discretization and the chain rule through the smoothing of the turbulent
+    transport coefficients, the scaling of an ``ADAPTIVE_TRANSPORT`` pedestal
+    and the global quantities of the state (volume integrals and on-axis
+    values of sources, a state-dependent pedestal, the reference values of
+    internal boundary conditions). Much faster than ``dense`` on fine radial
+    grids, for a longer compilation. User-defined transport models and sources
+    are assumed to couple neighboring cells only, and are listed in a warning;
+    a source can declare its global quantities by making its model function a
+    ``torax.sources.SplitModelFunction``. Where the assumption fails, the
+    solution is unchanged, since the residual is exact, but the Newton
+    iterations converge more slowly or not at all. With
+    ``TORAX_ERRORS_ENABLED=True`` the assembled Jacobian is checked against
+    the full residual at every Newton iteration, and a mismatch raises an
+    error.
+
 optimizer
 ^^^^^^^^^
 

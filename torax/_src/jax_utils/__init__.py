@@ -19,6 +19,7 @@ from torax._src.jax_utils.common import batched_cond
 from torax._src.jax_utils.common import enable_errors
 from torax._src.jax_utils.common import env_bool
 from torax._src.jax_utils.common import error_if
+from torax._src.jax_utils.common import errors_enabled
 from torax._src.jax_utils.common import get_dtype
 from torax._src.jax_utils.common import get_int_dtype
 from torax._src.jax_utils.common import get_np_dtype
