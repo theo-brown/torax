@@ -216,6 +216,8 @@ class TGLFNNukaeaTransportModel(pydantic_model_base.ComponentTransportBase):
   Attributes:
     model_name: The transport model to use. Hardcoded to 'tglfnn-ukaea'.
     machine: The machine type to use. Either 'step' or 'multimachine'.
+    version: The version of the network to use, e.g. '3.2.1'. If None, uses
+      the default version for the machine.
     rotation_multiplier: Multiplier for rotation.
     use_rotation: Whether to use rotation shear in the model.
     DV_effective: Effective D / effective V approach for particle transport.
@@ -238,6 +240,7 @@ class TGLFNNukaeaTransportModel(pydantic_model_base.ComponentTransportBase):
   machine: Annotated[
       Literal['step', 'multimachine'], torax_pydantic.JAX_STATIC
   ] = 'multimachine'
+  version: Annotated[str | None, torax_pydantic.JAX_STATIC] = None
   rotation_multiplier: pydantic.NonNegativeFloat = 1.0
   use_rotation: Annotated[bool, torax_pydantic.JAX_STATIC] = False
   # Quasilinear transport options
@@ -252,6 +255,7 @@ class TGLFNNukaeaTransportModel(pydantic_model_base.ComponentTransportBase):
   ) -> tglfnn_ukaea_transport_model.TGLFNNukaeaTransportModel:
     return tglfnn_ukaea_transport_model.TGLFNNukaeaTransportModel(
         machine=self.machine,
+        version=self.version,
     )
 
   def build_runtime_params(

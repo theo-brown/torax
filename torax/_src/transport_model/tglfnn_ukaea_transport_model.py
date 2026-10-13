@@ -44,6 +44,9 @@ class TGLFNNukaeaTransportModel(
   """TGLFNN-ukaea transport model."""
 
   machine: Literal["step", "multimachine"]
+  # Network version, e.g. "3.2.1". If None, set by __post_init__ to the default
+  # version for the machine.
+  version: str | None = None
 
   # The following fields are set by __post_init__
   model: tglfnn_ukaea_model.TGLFNNukaeaModel = dataclasses.field(init=False)
@@ -53,8 +56,15 @@ class TGLFNNukaeaTransportModel(
     # Use __setattr__ as this is a frozen dataclass, so we can't just do
     # self.model = ...
     object.__setattr__(
-        self, "model", tglfnn_ukaea_model.TGLFNNukaeaModel(self.machine)
+        self,
+        "model",
+        tglfnn_ukaea_model.TGLFNNukaeaModel(
+            self.machine, version=self.version
+        ),
     )
+    # Resolve the default version, so that models loading the same network
+    # compare equal.
+    object.__setattr__(self, "version", self.model.version)
     super().__post_init__()
 
   def _make_input_tensor_step(

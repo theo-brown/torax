@@ -1980,6 +1980,11 @@ Runtime parameters for the TGLFNN-UKAEA model. If you use this model, please cit
   See `ukaea/tglfnn-ukaea <https://github.com/ukaea/tglfnn-ukaea>`_ for more
   details. Note: currently, only the 'multimachine' model is publicly available.
 
+``version`` (str | None [default = None])
+  Version of the TGLFNN-UKAEA network to use, e.g. ``'3.2.1'``. If ``None``,
+  uses the default version for ``machine``: ``'3.2.1'`` for ``'multimachine'``
+  and ``'1.0.1'`` for ``'step'``.
+
 ``DV_effective`` (bool [default = False])
   If ``True``, use either :math:`D_{eff}` or :math:`V_{eff}` for particle
   transport. See :ref:`physics_models` for more details.
