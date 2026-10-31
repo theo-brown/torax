@@ -1,0 +1,21 @@
+=== time_accuracy ===
+reference run (BE, dt=0.0015625)...
+  steps=640 wall=73.5s t_end=1.0
+  BE(2*dt_ref) vs BE(dt_ref) max rel err: {'T_i': 5.2572723362797305e-05, 'T_e': 1.5852889790069353e-05, 'n_e': 0.00012581474826066675, 'psi': 4.229312259148486e-05}
+be    dt=0.2      steps=   5 wall=   0.5s newton_its(mean)=5.0 err={'T_i': '8.94e-03', 'T_e': '6.20e-03', 'n_e': '6.21e-03', 'psi': '1.23e-02'}
+be    dt=0.1      steps=  10 wall=   0.7s newton_its(mean)=3.5 err={'T_i': '4.32e-03', 'T_e': '2.82e-03', 'n_e': '3.86e-03', 'psi': '5.81e-03'}
+be    dt=0.05     steps=  20 wall=   1.4s newton_its(mean)=2.8 err={'T_i': '1.93e-03', 'T_e': '1.26e-03', 'n_e': '1.83e-03', 'psi': '2.59e-03'}
+be    dt=0.025    steps=  40 wall=   2.2s newton_its(mean)=2.5 err={'T_i': '7.84e-04', 'T_e': '5.08e-04', 'n_e': '1.06e-03', 'psi': '1.09e-03'}
+be    dt=0.0125   steps=  80 wall=   4.2s newton_its(mean)=2.1 err={'T_i': '3.22e-04', 'T_e': '1.65e-04', 'n_e': '5.15e-04', 'psi': '4.23e-04'}
+cn    dt=0.2      steps=   5 wall=  58.0s newton_its(mean)=5.8 err={'T_i': '4.52e-01', 'T_e': '4.55e-01', 'n_e': '1.88e-01', 'psi': '1.65e-01'}
+cn    dt=0.1      steps=  10 wall=   1.1s newton_its(mean)=7.1 err={'T_i': '2.36e-01', 'T_e': '2.32e-01', 'n_e': '8.74e-02', 'psi': '5.47e-02'}
+cn    dt=0.05     steps=  20 wall=   1.2s newton_its(mean)=2.8 err={'T_i': '1.38e-01', 'T_e': '1.38e-01', 'n_e': '5.39e-02', 'psi': '3.47e-02'}
+cn    dt=0.025    steps=  40 wall=   2.3s newton_its(mean)=2.3 err={'T_i': '7.92e-02', 'T_e': '7.41e-02', 'n_e': '2.76e-02', 'psi': '1.65e-02'}
+cn    dt=0.0125   steps=  80 wall=   4.2s newton_its(mean)=2.1 err={'T_i': '4.03e-02', 'T_e': '3.74e-02', 'n_e': '1.40e-02', 'psi': '8.01e-03'}
+bdf2  dt=0.2      steps=   5 wall=  50.6s newton_its(mean)=4.8 err={'T_i': '5.10e-03', 'T_e': '5.83e-03', 'n_e': '2.71e-03', 'psi': '4.70e-03'}
+bdf2  dt=0.1      steps=  10 wall=   1.5s newton_its(mean)=3.7 err={'T_i': '1.30e-03', 'T_e': '6.92e-04', 'n_e': '1.12e-03', 'psi': '5.00e-04'}
+bdf2  dt=0.05     steps=  20 wall=   3.0s newton_its(mean)=2.9 err={'T_i': '3.92e-04', 'T_e': '1.21e-04', 'n_e': '9.95e-04', 'psi': '1.87e-04'}
+bdf2  dt=0.025    steps=  40 wall=   5.4s newton_its(mean)=2.4 err={'T_i': '5.09e-04', 'T_e': '3.06e-04', 'n_e': '6.46e-04', 'psi': '5.78e-05'}
+bdf2  dt=0.0125   steps=  80 wall=   9.8s newton_its(mean)=2.1 err={'T_i': '3.94e-04', 'T_e': '4.01e-04', 'n_e': '1.91e-04', 'psi': '5.15e-05'}
+DONE
+TA_DONE

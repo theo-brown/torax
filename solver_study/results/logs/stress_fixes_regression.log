@@ -1,0 +1,46 @@
+01:59:04 jax_root_finding_test.py: Ran 3 tests in 4.325s OK  (7 s)
+01:59:07 pydantic_model_test.py: Ran 7 tests in 0.181s OK  (3 s)
+01:59:16 calc_coeffs_test.py: Ran 5 tests in 5.873s OK  (9 s)
+01:59:45 fvm_test.py: Ran 17 tests in 25.156s OK  (29 s)
+01:59:49 model_config_test.py: Ran 46 tests in 1.698s OK  (4 s)
+02:00:04 transport_model_test.py: Ran 19 tests in 11.727s OK  (15 s)
+02:00:10 qlknn_transport_model_test.py: Ran 23 tests in 3.339s OK  (6 s)
+02:01:20 step_function_test.py: Ran 15 tests in 65.533s OK  (70 s)
+02:01:33 step_function_processing_test.py: Ran 26 tests in 9.053s OK  (13 s)
+02:03:24 run_simulation_test.py: Ran 4 tests in 106.989s OK  (111 s)
+=== 02:03:24 chunk 0
+Ran 8 tests in 120.459s
+OK
+=== 02:05:30 chunk 8
+Ran 8 tests in 117.068s
+OK
+=== 02:07:32 chunk 16
+Ran 8 tests in 141.831s
+OK
+=== 02:09:59 chunk 24
+Ran 8 tests in 201.498s
+OK
+=== 02:13:27 chunk 32
+Ran 8 tests in 203.812s
+OK
+=== 02:16:58 chunk 40
+Ran 8 tests in 178.353s
+OK
+=== 02:20:02 chunk 48
+Ran 4 tests in 117.577s
+OK
+=== 02:22:05 others
+[       OK ] SimTest.test_fail
+[       OK ] SimTest.test_full_output_matches_reference
+[       OK ] SimTest.test_ip_bc_v_loop_bc_equivalence
+[       OK ] SimTest.test_low_temperature_error
+[       OK ] SimTest.test_nans_trigger_error
+[       OK ] SimTest.test_no_op
+[       OK ] SimTest.test_prescribed_psidot
+[       OK ] SimTest.test_simulation_with_restart0 ('test_psi_heat_dens')
+[       OK ] SimTest.test_simulation_with_restart1 ('test_psichease_prescribed_jtot')
+[       OK ] SimTest.test_simulation_with_restart2 ('test_psichease_prescribed_johm')
+[       OK ] SimTest.test_simulation_with_restart3 ('test_iterhybrid_rampup')
+Ran 11 tests in 216.687s
+OK
+SIMCHUNKS_DONE

@@ -1,0 +1,26 @@
+{
+ "colours_J": 86,
+ "colours_Jg_naive": 115,
+ "colours_Jg_minus_uv": 86,
+ "gmres_J_0.0001": [
+  22,
+  0
+ ],
+ "gmres_Jg_0.0001": [
+  34,
+  0
+ ],
+ "gmres_Jg_woodburyP_0.0001": 31,
+ "gmres_J_1e-06": [
+  28,
+  0
+ ],
+ "gmres_Jg_1e-06": [
+  29,
+  0
+ ],
+ "gmres_Jg_woodburyP_1e-06": 27,
+ "t_row_vjp_ms": 0.007033006113488227,
+ "t_residual_ms": 0.7528689966420643,
+ "split_assembly_rel_err": 0.0
+}

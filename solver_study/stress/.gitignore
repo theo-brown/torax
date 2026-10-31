@@ -1,0 +1,3 @@
+# Written by harness.py and sources_split.py.
+toric_nn.json
+out_*.npz

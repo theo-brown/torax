@@ -1,0 +1,32 @@
+{
+ "20.0_newton_its": 2,
+ "20.0_newton_err": 0,
+ "20.0_solver_inner": 2,
+ "20.0_nan_J": 0,
+ "20.0_denormal_J": 0,
+ "20.0_min_abs_nonzero_J": 1.0289546757009585e-18,
+ "20.0_timings_ms": {
+  "residual": 0.6803670003137086,
+  "jacfwd": 24.62281900079688,
+  "newton_solve": 72.68893299988122,
+  "full_step": 97.35727199949906,
+  "pre_step": 1.718093997624237,
+  "solver_call": 134.70075899749645,
+  "finalize_outputs": 2.4214840013883077
+ },
+ "60.0_newton_its": 5,
+ "60.0_newton_err": 0,
+ "60.0_solver_inner": 5,
+ "60.0_nan_J": 0,
+ "60.0_denormal_J": 0,
+ "60.0_min_abs_nonzero_J": 1.1071358799839197e-18,
+ "60.0_timings_ms": {
+  "residual": 0.6823990006523672,
+  "jacfwd": 24.49233399966033,
+  "newton_solve": 206.477427000209,
+  "full_step": 240.53630900016287,
+  "pre_step": 2.5002629990922287,
+  "solver_call": 193.08587900013663,
+  "finalize_outputs": 2.4575150018790737
+ }
+}

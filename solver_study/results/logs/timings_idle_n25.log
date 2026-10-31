@@ -1,0 +1,38 @@
+N=100 n_rho=25 dt=2.0 t=6.0
+gmres(40, tol 1e-4, prec P) direction rel err vs exact: 0.0004595973187236714
+
+=== timings (best, median) in ms ===
+residual                              0.542      0.636
+jacfwd_full                           5.397      6.153
+jacrev_full                           7.682      8.659
+jvp_single                            0.698      0.858
+vjp_single                            0.923      1.051
+batched_jvp_k2                        1.210      1.764
+batched_jvp_k4                        1.435      1.530
+batched_jvp_k8                        1.482      1.573
+batched_jvp_k16                       2.275      2.472
+batched_jvp_k32                       2.530      2.865
+batched_jvp_k64                       3.786      3.996
+batched_jvp_k100                      6.401      6.522
+dense_solve                           0.136      0.165
+dense_lu_factor                       0.136      0.171
+thomas_block_solve                    0.133      0.168
+jfnk_gmres40_prec_solve               8.935      9.200
+jfnk_gmres20_prec_solve               9.509     10.613
+picard_matrix_build                   0.579      0.680
+picard_lu                             0.110      0.118
+update_core_profiles                  0.356      0.409
+calc_coeffs_full                      0.736      0.900
+conductivity                          0.083      0.102
+implicit_sources                      0.170      0.191
+transport_coeffs_all                  0.612      0.685
+transport_model_only                  0.450      0.538
+newton_solve_custom_root             22.831     23.506
+newton_solve_no_custom_root          22.720     22.811
+newton_solve_vmap_ls8                24.704     24.717
+full_step_fn                         58.070     58.894
+predictor_corrector_10                4.348      4.980
+compile times (s): {'compile_newton_custom_root': 8.37, 'compile_newton_no_custom_root': 8.28, 'compile_newton_vmap_ls8': 10.32}
+newton iterations: 4
+ratio jacfwd/residual: 9.96130331665935  jacfwd/jvp_single: 7.737243329551679
+DONE

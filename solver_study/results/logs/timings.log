@@ -1,0 +1,192 @@
+=== timings n50 ===
+N=200 n_rho=50 dt=2.0 t=6.0
+gmres(40, tol 1e-4, prec P) direction rel err vs exact: 0.000882574025778406
+
+=== timings (best, median) in ms ===
+residual                              0.666      0.763
+jacfwd_full                          27.166     28.313
+jacrev_full                          18.751     18.895
+jvp_single                            0.962      1.192
+vjp_single                            0.911      1.155
+batched_jvp_k2                        1.293      1.443
+batched_jvp_k4                        1.695      1.859
+batched_jvp_k8                        2.083      2.685
+batched_jvp_k16                       2.490      2.562
+batched_jvp_k32                       4.937      5.512
+batched_jvp_k64                       6.821      7.570
+batched_jvp_k128                     12.256     13.225
+batched_jvp_k200                     29.990     41.272
+dense_solve                           0.517      0.745
+dense_lu_factor                       0.419      0.431
+thomas_block_solve                    0.208      0.240
+jfnk_gmres40_prec_solve              13.412     13.469
+jfnk_gmres20_prec_solve              14.159     16.093
+picard_matrix_build                   0.728      2.125
+picard_lu                             0.384      0.423
+update_core_profiles                  0.247      0.288
+calc_coeffs_full                      0.939      1.116
+conductivity                          0.073      0.100
+implicit_sources                      0.184      0.247
+transport_coeffs_all                  0.584      0.650
+transport_model_only                  0.536      0.649
+newton_solve_custom_root            144.561    160.072
+newton_solve_no_custom_root         142.044    150.039
+newton_solve_vmap_ls8               169.993    195.832
+full_step_fn                        199.823    212.569
+predictor_corrector_10                6.646      8.679
+compile times (s): {'compile_newton_custom_root': 9.87, 'compile_newton_no_custom_root': 10.05, 'compile_newton_vmap_ls8': 12.11}
+newton iterations: 4
+ratio jacfwd/residual: 40.780819329908375  jacfwd/jvp_single: 28.234583376458545
+DONE
+=== timings n100 ===
+N=400 n_rho=100 dt=2.0 t=6.0
+gmres(40, tol 1e-4, prec P) direction rel err vs exact: 0.003538065622902176
+
+=== timings (best, median) in ms ===
+residual                              0.856      0.984
+jacfwd_full                         138.522    149.276
+jacrev_full                          91.639     94.832
+jvp_single                            1.290      1.375
+vjp_single                            1.559      1.723
+batched_jvp_k2                        1.645      1.854
+batched_jvp_k4                        2.298      2.708
+batched_jvp_k8                        3.270      3.505
+batched_jvp_k16                       4.080      4.215
+batched_jvp_k32                       7.005      7.501
+batched_jvp_k64                      11.628     12.437
+batched_jvp_k128                     32.262     35.483
+batched_jvp_k400                    117.312    177.107
+dense_solve                           1.926      2.016
+dense_lu_factor                       2.034      2.740
+thomas_block_solve                    0.444      0.554
+jfnk_gmres40_prec_solve              22.710     23.643
+jfnk_gmres20_prec_solve              25.615     26.902
+picard_matrix_build                   1.880      1.999
+picard_lu                             1.731      1.830
+update_core_profiles                  0.326      0.390
+calc_coeffs_full                      0.902      1.048
+conductivity                          0.093      0.102
+implicit_sources                      0.251      0.321
+transport_coeffs_all                  0.977      1.150
+transport_model_only                  0.856      1.091
+newton_solve_custom_root            783.503    822.906
+newton_solve_no_custom_root         878.948    908.195
+newton_solve_vmap_ls8               868.953    979.049
+full_step_fn                        828.600    885.506
+predictor_corrector_10               11.669     12.476
+compile times (s): {'compile_newton_custom_root': 11.2, 'compile_newton_no_custom_root': 11.08, 'compile_newton_vmap_ls8': 13.87}
+newton iterations: 5
+ratio jacfwd/residual: 161.8792565659182  jacfwd/jvp_single: 107.3438853336539
+DONE
+=== timings n25 ===
+N=100 n_rho=25 dt=2.0 t=6.0
+gmres(40, tol 1e-4, prec P) direction rel err vs exact: 0.0004595973187236714
+
+=== timings (best, median) in ms ===
+residual                              0.410      0.510
+jacfwd_full                           5.493      5.767
+jacrev_full                           5.624      7.638
+jvp_single                            0.671      0.779
+vjp_single                            0.877      1.125
+batched_jvp_k2                        1.163      1.470
+batched_jvp_k4                        1.032      1.275
+batched_jvp_k8                        1.877      2.025
+batched_jvp_k16                       1.877      2.047
+batched_jvp_k32                       2.616      2.959
+batched_jvp_k64                       3.723      4.045
+batched_jvp_k100                      5.463      5.988
+dense_solve                           0.130      0.145
+dense_lu_factor                       0.105      0.123
+thomas_block_solve                    0.132      0.143
+jfnk_gmres40_prec_solve               9.631      9.715
+jfnk_gmres20_prec_solve               9.956     10.267
+picard_matrix_build                   0.635      1.209
+picard_lu                             0.111      0.114
+update_core_profiles                  0.284      0.327
+calc_coeffs_full                      0.602      0.778
+conductivity                          0.073      0.088
+implicit_sources                      0.166      0.194
+transport_coeffs_all                  0.583      0.736
+transport_model_only                  0.460      0.616
+newton_solve_custom_root             22.154     22.349
+newton_solve_no_custom_root          22.717     22.721
+newton_solve_vmap_ls8                25.620     27.837
+full_step_fn                         57.693     58.039
+predictor_corrector_10                4.605      5.228
+compile times (s): {'compile_newton_custom_root': 9.82, 'compile_newton_no_custom_root': 10.18, 'compile_newton_vmap_ls8': 12.07}
+newton iterations: 4
+ratio jacfwd/residual: 13.411818430247372  jacfwd/jvp_single: 8.18431023048947
+DONE
+TIMINGS_DONE
+=== stall_diag ===
+
+##### dt=0.02 t=6.0: newton it=4 conv=False final=4.73e-04 taus=[1.0, 1.0, 0.0625, 0.00390625]
+  mean|R| by channel: {'T_i': '4.55e-04', 'T_e': '9.16e-04', 'psi': '1.47e-08', 'n_e': '5.19e-04'}
+   T_i: largest |R| at cells [39, 38, 40, 37, 41] values [0.0029, 0.0027, 0.0027, 0.0024, 0.0021]
+   T_e: largest |R| at cells [42, 38, 39, 37, 41] values [0.0039, 0.0032, 0.0032, 0.0031, 0.0031]
+   psi: largest |R| at cells [44, 43, 42, 41, 39] values [2e-07, 1.5e-07, 1.1e-07, 9e-08, 5e-08]
+   n_e: largest |R| at cells [43, 42, 41, 37, 38] values [0.01, 0.0066, 0.003, 0.0011, 0.0011]
+  |d|_max=4.057e-01 (rel to x max 1.362e-02)
+   s=0.0001 mean|R(x+sd)|=4.726e-04  (predicted 4.726e-04)  linearisation err/|dR| = 1.455e-01
+   s=0.001  mean|R(x+sd)|=4.728e-04  (predicted 4.722e-04)  linearisation err/|dR| = 1.726e+00
+   s=0.01   mean|R(x+sd)|=5.402e-04  (predicted 4.679e-04)  linearisation err/|dR| = 1.054e+00
+   s=0.1    mean|R(x+sd)|=8.079e-03  (predicted 4.254e-04)  linearisation err/|dR| = 9.959e-01
+   s=0.5    mean|R(x+sd)|=5.478e-02  (predicted 2.363e-04)  linearisation err/|dR| = 9.985e-01
+   s=1      mean|R(x+sd)|=9.868e-02  (predicted 3.920e-16)  linearisation err/|dR| = 9.986e-01
+   nonlinearity (s=1e-2) T_i: cells [42, 43, 41, 40] dev [0.00064, 0.00047, 0.00041, 0.0003] vs |dR| [0.00063, 0.00047, 0.00039, 0.00027]
+   nonlinearity (s=1e-2) T_e: cells [35, 36, 37, 34] dev [0.00054, 0.00054, 0.00051, 0.00049] vs |dR| [0.00051, 0.00051, 0.00048, 0.00047]
+   nonlinearity (s=1e-2) psi: cells [42, 43, 41, 39] dev [1.1e-08, 9.3e-09, 4.9e-09, 2.2e-09] vs |dR| [1.2e-08, 7.8e-09, 5.8e-09, 2.7e-09]
+   nonlinearity (s=1e-2) n_e: cells [43, 42, 41, 36] dev [0.0016, 0.0011, 0.00055, 0.00037] vs |dR| [0.0015, 0.001, 0.00052, 0.00036]
+  cond(J)=1.41e+06; smallest sing. values ['1.19e-02', '5.72e-03', '4.54e-03', '1.07e-03']
+  smallest right singular vector: channel weights {'T_i': '0.66', 'T_e': '0.75', 'psi': '0.00', 'n_e': '0.04'} peak cells [30, 29, 43, 42]
+
+##### dt=0.05 t=6.0: newton it=4 conv=False final=1.31e-03 taus=[1.0, 1.0, 0.03125, 0.00390625]
+  mean|R| by channel: {'T_i': '1.10e-03', 'T_e': '2.93e-03', 'psi': '3.05e-08', 'n_e': '1.23e-03'}
+   T_i: largest |R| at cells [27, 24, 26, 25, 28] values [0.005, 0.0049, 0.0049, 0.0048, 0.0046]
+   T_e: largest |R| at cells [24, 27, 28, 26, 37] values [0.012, 0.0097, 0.0094, 0.0092, 0.009]
+   psi: largest |R| at cells [33, 34, 32, 36, 37] values [1.9e-07, 1.6e-07, 1.4e-07, 1.3e-07, 1.2e-07]
+   n_e: largest |R| at cells [43, 42, 39, 38, 37] values [0.024, 0.0064, 0.005, 0.005, 0.0044]
+  |d|_max=4.669e-01 (rel to x max 1.567e-02)
+   s=0.0001 mean|R(x+sd)|=1.314e-03  (predicted 1.314e-03)  linearisation err/|dR| = 8.196e-02
+   s=0.001  mean|R(x+sd)|=1.314e-03  (predicted 1.313e-03)  linearisation err/|dR| = 1.448e+00
+   s=0.01   mean|R(x+sd)|=1.398e-03  (predicted 1.301e-03)  linearisation err/|dR| = 1.123e+00
+   s=0.1    mean|R(x+sd)|=6.639e-03  (predicted 1.183e-03)  linearisation err/|dR| = 1.002e+00
+   s=0.5    mean|R(x+sd)|=9.768e-02  (predicted 6.573e-04)  linearisation err/|dR| = 9.979e-01
+   s=1      mean|R(x+sd)|=1.493e-01  (predicted 1.010e-15)  linearisation err/|dR| = 9.981e-01
+   nonlinearity (s=1e-2) T_i: cells [42, 41, 43, 40] dev [0.0008, 0.00069, 0.00069, 0.00052] vs |dR| [0.00077, 0.00067, 0.00065, 0.00051]
+   nonlinearity (s=1e-2) T_e: cells [24, 36, 37, 38] dev [0.00098, 0.0008, 0.0008, 0.00077] vs |dR| [0.00086, 0.00071, 0.0007, 0.00069]
+   nonlinearity (s=1e-2) psi: cells [43, 42, 38, 37] dev [1.3e-08, 8.6e-09, 7.5e-09, 7.1e-09] vs |dR| [1.2e-08, 7.7e-09, 6.5e-09, 5.9e-09]
+   nonlinearity (s=1e-2) n_e: cells [43, 42, 38, 37] dev [0.001, 0.00039, 0.00022, 0.00022] vs |dR| [0.00079, 0.00032, 0.00017, 0.00018]
+  cond(J)=1.69e+06; smallest sing. values ['1.96e-02', '7.14e-03', '4.35e-03', '2.22e-03']
+  smallest right singular vector: channel weights {'T_i': '0.38', 'T_e': '0.92', 'psi': '0.00', 'n_e': '0.02'} peak cells [30, 30, 40, 42]
+
+##### dt=0.2 t=6.0: newton it=3 conv=True final=2.81e-07 taus=[1.0, 1.0, 1.0]
+  mean|R| by channel: {'T_i': '4.04e-07', 'T_e': '7.05e-07', 'psi': '1.58e-10', 'n_e': '1.43e-08'}
+   T_i: largest |R| at cells [43, 42, 41, 14, 40] values [3.7e-06, 2.8e-06, 2.1e-06, 2e-06, 1.4e-06]
+   T_e: largest |R| at cells [31, 43, 32, 33, 34] values [2e-06, 2e-06, 1.9e-06, 1.7e-06, 1.7e-06]
+   psi: largest |R| at cells [42, 43, 38, 37, 41] values [8e-10, 7.7e-10, 7.2e-10, 7e-10, 7e-10]
+   n_e: largest |R| at cells [43, 42, 41, 14, 39] values [3.4e-07, 1.1e-07, 3.2e-08, 2.9e-08, 2.2e-08]
+  |d|_max=1.493e-06 (rel to x max 5.031e-08)
+   s=0.0001 mean|R(x+sd)|=2.808e-07  (predicted 2.808e-07)  linearisation err/|dR| = 4.203e-03
+   s=0.001  mean|R(x+sd)|=2.806e-07  (predicted 2.806e-07)  linearisation err/|dR| = 3.780e-04
+   s=0.01   mean|R(x+sd)|=2.780e-07  (predicted 2.780e-07)  linearisation err/|dR| = 3.268e-05
+   s=0.1    mean|R(x+sd)|=2.528e-07  (predicted 2.528e-07)  linearisation err/|dR| = 3.954e-06
+   s=0.5    mean|R(x+sd)|=1.404e-07  (predicted 1.404e-07)  linearisation err/|dR| = 1.948e-06
+   s=1      mean|R(x+sd)|=9.965e-13  (predicted 1.270e-20)  linearisation err/|dR| = 3.647e-06
+   nonlinearity (s=1e-2) T_i: cells [0, 14, 40, 17] dev [2.3e-13, 2.1e-13, 2e-13, 1.8e-13] vs |dR| [4.6e-12, 2e-08, 1.4e-08, 2.4e-10]
+   nonlinearity (s=1e-2) T_e: cells [4, 9, 2, 3] dev [1.1e-12, 9.7e-13, 9.4e-13, 8e-13] vs |dR| [1e-10, 6.2e-10, 5.6e-11, 7.3e-11]
+   nonlinearity (s=1e-2) psi: cells [47, 48, 49, 38] dev [5e-14, 4.5e-14, 3.6e-14, 1.6e-14] vs |dR| [5e-14, 4.3e-14, 3.6e-14, 7.2e-12]
+   nonlinearity (s=1e-2) n_e: cells [40, 14, 42, 37] dev [1.7e-15, 1.6e-15, 1e-15, 9.6e-16] vs |dR| [1e-11, 2.9e-10, 1.1e-09, 9.4e-11]
+  cond(J)=3.49e+06; smallest sing. values ['3.62e-02', '1.74e-02', '1.17e-02', '4.09e-03']
+  smallest right singular vector: channel weights {'T_i': '0.14', 'T_e': '0.99', 'psi': '0.00', 'n_e': '0.01'} peak cells [14, 6, 20, 44]
+DONE
+SD_DONE
+=== scale_linear_100
+[scale_linear_100] DONE steps=51 t=1.0000 first_step=15.09s median_step=0.0080s run_clean=0.41s inner_total=102 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=24.1s
+=== scale_newton_100
+[scale_newton_100] DONE steps=49 t=1.0000 first_step=22.86s median_step=0.4050s run_clean=22.97s inner_total=127 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=54.9s
+=== scale_linear_200
+[scale_linear_200] DONE steps=60 t=0.1968 first_step=14.05s median_step=0.0103s run_clean=0.65s inner_total=120 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=23.1s
+=== scale_newton_200
+[scale_newton_200] DONE steps=60 t=0.1845 first_step=26.73s median_step=1.0387s run_clean=54.84s inner_total=107 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=90.1s
+SCALE_DONE

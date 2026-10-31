@@ -1,0 +1,19 @@
+=== linear_vs_newton dt=0.05 ===
+newton (tol 1e-7): steps 40
+newton_default_tol   steps=40 max rel diff vs converged newton: T_i=6.21e-07 T_e=6.18e-07 n_e=1.09e-06 psi=8.91e-08
+linear_1corr         steps=40 max rel diff vs converged newton: T_i=3.28e-02 T_e=6.58e-02 n_e=7.22e-02 psi=2.44e-02
+linear_3corr         steps=40 max rel diff vs converged newton: T_i=1.98e-02 T_e=3.29e-02 n_e=1.61e-02 psi=1.31e-02
+linear_10corr        steps=40 max rel diff vs converged newton: T_i=8.30e-03 T_e=1.24e-02 n_e=3.70e-03 psi=8.25e-03
+linear_30corr        steps=40 max rel diff vs converged newton: T_i=4.92e-03 T_e=1.07e-02 n_e=1.71e-03 psi=1.75e-03
+linear_nopc          steps=40 max rel diff vs converged newton: T_i=3.81e-02 T_e=9.21e-02 n_e=1.14e-01 psi=3.44e-02
+DONE
+=== linear_vs_newton dt=0.2 ===
+newton (tol 1e-7): steps 10
+newton_default_tol   steps=10 max rel diff vs converged newton: T_i=2.93e-08 T_e=1.06e-07 n_e=7.58e-08 psi=1.68e-08
+linear_1corr         steps=10 max rel diff vs converged newton: T_i=7.36e-02 T_e=1.96e-01 n_e=1.72e-01 psi=2.71e-02
+linear_3corr         steps=10 max rel diff vs converged newton: T_i=4.44e-02 T_e=1.14e-01 n_e=9.04e-02 psi=9.60e-03
+linear_10corr        steps=10 max rel diff vs converged newton: T_i=2.06e-02 T_e=3.14e-02 n_e=2.12e-02 psi=8.60e-03
+linear_30corr        steps=10 max rel diff vs converged newton: T_i=1.01e-02 T_e=1.21e-02 n_e=2.65e-03 psi=7.20e-03
+linear_nopc          steps=10 max rel diff vs converged newton: T_i=8.96e-02 T_e=2.84e-01 n_e=1.95e-01 psi=1.27e-02
+DONE
+LVN_DONE

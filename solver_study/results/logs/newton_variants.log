@@ -1,0 +1,79 @@
+=== newton_variants ===
+
+##### dt=2.0 t=6.0 N=200: initial residual norm 5.972e-01, |x0-x_old|/|x_old|=7.660e-02
+full Newton: it=4 conv=True res=5 jac=4 ls_extra=0 hist=['6.0e-01', '3.2e-02', '6.1e-04', '1.8e-05', '2.2e-10']
+full Newton from x_old: it=7 conv=True res=15 jac=7 ls_extra=7 hist=['4.9e-01', '4.8e-01', '4.5e-01', '4.0e-01', '1.4e-01', '1.8e-02', '3.7e-04', '1.4e-07']
+  full Newton: |x_k - x*| / |x* - x_old| per iteration: ['3.0e-01', '8.9e-03', '2.3e-03', '3.6e-06', '0.0e+00']
+  residual norm per iteration: ['6.0e-01', '3.2e-02', '6.1e-04', '1.8e-05', '2.2e-10']
+full Newton from extrapolated guess (dt ratio 1.00): it=5 conv=True res=6 jac=5 ls_extra=0 hist=['8.9e-01', '7.0e-01', '1.0e-01', '7.3e-03', '2.8e-04', '3.1e-08']
+  initial-guess quality |x_guess - x*|/|x*-x_old|: linear PC 3.000e-01, x_old 1.0, extrapolation 1.560e+00
+Jacobian every 2: it=5 conv=True res=6 jac=3 ls_extra=0 final=2.6e-08
+Jacobian every 3: it=5 conv=True res=6 jac=2 ls_extra=0 final=4.3e-06
+chord (J at x0 fixed): it=21 conv=True res=22 ls_extra=0 final=9.7e-06
+chord (J at x_old fixed): it=29 conv=True res=84 ls_extra=54 final=8.9e-06
+Newton with Picard P(x): it=1 conv=False res=24 ls_extra=22 final=6.0e-01
+Newton with Pereverzev-augmented P(x): it=100 conv=False res=101 ls_extra=0 final=1.8e-02
+band-truncated J (k=2 cells): it=60 conv=False res=85 jac=60 final=1.9e-03
+band-truncated J (k=4 cells): it=9 conv=False res=33 jac=9 final=6.3e-02
+band-truncated J (k=8 cells): it=60 conv=False res=61 jac=60 final=2.9e-05
+JFNK (prec P): newton it=4 conv=True total JVPs=99 res evals=5 prec builds=4 hist=['6.0e-01', '2.9e-02', '6.0e-04', '1.8e-05', '6.9e-09']
+JFNK (prec P_pereverzev): newton it=4 conv=True total JVPs=304 res evals=5 prec builds=4 hist=['6.0e-01', '2.9e-02', '1.6e-03', '1.7e-05', '3.0e-09']
+
+##### dt=0.5 t=6.0 N=200: initial residual norm 1.120e-01, |x0-x_old|/|x_old|=3.434e-02
+full Newton: it=3 conv=True res=4 jac=3 ls_extra=0 hist=['1.1e-01', '1.3e-02', '1.4e-04', '2.8e-06']
+full Newton from x_old: it=5 conv=True res=7 jac=5 ls_extra=1 hist=['4.7e-02', '3.8e-02', '1.1e-02', '3.8e-04', '1.9e-05', '2.4e-07']
+  full Newton: |x_k - x*| / |x* - x_old| per iteration: ['7.5e-01', '3.3e-02', '3.1e-03', '0.0e+00']
+  residual norm per iteration: ['1.1e-01', '1.3e-02', '1.4e-04', '2.8e-06']
+full Newton from extrapolated guess (dt ratio 0.25): it=3 conv=True res=4 jac=3 ls_extra=0 hist=['6.8e-02', '3.7e-02', '9.5e-04', '3.7e-06']
+  initial-guess quality |x_guess - x*|/|x*-x_old|: linear PC 7.494e-01, x_old 1.0, extrapolation 1.382e+00
+Jacobian every 2: it=3 conv=True res=4 jac=2 ls_extra=0 final=4.1e-06
+Jacobian every 3: it=4 conv=True res=5 jac=2 ls_extra=0 final=1.3e-07
+chord (J at x0 fixed): it=5 conv=True res=6 ls_extra=0 final=5.6e-06
+chord (J at x_old fixed): it=7 conv=True res=8 ls_extra=0 final=7.2e-06
+Newton with Picard P(x): it=1 conv=False res=16 ls_extra=14 final=1.1e-01
+Newton with Pereverzev-augmented P(x): it=100 conv=False res=101 ls_extra=0 final=3.2e-03
+band-truncated J (k=2 cells): it=60 conv=False res=74 jac=60 final=7.9e-05
+band-truncated J (k=4 cells): it=8 conv=False res=34 jac=8 final=1.6e-02
+band-truncated J (k=8 cells): it=46 conv=True res=48 jac=46 final=9.9e-06
+JFNK (prec P): newton it=4 conv=True total JVPs=87 res evals=5 prec builds=4 hist=['1.1e-01', '1.8e-02', '2.2e-04', '4.9e-05', '5.1e-07']
+JFNK (prec P_pereverzev): newton it=3 conv=True total JVPs=142 res evals=4 prec builds=3 hist=['1.1e-01', '1.1e-02', '7.8e-04', '2.9e-06']
+
+##### dt=0.1 t=6.0 N=200: initial residual norm 2.110e-02, |x0-x_old|/|x_old|=5.881e-03
+full Newton: it=3 conv=True res=4 jac=3 ls_extra=0 hist=['2.1e-02', '3.4e-03', '1.4e-04', '8.9e-07']
+full Newton from x_old: it=4 conv=True res=6 jac=4 ls_extra=1 hist=['7.8e-03', '7.1e-03', '1.7e-03', '1.1e-04', '1.1e-07']
+  full Newton: |x_k - x*| / |x* - x_old| per iteration: ['9.0e-01', '1.4e-01', '2.5e-03', '0.0e+00']
+  residual norm per iteration: ['2.1e-02', '3.4e-03', '1.4e-04', '8.9e-07']
+full Newton from extrapolated guess (dt ratio 0.05): it=6 conv=True res=13 jac=6 ls_extra=6 hist=['2.8e-03', '2.6e-03', '2.6e-03', '2.4e-03', '1.0e-03', '2.7e-05', '7.0e-07']
+  initial-guess quality |x_guess - x*|/|x*-x_old|: linear PC 8.951e-01, x_old 1.0, extrapolation 1.044e+00
+Jacobian every 2: it=5 conv=True res=6 jac=3 ls_extra=0 final=1.4e-07
+Jacobian every 3: it=5 conv=True res=6 jac=2 ls_extra=0 final=5.9e-06
+chord (J at x0 fixed): it=6 conv=True res=7 ls_extra=0 final=6.7e-06
+chord (J at x_old fixed): it=8 conv=True res=9 ls_extra=0 final=5.4e-06
+Newton with Picard P(x): it=2 conv=False res=26 ls_extra=23 final=2.1e-02
+Newton with Pereverzev-augmented P(x): it=100 conv=False res=101 ls_extra=0 final=7.7e-04
+band-truncated J (k=2 cells): it=28 conv=True res=32 jac=28 final=9.4e-06
+band-truncated J (k=4 cells): it=7 conv=False res=34 jac=7 final=6.4e-03
+band-truncated J (k=8 cells): it=23 conv=True res=27 jac=23 final=8.1e-06
+JFNK (prec P): newton it=3 conv=True total JVPs=55 res evals=4 prec builds=3 hist=['2.1e-02', '3.6e-03', '1.4e-04', '8.8e-07']
+JFNK (prec P_pereverzev): newton it=4 conv=True total JVPs=227 res evals=5 prec builds=4 hist=['2.1e-02', '3.2e-03', '1.5e-04', '1.2e-05', '2.8e-08']
+
+##### dt=0.02 t=6.0 N=200: initial residual norm 7.779e-03, |x0-x_old|/|x_old|=2.214e-03
+full Newton: it=4 conv=False res=17 jac=4 ls_extra=12 hist=['7.8e-03', '1.3e-03', '4.8e-04', '4.7e-04', '4.7e-04']
+full Newton from x_old: it=6 conv=False res=21 jac=6 ls_extra=14 hist=['1.5e-03', '1.4e-03', '5.0e-04', '4.3e-04', '3.4e-04', '3.2e-04', '3.1e-04']
+  full Newton: |x_k - x*| / |x* - x_old| per iteration: ['1.9e+00', '2.2e-01', '1.0e-01', '2.1e-02', '0.0e+00']
+  residual norm per iteration: ['7.8e-03', '1.3e-03', '4.8e-04', '4.7e-04', '4.7e-04']
+full Newton from extrapolated guess (dt ratio 0.01): it=11 conv=False res=61 jac=11 ls_extra=49 hist=['1.7e-04', '1.7e-04', '1.7e-04', '1.7e-04', '1.6e-04', '1.6e-04', '1.6e-04', '1.6e-04', '1.6e-04', '1.5e-04', '1.2e-04', '1.2e-04']
+  initial-guess quality |x_guess - x*|/|x*-x_old|: linear PC 1.919e+00, x_old 1.0, extrapolation 8.754e-01
+Jacobian every 2: it=4 conv=False res=27 jac=2 ls_extra=22 final=7.8e-04
+Jacobian every 3: it=5 conv=False res=33 jac=2 ls_extra=27 final=6.0e-04
+chord (J at x0 fixed): it=11 conv=False res=54 ls_extra=42 final=1.8e-04
+chord (J at x_old fixed): it=5 conv=False res=34 ls_extra=28 final=6.6e-04
+Newton with Picard P(x): it=8 conv=False res=32 ls_extra=23 final=1.6e-03
+Newton with Pereverzev-augmented P(x): it=10 conv=False res=26 ls_extra=15 final=3.4e-03
+band-truncated J (k=2 cells): it=6 conv=False res=32 jac=6 final=3.2e-03
+band-truncated J (k=4 cells): it=7 conv=False res=28 jac=7 final=1.1e-03
+band-truncated J (k=8 cells): it=3 conv=False res=23 jac=3 final=2.4e-03
+JFNK (prec P): newton it=30 conv=False total JVPs=621 res evals=497 prec builds=30 hist=['7.8e-03', '1.4e-03', '4.8e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04', '4.7e-04']
+JFNK (prec P_pereverzev): newton it=30 conv=False total JVPs=2893 res evals=472 prec builds=30 hist=['7.8e-03', '1.2e-03', '9.4e-04', '5.8e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04', '5.7e-04']
+DONE
+NV_DONE

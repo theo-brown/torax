@@ -1,0 +1,13 @@
+=== 18:16:01 START cmp_base_dense overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}}
+=== 18:17:08 END cmp_base_dense rc=0
+  cmp_base_dense: lower 3.9 s, xla compile 19.3 s, first step (jit) 0.3 s, hlo 21.4 MB, steps 3
+=== 18:17:08 START cmpg_base_dense overrides={"numerics": {"t_final": 2.0}, "geometry": {"__replace__": true, "geometry_type": "circular", "n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}, "sources": {"cyclotron_radiation": {}, "impurity_radiation": {"model_name": "P_in_scaled_flat_profile", "fraction_P_heating": 0.1}, "icrh": {"model_path": "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/dummy_toric_nn.json", "P_total": 10e6, "wall_inner": 1.24, "wall_outer": 2.43}}}
+=== 18:17:43 END cmpg_base_dense rc=0
+  cmpg_base_dense: lower 4.0 s, xla compile 19.7 s, first step (jit) 0.3 s, hlo 24.0 MB, steps 3
+=== 18:17:43 START cmp_base_structured overrides={"numerics": {"t_final": 2.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}}
+=== 18:18:23 END cmp_base_structured rc=0
+  cmp_base_structured: lower 4.8 s, xla compile 25.6 s, first step (jit) 0.1 s, hlo 22.7 MB, steps 3
+=== 18:18:23 START cmpg_base_structured overrides={"numerics": {"t_final": 2.0}, "geometry": {"__replace__": true, "geometry_type": "circular", "n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}, "sources": {"cyclotron_radiation": {}, "impurity_radiation": {"model_name": "P_in_scaled_flat_profile", "fraction_P_heating": 0.1}, "icrh": {"model_path": "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/dummy_toric_nn.json", "P_total": 10e6, "wall_inner": 1.24, "wall_outer": 2.43}}}
+=== 18:19:14 END cmpg_base_structured rc=0
+  cmpg_base_structured: lower 6.7 s, xla compile 32.4 s, first step (jit) 0.2 s, hlo 27.2 MB, steps 3
+DRIVER_DONE

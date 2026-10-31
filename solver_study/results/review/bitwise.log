@@ -1,0 +1,37 @@
+component adaptive_H rc=0 361 bitwise-equal arrays, 0 differing arrays
+component adaptive_H_implicit rc=0 361 bitwise-equal arrays, 0 differing arrays
+component adaptive_L rc=0 361 bitwise-equal arrays, 0 differing arrays
+component bpp rc=0 345 bitwise-equal arrays, 0 differing arrays
+component bpp_fgw rc=0 345 bitwise-equal arrays, 0 differing arrays
+component constfrac rc=0 347 bitwise-equal arrays, 0 differing arrays
+component cyclotron rc=0 347 bitwise-equal arrays, 0 differing arrays
+component explicit_mtanh rc=0 345 bitwise-equal arrays, 0 differing arrays
+component gaspuff_fb rc=0 345 bitwise-equal arrays, 0 differing arrays
+component gaspuff_fb_volume rc=0 345 bitwise-equal arrays, 0 differing arrays
+component global_sources rc=0 353 bitwise-equal arrays, 0 differing arrays
+component icrh rc=0 349 bitwise-equal arrays, 0 differing arrays
+component icrh_minority rc=0 349 bitwise-equal arrays, 0 differing arrays
+component implicit_pedestal_mtanh rc=0 345 bitwise-equal arrays, 0 differing arrays
+component lh_adaptive_H rc=0 333 bitwise-equal arrays, 0 differing arrays
+component lh_adaptive_L rc=0 333 bitwise-equal arrays, 0 differing arrays
+component lh_ibc_H rc=0 317 bitwise-equal arrays, 0 differing arrays
+component lh_ibc_L rc=0 317 bitwise-equal arrays, 0 differing arrays
+component lh_ibc_mtanh_H rc=0 317 bitwise-equal arrays, 0 differing arrays
+component lh_ibc_trans rc=0 317 bitwise-equal arrays, 0 differing arrays
+component prescribed_ibc rc=0 345 bitwise-equal arrays, 0 differing arrays
+simulation adaptive_implicit_nr rc=0 RESULT case=adaptive_implicit_nr steps=90 wall=69.8s sim_error=SimError.NO_ERROR :: 199 bitwise-equal arrays, 0 differing arrays
+simulation bpp_linear rc=0 RESULT case=bpp_linear steps=30 wall=29.6s sim_error=SimError.NO_ERROR arrays=19 :: 199 bitwise-equal arrays, 0 differing arrays
+simulation bpp_nr rc=0 RESULT case=bpp_nr steps=30 wall=42.1s sim_error=SimError.NO_ERROR arrays=199 to :: 199 bitwise-equal arrays, 0 differing arrays
+simulation constfrac_linear rc=0 RESULT case=constfrac_linear steps=8 wall=36.8s sim_error=SimError.NO_ERROR arra :: 200 bitwise-equal arrays, 0 differing arrays
+simulation constfrac_nr rc=0 RESULT case=constfrac_nr steps=9 wall=53.8s sim_error=SimError.NO_ERROR arrays=2 :: 200 bitwise-equal arrays, 0 differing arrays
+simulation cyclotron_linear rc=0 RESULT case=cyclotron_linear steps=8 wall=42.7s sim_error=SimError.NO_ERROR arra :: 200 bitwise-equal arrays, 0 differing arrays
+simulation cyclotron_nr rc=0 RESULT case=cyclotron_nr steps=11 wall=56.9s sim_error=SimError.NO_ERROR arrays= :: 200 bitwise-equal arrays, 0 differing arrays
+simulation gaspuff_fb_nr rc=0 RESULT case=gaspuff_fb_nr steps=21 wall=58.8s sim_error=SimError.NO_ERROR arrays :: 199 bitwise-equal arrays, 0 differing arrays
+simulation global_sources_nr rc=0 RESULT case=global_sources_nr steps=14 wall=60.5s sim_error=SimError.NO_ERROR ar :: 199 bitwise-equal arrays, 0 differing arrays
+simulation lh_adaptive_highP rc=0 RESULT case=lh_adaptive_highP steps=27 wall=40.6s sim_error=SimError.NO_ERROR ar :: 199 bitwise-equal arrays, 0 differing arrays
+simulation lh_adaptive_native rc=0 RESULT case=lh_adaptive_native steps=559 wall=84.4s sim_error=SimError.NO_ERROR  :: 199 bitwise-equal arrays, 0 differing arrays
+simulation lh_ibc_highP rc=0 RESULT case=lh_ibc_highP steps=7 wall=36.1s sim_error=SimError.NO_ERROR arrays=1 :: 199 bitwise-equal arrays, 0 differing arrays
+simulation lh_ibc_highP_mtanh rc=0 RESULT case=lh_ibc_highP_mtanh steps=7 wall=37.0s sim_error=SimError.NO_ERROR ar :: 199 bitwise-equal arrays, 0 differing arrays
+simulation lh_ibc_native rc=0 RESULT case=lh_ibc_native steps=9 wall=35.6s sim_error=SimError.NO_ERROR arrays= :: 199 bitwise-equal arrays, 0 differing arrays
+simulation mtanh_implicit rc=0 RESULT case=mtanh_implicit steps=12 wall=40.4s sim_error=SimError.NO_ERROR array :: 198 bitwise-equal arrays, 0 differing arrays
+BITWISE_DONE

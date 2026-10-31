@@ -1,0 +1,53 @@
+=== 02:26:07 START prod_rampup50_dense config=torax.examples.iterhybrid_rampup overrides={"solver": {"jacobian_mode": "dense"}} extra=
+=== 02:26:46 END prod_rampup50_dense rc=0
+[prod_rampup50_dense] DONE steps=40 t=80.0000 first_step=21.36s median_step=0.1922s run_clean=7.60s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=37.4s
+=== 02:26:46 START prod_rampup100_dense config=torax.examples.iterhybrid_rampup overrides={"geometry": {"n_rho": 100}, "solver": {"jacobian_mode": "dense"}} extra=
+=== 02:27:40 END prod_rampup100_dense rc=0
+[prod_rampup100_dense] DONE steps=40 t=80.0000 first_step=22.48s median_step=0.4902s run_clean=21.65s inner_total=139 outer>1=0 err2=6 err1=0 sim_error=NO_ERROR proc_total=52.8s
+=== 02:27:40 START prod_rampup50_structured config=torax.examples.iterhybrid_rampup overrides={"solver": {"jacobian_mode": "structured"}} extra=
+=== 02:28:21 END prod_rampup50_structured rc=0
+[prod_rampup50_structured] DONE steps=40 t=80.0000 first_step=27.95s median_step=0.0684s run_clean=2.69s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=38.8s
+=== 02:28:21 START prod_rampup100_structured config=torax.examples.iterhybrid_rampup overrides={"geometry": {"n_rho": 100}, "solver": {"jacobian_mode": "structured"}} extra=
+=== 02:29:03 END prod_rampup100_structured rc=0
+[prod_rampup100_structured] DONE steps=40 t=80.0000 first_step=27.90s median_step=0.1113s run_clean=4.69s inner_total=139 outer>1=0 err2=6 err1=0 sim_error=NO_ERROR proc_total=41.1s
+=== 02:29:03 START prod_scale25_dense config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 25}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}} extra=--max-steps 60
+=== 02:29:32 END prod_scale25_dense rc=0
+[prod_scale25_dense] DONE steps=5 t=1.0000 first_step=19.98s median_step=0.0726s run_clean=0.28s inner_total=26 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=27.6s
+=== 02:29:32 START prod_scale25_structured config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 25}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}} extra=--max-steps 60
+=== 02:30:08 END prod_scale25_structured rc=0
+[prod_scale25_structured] DONE steps=5 t=1.0000 first_step=26.59s median_step=0.0440s run_clean=0.18s inner_total=26 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=34.5s
+=== 02:30:08 START prod_scale50_dense config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}} extra=--max-steps 60
+=== 02:30:40 END prod_scale50_dense rc=0
+[prod_scale50_dense] DONE steps=13 t=1.0000 first_step=20.11s median_step=0.2068s run_clean=2.73s inner_total=46 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=31.0s
+=== 02:30:40 START prod_scale50_structured config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}} extra=--max-steps 60
+=== 02:31:19 END prod_scale50_structured rc=0
+[prod_scale50_structured] DONE steps=13 t=1.0000 first_step=27.98s median_step=0.0690s run_clean=0.83s inner_total=46 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=36.7s
+=== 02:31:19 START prod_scale100_dense config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 100}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}} extra=--max-steps 60
+=== 02:32:09 END prod_scale100_dense rc=0
+[prod_scale100_dense] DONE steps=49 t=1.0000 first_step=21.39s median_step=0.3410s run_clean=19.57s inner_total=127 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=49.1s
+=== 02:32:09 START prod_scale100_structured config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 100}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}} extra=--max-steps 60
+=== 02:32:50 END prod_scale100_structured rc=0
+[prod_scale100_structured] DONE steps=49 t=1.0000 first_step=26.71s median_step=0.0768s run_clean=4.11s inner_total=127 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=39.5s
+DRIVER_DONE
+=== 02:32:50 START prodg_rampup50_dense config=torax.examples.iterhybrid_rampup overrides={"geometry": {"__replace__": true, "geometry_type": "circular", "n_rho": 50}, "solver": {"jacobian_mode": "dense"}, "sources": {"cyclotron_radiation": {}, "impurity_radiation": {"model_name": "P_in_scaled_flat_profile", "fraction_P_heating": 0.1}, "icrh": {"model_path": "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/dummy_toric_nn.json", "P_total": 10e6, "wall_inner": 1.24, "wall_outer": 2.43}}} extra=
+=== 02:33:36 END prodg_rampup50_dense rc=0
+[prodg_rampup50_dense] DONE steps=40 t=80.0000 first_step=25.26s median_step=0.2136s run_clean=9.13s inner_total=128 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=43.8s
+=== 02:33:36 START prodg_rampup50_structured config=torax.examples.iterhybrid_rampup overrides={"geometry": {"__replace__": true, "geometry_type": "circular", "n_rho": 50}, "solver": {"jacobian_mode": "structured"}, "sources": {"cyclotron_radiation": {}, "impurity_radiation": {"model_name": "P_in_scaled_flat_profile", "fraction_P_heating": 0.1}, "icrh": {"model_path": "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/dummy_toric_nn.json", "P_total": 10e6, "wall_inner": 1.24, "wall_outer": 2.43}}} extra=
+=== 02:34:31 END prodg_rampup50_structured rc=0
+[prodg_rampup50_structured] DONE steps=40 t=80.0000 first_step=40.11s median_step=0.0893s run_clean=3.65s inner_total=128 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=53.2s
+=== 02:34:31 START prodg_rampup100_dense config=torax.examples.iterhybrid_rampup overrides={"geometry": {"__replace__": true, "geometry_type": "circular", "n_rho": 100}, "solver": {"jacobian_mode": "dense"}, "sources": {"cyclotron_radiation": {}, "impurity_radiation": {"model_name": "P_in_scaled_flat_profile", "fraction_P_heating": 0.1}, "icrh": {"model_path": "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/dummy_toric_nn.json", "P_total": 10e6, "wall_inner": 1.24, "wall_outer": 2.43}}} extra=
+=== 02:35:28 END prodg_rampup100_dense rc=0
+[prodg_rampup100_dense] DONE steps=40 t=80.0000 first_step=25.46s median_step=0.4939s run_clean=20.90s inner_total=130 outer>1=0 err2=2 err1=0 sim_error=NO_ERROR proc_total=56.1s
+=== 02:35:28 START prodg_rampup100_structured config=torax.examples.iterhybrid_rampup overrides={"geometry": {"__replace__": true, "geometry_type": "circular", "n_rho": 100}, "solver": {"jacobian_mode": "structured"}, "sources": {"cyclotron_radiation": {}, "impurity_radiation": {"model_name": "P_in_scaled_flat_profile", "fraction_P_heating": 0.1}, "icrh": {"model_path": "/tmp/claude-0/-home-user/9ffdac3c-d367-5e9c-a2e7-3a84fcf08450/scratchpad/bench/dummy_toric_nn.json", "P_total": 10e6, "wall_inner": 1.24, "wall_outer": 2.43}}} extra=
+=== 02:36:26 END prodg_rampup100_structured rc=0
+[prodg_rampup100_structured] DONE steps=40 t=80.0000 first_step=40.27s median_step=0.1362s run_clean=5.75s inner_total=130 outer>1=0 err2=2 err1=0 sim_error=NO_ERROR proc_total=55.8s
+DRIVER_DONE
+=== 02:36:26 public API dense n_rho=50
+RESULT mode=dense n_rho=50 t_final=4.0 wrap=False wall=29.0s steps=2 T_e0=28.3740126497
+=== 02:36:58 public API structured n_rho=50
+RESULT mode=structured n_rho=50 t_final=4.0 wrap=False wall=34.6s steps=2 T_e0=28.3740126497
+=== 02:37:37 public API dense n_rho=100
+RESULT mode=dense n_rho=100 t_final=4.0 wrap=False wall=30.2s steps=2 T_e0=28.473337165
+=== 02:38:10 public API structured n_rho=100
+RESULT mode=structured n_rho=100 t_final=4.0 wrap=False wall=36.0s steps=2 T_e0=28.473337165
+BENCH_DONE

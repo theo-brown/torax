@@ -1,0 +1,25 @@
+=== structured_jacobian n_rho=25 ===
+N=100 n_rho=25: residual with injected S.h(x) vs original: max rel diff 1.19e-13
+patterns: dG/dx bandwidth 2 cells -> 16 colours; dh/dx reach 2 -> 14 colours; dG/dc reach 1 -> 4 colours; total seeds 34 vs N=100
+exactness (rel Frobenius error vs jacfwd): x0 2.76e-15, x* 2.90e-15, midpoint 3.86e-15
+timings (ms): jacfwd=5.12, structured_total=2.30, h(x)=0.40, cjvp_Gx=0.40, cjvp_Hx=1.38, cjvp_Gc=0.20, residual=0.46
+compile: structured 8.7 s, jacfwd 5.4 s
+Newton solve: baseline 21.3 ms (4 it, compile 7.8 s) | structured 10.5 ms (4 it, compile 13.0 s) | solution rel diff 4.2e-15
+DONE
+=== structured_jacobian n_rho=100 ===
+N=400 n_rho=100: residual with injected S.h(x) vs original: max rel diff 3.62e-13
+patterns: dG/dx bandwidth 2 cells -> 16 colours; dh/dx reach 2 -> 14 colours; dG/dc reach 1 -> 4 colours; total seeds 34 vs N=400
+exactness (rel Frobenius error vs jacfwd): x0 2.03e-14, x* 1.84e-14, midpoint 1.37e-14
+timings (ms): jacfwd=90.86, structured_total=8.71, h(x)=0.71, cjvp_Gx=0.87, cjvp_Hx=2.63, cjvp_Gc=0.39, residual=0.96
+compile: structured 9.4 s, jacfwd 5.9 s
+Newton solve: baseline 779.0 ms (5 it, compile 9.0 s) | structured 90.8 ms (5 it, compile 13.5 s) | solution rel diff 2.3e-09
+DONE
+=== structured_jacobian n_rho=200 ===
+N=800 n_rho=200: residual with injected S.h(x) vs original: max rel diff 1.18e-12
+patterns: dG/dx bandwidth 4 cells -> 16 colours; dh/dx reach 2 -> 14 colours; dG/dc reach 1 -> 4 colours; total seeds 34 vs N=800
+exactness (rel Frobenius error vs jacfwd): x0 3.84e-14, x* 4.08e-14, midpoint 3.49e-14
+timings (ms): jacfwd=413.13, structured_total=22.89, h(x)=0.98, cjvp_Gx=1.65, cjvp_Hx=4.70, cjvp_Gc=0.36, residual=1.67
+compile: structured 9.3 s, jacfwd 6.2 s
+Newton solve: baseline 1628.7 ms (4 it, compile 10.2 s) | structured 272.6 ms (4 it, compile 13.2 s) | solution rel diff 6.0e-09
+DONE
+SJ_DONE

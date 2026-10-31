@@ -1,0 +1,13 @@
+rampup n_rho=50 globals=True mode=dense: compile 1.6s, step 315.8 ms, inner its 3, err state 0
+rampup n_rho=50 globals=True mode=structured: compile 1.3s, step 224.0 ms, inner its 3, err state 0
+  max rel diff vs dense: {'T_i': '9.5e-15', 'T_e': '8.1e-15', 'n_e': '2.0e-15', 'psi': '5.9e-15'}
+DONE
+rampup n_rho=100 globals=True mode=dense: compile 0.6s, step 570.5 ms, inner its 3, err state 0
+rampup n_rho=100 globals=True mode=structured: compile 0.3s, step 216.3 ms, inner its 3, err state 0
+  max rel diff vs dense: {'T_i': '2.8e-14', 'T_e': '1.9e-14', 'n_e': '1.3e-14', 'psi': '7.1e-15'}
+DONE
+pc n_rho=25 globals=True mode=dense: compile 0.2s, step 146.7 ms, inner its 5, err state 0
+pc n_rho=25 globals=True mode=structured: compile 0.2s, step 151.4 ms, inner its 5, err state 0
+  max rel diff vs dense: {'T_i': '9.7e-15', 'T_e': '9.6e-15', 'n_e': '1.1e-15', 'psi': '5.9e-15'}
+DONE
+VS_DONE

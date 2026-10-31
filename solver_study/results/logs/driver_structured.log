@@ -1,0 +1,31 @@
+=== 20:48:41 START prod_rampup50_dense config=torax.examples.iterhybrid_rampup overrides={"solver": {"jacobian_mode": "dense"}} extra=
+=== 20:49:18 END prod_rampup50_dense rc=0
+[prod_rampup50_dense] DONE steps=40 t=80.0000 first_step=20.08s median_step=0.1776s run_clean=7.59s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=35.2s
+=== 20:49:18 START prod_rampup100_dense config=torax.examples.iterhybrid_rampup overrides={"geometry": {"n_rho": 100}, "solver": {"jacobian_mode": "dense"}} extra=
+=== 20:50:08 END prod_rampup100_dense rc=0
+[prod_rampup100_dense] DONE steps=40 t=80.0000 first_step=19.89s median_step=0.5097s run_clean=21.80s inner_total=139 outer>1=0 err2=6 err1=0 sim_error=NO_ERROR proc_total=49.2s
+=== 20:50:08 START prod_rampup50_structured config=torax.examples.iterhybrid_rampup overrides={"solver": {"jacobian_mode": "structured"}} extra=
+=== 20:50:39 END prod_rampup50_structured rc=0
+[prod_rampup50_structured] DONE steps=40 t=80.0000 first_step=20.68s median_step=0.0537s run_clean=2.15s inner_total=109 outer>1=0 err2=1 err1=0 sim_error=NO_ERROR proc_total=30.4s
+=== 20:50:39 START prod_rampup100_structured config=torax.examples.iterhybrid_rampup overrides={"geometry": {"n_rho": 100}, "solver": {"jacobian_mode": "structured"}} extra=
+=== 20:51:14 END prod_rampup100_structured rc=0
+[prod_rampup100_structured] DONE steps=40 t=80.0000 first_step=22.04s median_step=0.0972s run_clean=4.17s inner_total=139 outer>1=0 err2=6 err1=0 sim_error=NO_ERROR proc_total=33.6s
+=== 20:51:14 START prod_scale25_dense config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 25}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}} extra=--max-steps 60
+=== 20:51:40 END prod_scale25_dense rc=0
+[prod_scale25_dense] DONE steps=5 t=1.0000 first_step=18.05s median_step=0.0805s run_clean=0.32s inner_total=26 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=25.0s
+=== 20:51:40 START prod_scale25_structured config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 25}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}} extra=--max-steps 60
+=== 20:52:08 END prod_scale25_structured rc=0
+[prod_scale25_structured] DONE steps=5 t=1.0000 first_step=19.57s median_step=0.0400s run_clean=0.16s inner_total=26 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=26.6s
+=== 20:52:08 START prod_scale50_dense config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}} extra=--max-steps 60
+=== 20:52:38 END prod_scale50_dense rc=0
+[prod_scale50_dense] DONE steps=13 t=1.0000 first_step=18.65s median_step=0.2042s run_clean=2.48s inner_total=46 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=28.2s
+=== 20:52:38 START prod_scale50_structured config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 50}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}} extra=--max-steps 60
+=== 20:53:07 END prod_scale50_structured rc=0
+[prod_scale50_structured] DONE steps=13 t=1.0000 first_step=20.23s median_step=0.0523s run_clean=0.68s inner_total=46 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=28.1s
+=== 20:53:07 START prod_scale100_dense config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 100}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "dense"}} extra=--max-steps 60
+=== 20:53:55 END prod_scale100_dense rc=0
+[prod_scale100_dense] DONE steps=49 t=1.0000 first_step=18.72s median_step=0.3610s run_clean=20.97s inner_total=127 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=47.4s
+=== 20:53:55 START prod_scale100_structured config=torax.examples.iterhybrid_predictor_corrector overrides={"numerics": {"t_final": 1.0}, "geometry": {"n_rho": 100}, "solver": {"solver_type": "newton_raphson", "jacobian_mode": "structured"}} extra=--max-steps 60
+=== 20:54:28 END prod_scale100_structured rc=0
+[prod_scale100_structured] DONE steps=49 t=1.0000 first_step=20.75s median_step=0.0693s run_clean=3.60s inner_total=127 outer>1=0 err2=0 err1=0 sim_error=NO_ERROR proc_total=31.9s
+DRIVER_DONE

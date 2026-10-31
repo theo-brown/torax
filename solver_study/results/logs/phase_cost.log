@@ -1,0 +1,23 @@
+=== phase_cost ===
+
+##### state t=20.0 (n_warm=10) dt=2.0 N=200
+  residual                0.68 ms (median 0.75)
+  jacfwd                 24.62 ms (median 26.25)
+  newton_solve           72.69 ms (median 77.51)
+  full_step              97.36 ms (median 124.37)
+  pre_step                1.72 ms (median 1.82)
+  solver_call           134.70 ms (median 135.22)
+  finalize_outputs        2.42 ms (median 2.45)
+  newton its 2 solver inner 2 nan in J 0 denormals in J 0 min|J|>0 1.0289546757009585e-18
+
+##### state t=60.0 (n_warm=30) dt=2.0 N=200
+  residual                0.68 ms (median 0.84)
+  jacfwd                 24.49 ms (median 25.79)
+  newton_solve          206.48 ms (median 229.12)
+  full_step             240.54 ms (median 247.63)
+  pre_step                2.50 ms (median 2.59)
+  solver_call           193.09 ms (median 199.39)
+  finalize_outputs        2.46 ms (median 2.61)
+  newton its 5 solver inner 5 nan in J 0 denormals in J 0 min|J|>0 1.1071358799839197e-18
+DONE
+PC_DONE
