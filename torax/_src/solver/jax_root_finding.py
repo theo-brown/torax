@@ -74,6 +74,8 @@ def root_newton_raphson(
     convergence_norm: Callable[[jax.Array], jax.Array] = max_abs_norm,
     vmap_linesearch: bool = False,
     max_linesearch_steps: int = 100,
+    max_step: float | None = None,
+    max_step_mask: jax.Array | None = None,
 ) -> tuple[jax.Array, RootMetadata]:
   """A differentiable Newton-Raphson root finder.
 
@@ -107,6 +109,11 @@ def root_newton_raphson(
     vmap_linesearch: If True, use parallel vmapped linesearch instead of
       sequential backtracking.
     max_linesearch_steps: Maximum number of linesearch steps to try.
+    max_step: If set, the Newton direction is scaled down (keeping its
+      orientation) so that its largest absolute component over `max_step_mask`
+      is at most `max_step`.
+    max_step_mask: Boolean mask selecting the components limited by
+      `max_step`. If None, all components are limited.
 
   Returns:
     A tuple `(x_root, RootMetadata(...))`.
@@ -151,6 +158,8 @@ def root_newton_raphson(
         convergence_norm=convergence_norm,
         vmap_linesearch=vmap_linesearch,
         max_linesearch_steps=max_linesearch_steps,
+        max_step=max_step,
+        max_step_mask=max_step_mask,
     )
     output_state = jax.lax.while_loop(cond_fun, body_fun, initial_state)
     x_out = output_state.pop('x')
@@ -255,6 +264,8 @@ def _body(
     convergence_norm: Callable[[jax.Array], jax.Array],
     max_linesearch_steps: int,
     vmap_linesearch: bool = False,
+    max_step: float | None = None,
+    max_step_mask: jax.Array | None = None,
 ) -> dict[str, jax.Array]:
   """Calculates next guess in Newton-Raphson iteration."""
   rhs = -input_state['residual']
@@ -263,12 +274,22 @@ def _body(
   a_mat = jacobian_fun(input_state['x'])
 
   direction = jnp.linalg.solve(a_mat, rhs)
+  # Fraction of the full Newton step taken at step_size = 1.
+  step_scale = 1.0
+  if max_step is not None:
+    limited = jnp.abs(direction)
+    if max_step_mask is not None:
+      limited = jnp.where(max_step_mask, limited, 0.0)
+    step_scale = jnp.minimum(1.0, max_step / jnp.max(limited))
+    direction = direction * step_scale
   max_abs_dir = jnp.max(jnp.abs(direction))
 
   def accept_fn(step_size, trial_norm):
-    sufficient_decrease_met = (
-        trial_norm <= (1.0 - sufficient_decrease * step_size) * init_ls_norm
-    )
+    # A full Newton step predicts a residual of zero, so the expected decrease
+    # along a scaled step is proportional to the fraction of it taken.
+    sufficient_decrease_met = trial_norm <= (
+        1.0 - sufficient_decrease * step_size * step_scale
+    ) * init_ls_norm
     step_valid = ~jnp.isnan(trial_norm)
     step_too_small = (step_size * max_abs_dir) <= MIN_DELTA
     return (sufficient_decrease_met | step_too_small) & step_valid

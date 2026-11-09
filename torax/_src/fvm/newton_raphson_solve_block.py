@@ -53,6 +53,10 @@ MIN_DELTA: Final[float] = 1e-7
 LOG_VARIABLE_NAMES: Final[frozenset[str]] = frozenset({'T_i', 'T_e', 'n_e'})
 # Floor applied before taking the log of the initial guess [solver units].
 _LOG_VARIABLE_FLOOR: Final[float] = 1e-10
+# Largest Newton step in log variables, i.e. at most a factor e change per
+# iteration. A Newton step dx becomes dx/x in log variables, so a large heating
+# step from a cold state would otherwise be exponentiated into an overflow.
+MAX_LOG_STEP: Final[float] = 1.0
 
 
 def log_variable_mask(
@@ -284,12 +288,15 @@ def newton_raphson_solve_block(
     log_mask = log_variable_mask(evolving_names, x_old)
     root_fun = lambda y: residual_fun(from_log_variables(y, log_mask))
     init_x_new_vec = to_log_variables(init_x_new_vec, log_mask)
+    step_limits = dict(max_step=MAX_LOG_STEP, max_step_mask=log_mask)
   else:
     root_fun = residual_fun
+    step_limits = {}
 
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
       fun=root_fun,
+      **step_limits,
       maxiter=maxiter,
       tol=tol,
       coarse_tol=coarse_tol,

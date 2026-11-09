@@ -77,6 +77,24 @@ class LogVariablesTest(parameterized.TestCase):
     self.assertEqual(int(meta_log.iterations), 1)
     self.assertGreater(int(meta_plain.iterations), int(meta_log.iterations))
 
+  def test_log_step_cap_prevents_overflow(self):
+    # Heating from a cold state, R(x) = x - a with x0 << a: the Newton step in
+    # log variables is ~a/x0 = 1e5, which overflows exp() and exhausts the line
+    # search. Capping the log step at MAX_LOG_STEP converges.
+    a = jnp.array([1e3, 1.0])
+    mask = jnp.array([True, False])
+    residual = lambda y: nrsb.from_log_variables(y, mask) - a
+    y0 = nrsb.to_log_variables(jnp.array([1e-2, 0.0]), mask)
+
+    _, meta_uncapped = jax_root_finding.root_newton_raphson(residual, y0)
+    y_root, meta_capped = jax_root_finding.root_newton_raphson(
+        residual, y0, max_step=nrsb.MAX_LOG_STEP, max_step_mask=mask
+    )
+
+    self.assertEqual(int(meta_uncapped.error), 1)
+    self.assertEqual(int(meta_capped.error), 0)
+    np.testing.assert_allclose(nrsb.from_log_variables(y_root, mask), a)
+
 
 class LogVariablesSimulationTest(absltest.TestCase):
 
