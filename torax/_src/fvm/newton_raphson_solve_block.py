@@ -47,6 +47,44 @@ from torax._src.solver import (
 # cases with bad numerics.
 MIN_DELTA: Final[float] = 1e-7
 
+# Strictly positive channels that are iterated in log space when
+# `log_positive_variables` is enabled. psi is a flux with an arbitrary offset,
+# so it stays linear.
+LOG_VARIABLE_NAMES: Final[frozenset[str]] = frozenset({'T_i', 'T_e', 'n_e'})
+# Floor applied before taking the log of the initial guess [solver units].
+_LOG_VARIABLE_FLOOR: Final[float] = 1e-10
+
+
+def log_variable_mask(
+    evolving_names: tuple[str, ...],
+    x: tuple[cell_variable.CellVariable, ...],
+) -> jax.Array:
+  """Boolean mask over the flattened solver vector of log-iterated channels.
+
+  Args:
+    evolving_names: Names of the evolving channels, in solver order.
+    x: CellVariables of the evolving channels, used for their cell counts.
+
+  Returns:
+    Boolean array with the same length as the flattened solver vector, True for
+    cells of channels in `LOG_VARIABLE_NAMES`.
+  """
+  return jnp.concatenate([
+      jnp.full(cv.value.shape, name in LOG_VARIABLE_NAMES)
+      for name, cv in zip(evolving_names, x, strict=True)
+  ])
+
+
+def to_log_variables(x: jax.Array, mask: jax.Array) -> jax.Array:
+  """Maps solver values to iteration variables: log(x) where `mask`."""
+  safe_x = jnp.where(mask, jnp.maximum(x, _LOG_VARIABLE_FLOOR), 1.0)
+  return jnp.where(mask, jnp.log(safe_x), x)
+
+
+def from_log_variables(y: jax.Array, mask: jax.Array) -> jax.Array:
+  """Inverse of `to_log_variables`: exp(y) where `mask`."""
+  return jnp.where(mask, jnp.exp(jnp.where(mask, y, 0.0)), y)
+
 
 @jax.jit(
     static_argnames=[
@@ -57,6 +95,7 @@ MIN_DELTA: Final[float] = 1e-7
         'vmap_linesearch',
         'max_linesearch_steps',
         'log_iterations',
+        'log_positive_variables',
     ],
 )
 def newton_raphson_solve_block(
@@ -82,6 +121,7 @@ def newton_raphson_solve_block(
     max_linesearch_steps: int,
     vmap_linesearch: bool = False,
     log_iterations: bool = False,
+    log_positive_variables: bool = False,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     solver_numeric_outputs_lib.SolverNumericOutputs,
@@ -152,6 +192,9 @@ def newton_raphson_solve_block(
     max_linesearch_steps: Maximum number of linesearch steps to try.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
+    log_positive_variables: If true, iterate on log(x) for the T_i, T_e and n_e
+      channels (psi stays linear). The residual, tolerances and converged
+      solution are unchanged; only the Newton path differs.
 
 
   Returns:
@@ -234,9 +277,19 @@ def newton_raphson_solve_block(
   residual_scaling_vector = convertors.compute_residual_scaling_vector(
       evolving_names, x_old
   )
+  if log_positive_variables:
+    # Newton steps in log(x) are multiplicative, so trial states keep T and n
+    # positive (avoiding NaN residuals in the line search), and relative
+    # changes are weighted equally in the hot core and the cold edge.
+    log_mask = log_variable_mask(evolving_names, x_old)
+    root_fun = lambda y: residual_fun(from_log_variables(y, log_mask))
+    init_x_new_vec = to_log_variables(init_x_new_vec, log_mask)
+  else:
+    root_fun = residual_fun
+
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
-      fun=residual_fun,
+      fun=root_fun,
       maxiter=maxiter,
       tol=tol,
       coarse_tol=coarse_tol,
@@ -254,6 +307,8 @@ def newton_raphson_solve_block(
   )
 
   x_root, metadata = root_finder(x0=init_x_new_vec)
+  if log_positive_variables:
+    x_root = from_log_variables(x_root, log_mask)
 
   # Create updated CellVariable instances based on solver_state_t_plus_dt which
   # has updated boundary conditions and prescribed profiles.

@@ -54,6 +54,7 @@ class NewtonRaphsonRuntimeParams(solver_runtime_params_lib.RuntimeParams):
   log_iterations: bool = jax.tree.static()
   vmap_linesearch: bool = jax.tree.static()
   max_linesearch_steps: int = jax.tree.static()
+  log_positive_variables: bool = jax.tree.static()
 
 
 class NonlinearThetaMethod(solver.Solver):
@@ -268,6 +269,7 @@ class NewtonRaphsonThetaMethod(NonlinearThetaMethod):
         model_state=model_state,
         vmap_linesearch=solver_params.vmap_linesearch,
         max_linesearch_steps=solver_params.max_linesearch_steps,
+        log_positive_variables=solver_params.log_positive_variables,
     )
     return (
         x_new,

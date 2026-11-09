@@ -217,6 +217,12 @@ class NewtonRaphsonThetaMethodConfig(SolverConfigBase):
       the cost of higher peak memory usage and compilation time.
     max_linesearch_steps: Maximum number of backtracking linesearch steps per
       Newton iteration.
+    log_positive_variables: If `True`, the Newton iteration variable for the
+      `T_i`, `T_e` and `n_e` channels is their logarithm (`psi` is unchanged).
+      Newton steps then change these profiles multiplicatively, which keeps
+      trial states positive and balances the scaling between the hot core and
+      the cold edge. The residual, tolerances and converged solution are
+      unchanged; only the iteration path differs.
   """  # fmt: skip
 
   solver_type: Annotated[
@@ -234,6 +240,7 @@ class NewtonRaphsonThetaMethodConfig(SolverConfigBase):
   max_linesearch_steps: Annotated[
       pydantic.PositiveInt, torax_pydantic.JAX_STATIC
   ] = 100
+  log_positive_variables: Annotated[bool, torax_pydantic.JAX_STATIC] = False
 
   @functools.cached_property
   def build_runtime_params(
@@ -250,6 +257,7 @@ class NewtonRaphsonThetaMethodConfig(SolverConfigBase):
         log_iterations=self.log_iterations,
         vmap_linesearch=self.vmap_linesearch,
         max_linesearch_steps=self.max_linesearch_steps,
+        log_positive_variables=self.log_positive_variables,
     )
 
   def build_solver(
