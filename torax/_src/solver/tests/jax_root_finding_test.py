@@ -153,6 +153,43 @@ class NewtonRaphsonSolveBlockTest(parameterized.TestCase):
     chex.assert_trees_all_close(sol_np.x, sol_jax, atol=1e-9)
     self.assertEqual(int(metadata.error), 0)
 
+  @parameterized.parameters(
+      dict(norm=1e-6, coarse_max_norm=None, expected=0),
+      dict(norm=1e-6, coarse_max_norm=0.0, expected=0),
+      dict(norm=5e-3, coarse_max_norm=None, expected=2),
+      dict(norm=5e-3, coarse_max_norm=1e-2, expected=2),
+      dict(norm=5e-3, coarse_max_norm=1e-3, expected=1),
+      dict(norm=5e-2, coarse_max_norm=None, expected=1),
+  )
+  def test_get_error_flag_coarse_max_norm(
+      self, norm, coarse_max_norm, expected
+  ):
+    error = jax_root_finding._get_error_flag(
+        norm=jnp.array(norm),
+        coarse_tol=1e-2,
+        tol=1e-5,
+        coarse_max_norm=(
+            None if coarse_max_norm is None else jnp.array(coarse_max_norm)
+        ),
+    )
+    self.assertEqual(int(error), expected)
+
+  def test_coarse_max_norm_rejects_stalled_solve(self):
+    """A stalled solve below coarse_tol is accepted unless it made progress."""
+    # No root: |f| has a minimum of 3e-3 at x = 0, below coarse_tol = 1e-2.
+    f = lambda x: 3e-3 * jnp.cosh(x)
+    x0 = jnp.array([0.5])
+    kwargs = dict(tol=1e-5, coarse_tol=1e-2, use_jax_custom_root=False)
+
+    _, metadata = jax_root_finding.root_newton_raphson(f, x0, **kwargs)
+    self.assertEqual(int(metadata.error), 2)
+
+    ref_norm = jax_root_finding.max_abs_norm(f(x0))
+    _, metadata = jax_root_finding.root_newton_raphson(
+        f, x0, coarse_max_norm=0.5 * ref_norm, **kwargs
+    )
+    self.assertEqual(int(metadata.error), 1)
+
 
 if __name__ == '__main__':
   absltest.main()

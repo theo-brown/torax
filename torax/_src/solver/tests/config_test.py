@@ -84,6 +84,24 @@ class ConfigTest(parameterized.TestCase):
       self.assertEqual(output.D_pereverzev, 0.6)
       self.assertEqual(jax_utils.get_number_of_compiles(f), 1)
 
+  def test_newton_raphson_residual_coarse_reduction(self):
+    config_dict = default_configs.get_default_config_dict()
+    config_dict['solver'] = {'solver_type': 'newton_raphson'}
+    torax_config = config.ToraxConfig.from_dict(config_dict)
+    self.assertIsNone(
+        torax_config.solver.build_runtime_params.residual_coarse_reduction
+    )
+
+    config_dict['solver']['residual_coarse_reduction'] = 0.5
+    torax_config = config.ToraxConfig.from_dict(config_dict)
+    self.assertEqual(
+        torax_config.solver.build_runtime_params.residual_coarse_reduction, 0.5
+    )
+
+    config_dict['solver']['residual_coarse_reduction'] = 1.5
+    with self.assertRaises(pydantic.ValidationError):
+      config.ToraxConfig.from_dict(config_dict)
+
   def test_solver_discriminator(self):
     config_dict = default_configs.get_default_config_dict()
     config_dict['solver'] = {

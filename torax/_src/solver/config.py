@@ -217,6 +217,14 @@ class NewtonRaphsonThetaMethodConfig(SolverConfigBase):
       the cost of higher peak memory usage and compilation time.
     max_linesearch_steps: Maximum number of backtracking linesearch steps per
       Newton iteration.
+    residual_coarse_reduction: If set, a step that ends between `residual_tol`
+      and `residual_coarse_tol` is only accepted if its residual is at most
+      this factor times the residual of the unchanged state at the start of the
+      step; otherwise `dt` backtracking takes place. Because the residual of
+      the unchanged state scales with `dt`, without this check a stalled solve
+      can pass `residual_coarse_tol` at small `dt` and leave the profiles
+      frozen. `None` (default) disables the check. 0.5 has worked well in
+      practice; 0.1 can be too strict for stiff transients.
   """  # fmt: skip
 
   solver_type: Annotated[
@@ -234,6 +242,9 @@ class NewtonRaphsonThetaMethodConfig(SolverConfigBase):
   max_linesearch_steps: Annotated[
       pydantic.PositiveInt, torax_pydantic.JAX_STATIC
   ] = 100
+  residual_coarse_reduction: Annotated[
+      torax_pydantic.UnitInterval | None, torax_pydantic.JAX_STATIC
+  ] = None
 
   @functools.cached_property
   def build_runtime_params(
@@ -250,6 +261,7 @@ class NewtonRaphsonThetaMethodConfig(SolverConfigBase):
         log_iterations=self.log_iterations,
         vmap_linesearch=self.vmap_linesearch,
         max_linesearch_steps=self.max_linesearch_steps,
+        residual_coarse_reduction=self.residual_coarse_reduction,
     )
 
   def build_solver(

@@ -57,6 +57,7 @@ MIN_DELTA: Final[float] = 1e-7
         'vmap_linesearch',
         'max_linesearch_steps',
         'log_iterations',
+        'residual_coarse_reduction',
     ],
 )
 def newton_raphson_solve_block(
@@ -82,6 +83,7 @@ def newton_raphson_solve_block(
     max_linesearch_steps: int,
     vmap_linesearch: bool = False,
     log_iterations: bool = False,
+    residual_coarse_reduction: float | None = None,
 ) -> tuple[
     tuple[cell_variable.CellVariable, ...],
     solver_numeric_outputs_lib.SolverNumericOutputs,
@@ -152,6 +154,9 @@ def newton_raphson_solve_block(
     max_linesearch_steps: Maximum number of linesearch steps to try.
     log_iterations: If true, output diagnostic information from within iteration
       loop.
+    residual_coarse_reduction: If not None, a step is only accepted at the
+      coarse tolerance if its final residual norm is at most this factor times
+      the residual norm of the unchanged state, `R(x_old)`.
 
 
   Returns:
@@ -234,6 +239,18 @@ def newton_raphson_solve_block(
   residual_scaling_vector = convertors.compute_residual_scaling_vector(
       evolving_names, x_old
   )
+  convergence_norm = lambda x: jax_root_finding.max_abs_norm(
+      x, residual_scaling_vector
+  )
+  coarse_max_norm = None
+  if residual_coarse_reduction is not None:
+    # R(x_old) scales with dt, so at small dt a failed solve that returns
+    # ~x_old falls below coarse_tol and would be accepted, freezing the
+    # profiles while dt cycles. Require a real reduction relative to R(x_old).
+    x_old_vec = fvm_conversions.cell_variable_tuple_to_vec(x_old)
+    coarse_max_norm = residual_coarse_reduction * jax.lax.stop_gradient(
+        convergence_norm(residual_fun(x_old_vec))
+    )
   root_finder = functools.partial(
       jax_root_finding.root_newton_raphson,
       fun=residual_fun,
@@ -245,9 +262,8 @@ def newton_raphson_solve_block(
       vmap_linesearch=vmap_linesearch,
       max_linesearch_steps=max_linesearch_steps,
       log_iterations=log_iterations,
-      convergence_norm=lambda x: jax_root_finding.max_abs_norm(
-          x, residual_scaling_vector
-      ),
+      convergence_norm=convergence_norm,
+      coarse_max_norm=coarse_max_norm,
       linesearch_norm=lambda x: jax_root_finding.rms_norm(
           x, residual_scaling_vector
       ),

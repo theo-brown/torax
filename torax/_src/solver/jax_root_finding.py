@@ -74,6 +74,7 @@ def root_newton_raphson(
     convergence_norm: Callable[[jax.Array], jax.Array] = max_abs_norm,
     vmap_linesearch: bool = False,
     max_linesearch_steps: int = 100,
+    coarse_max_norm: jax.Array | None = None,
 ) -> tuple[jax.Array, RootMetadata]:
   """A differentiable Newton-Raphson root finder.
 
@@ -107,6 +108,10 @@ def root_newton_raphson(
     vmap_linesearch: If True, use parallel vmapped linesearch instead of
       sequential backtracking.
     max_linesearch_steps: Maximum number of linesearch steps to try.
+    coarse_max_norm: If provided, a solve that ends between `tol` and
+      `coarse_tol` is only accepted (error 2) if its final residual norm is also
+      at most `coarse_max_norm`; otherwise it is flagged as not converged
+      (error 1). Must be computed with `convergence_norm`.
 
   Returns:
     A tuple `(x_root, RootMetadata(...))`.
@@ -190,6 +195,7 @@ def root_newton_raphson(
       norm=metadata.pop('residual_norm'),
       coarse_tol=coarse_tol,
       tol=tol,
+      coarse_max_norm=coarse_max_norm,
   )
   # Workaround for https://github.com/google/jax/issues/24295: cast iterations
   # to the correct int dtype.
@@ -204,6 +210,7 @@ def _get_error_flag(
     norm: jax.Array,
     coarse_tol: float,
     tol: float,
+    coarse_max_norm: jax.Array | None = None,
 ) -> jax.Array:
   """Computes the flag indicating whether a solve step converged.
 
@@ -212,18 +219,24 @@ def _get_error_flag(
     coarse_tol: Coarser allowed tolerance for cases when solver exits early due
       to small steps in the solution vicinity.
     tol: Fine convergence tolerance.
+    coarse_max_norm: Optional additional upper bound on `norm` for the coarse
+      acceptance (error 2).
 
   Returns:
     An integer scalar flag indicating the convergence status:
       - 0: Residual converged within fine tolerance (`norm < tol`).
-      - 1: Not converged (`norm >= coarse_tol`).
-      - 2: Residual within reasonable tolerance (`norm < coarse_tol`).
+      - 1: Not converged (`norm >= coarse_tol`, or `norm > coarse_max_norm`).
+      - 2: Residual within reasonable tolerance (`norm < coarse_tol` and
+        `norm <= coarse_max_norm` if provided).
   """
+  coarse_ok = norm < coarse_tol
+  if coarse_max_norm is not None:
+    coarse_ok &= norm <= coarse_max_norm
   return jax.lax.cond(
       norm < tol,
       lambda: 0,
       lambda: jax.lax.cond(
-          norm < coarse_tol,
+          coarse_ok,
           lambda: 2,  # tol < norm < coarse_tol
           lambda: 1,  # norm > coarse_tol
       ),
