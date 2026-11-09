@@ -114,6 +114,56 @@ class NeoclassicalTransportTest(absltest.TestCase):
         raw_coeffs.v_face_el_ware,
     )
 
+  def test_smooth_clipping_stays_within_bounds_and_near_hard_clip(self):
+    bounds = {
+        'chi_min': 0.75,
+        'chi_max': 1.25,
+        'D_e_min': 2.25,
+        'D_e_max': 2.75,
+        'V_e_min': -1.25,
+        'V_e_max': -0.75,
+    }
+
+    def _clipped(smooth_clipping):
+      config_dict = default_configs.get_default_config_dict()
+      config_dict['neoclassical'] = {
+          'transport': {
+              'model_name': 'fake',
+              'smooth_clipping': smooth_clipping,
+              **bounds,
+          }
+      }
+      torax_config = config.ToraxConfig.from_dict(config_dict)
+      core_profiles, _, geo = core_profile_helpers.make_initial_inputs(
+          torax_config
+      )
+      return torax_config.neoclassical.transport.build_model()(
+          torax_config.neoclassical.transport.build_runtime_params(),
+          geo,
+          core_profiles,
+          formulas.compute_neoclassical_intermediates(
+              geo, core_profiles, fast_ions=()
+          ),
+      )
+
+    hard, smooth = _clipped(False), _clipped(True)
+    for name, lo, hi in [
+        ('chi_face_ion', 'chi_min', 'chi_max'),
+        ('chi_face_el', 'chi_min', 'chi_max'),
+        ('d_face_el', 'D_e_min', 'D_e_max'),
+        ('v_face_el', 'V_e_min', 'V_e_max'),
+    ]:
+      value = getattr(smooth, name)
+      self.assertTrue(np.all(value >= bounds[lo]), name)
+      # Upper overshoot is at most width_lower * exp(-range / width_lower).
+      width_lower = 0.1 * abs(bounds[lo])
+      overshoot = width_lower * np.exp(-(bounds[hi] - bounds[lo]) / width_lower)
+      self.assertTrue(np.all(value <= bounds[hi] + overshoot), name)
+      # Differs from the hard clip by at most ~(transition width) * ln(2).
+      np.testing.assert_allclose(
+          value, getattr(hard, name), atol=0.1 * abs(bounds[lo]), err_msg=name
+      )
+
 
 class FakeNeoclassicalTransportModel(
     neoclassical_transport_base.NeoclassicalTransportModel

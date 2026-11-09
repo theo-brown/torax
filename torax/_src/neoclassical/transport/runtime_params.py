@@ -30,3 +30,4 @@ class RuntimeParams:
   D_e_max: float
   V_e_min: float
   V_e_max: float
+  smooth_clipping: bool = jax.tree.static()

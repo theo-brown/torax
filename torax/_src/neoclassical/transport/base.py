@@ -17,10 +17,11 @@
 from __future__ import annotations
 
 import abc
-from typing import Self
+from typing import Annotated, Self
 
 import jax.numpy as jnp
 import pydantic
+from torax._src import math_utils
 from torax._src.core_profiles import core_profiles as core_profiles_lib
 from torax._src.geometry import geometry as geometry_lib
 from torax._src.neoclassical.formulas import formulas
@@ -60,26 +61,13 @@ class NeoclassicalTransportModel(abc.ABC):
       neoclassical_transport: transport_coeffs_lib.NeoclassicalTransport,
   ) -> transport_coeffs_lib.NeoclassicalTransport:
     """Applies min/max clipping to neoclassical transport coefficients."""
-    chi_face_ion = jnp.clip(
-        neoclassical_transport.chi_face_ion,
-        runtime_params.chi_min,
-        runtime_params.chi_max,
-    )
-    chi_face_el = jnp.clip(
-        neoclassical_transport.chi_face_el,
-        runtime_params.chi_min,
-        runtime_params.chi_max,
-    )
-    d_face_el = jnp.clip(
-        neoclassical_transport.d_face_el,
-        runtime_params.D_e_min,
-        runtime_params.D_e_max,
-    )
-    v_face_el = jnp.clip(
-        neoclassical_transport.v_face_el,
-        runtime_params.V_e_min,
-        runtime_params.V_e_max,
-    )
+    p = runtime_params
+    clip = math_utils.smooth_clip if p.smooth_clipping else jnp.clip
+    n = neoclassical_transport
+    chi_face_ion = clip(n.chi_face_ion, p.chi_min, p.chi_max)
+    chi_face_el = clip(n.chi_face_el, p.chi_min, p.chi_max)
+    d_face_el = clip(n.d_face_el, p.D_e_min, p.D_e_max)
+    v_face_el = clip(n.v_face_el, p.V_e_min, p.V_e_max)
     return transport_coeffs_lib.NeoclassicalTransport(
         chi_face_ion=chi_face_ion,
         chi_face_el=chi_face_el,
@@ -121,6 +109,8 @@ class NeoclassicalTransportModelConfig(torax_pydantic.ConfigBase):
       $V_neo$ [m/s].
     V_e_max: Upper allowed bound for neoclassical particle convection
       $V_neo$ [m/s].
+    smooth_clipping: If `True`, replace the hard min/max clipping with a smooth
+      (softplus) clip, keeping the solver Jacobian continuous at the bounds.
   """
 
   chi_min: torax_pydantic.MeterSquaredPerSecond = 0.0
@@ -129,6 +119,7 @@ class NeoclassicalTransportModelConfig(torax_pydantic.ConfigBase):
   D_e_max: torax_pydantic.MeterSquaredPerSecond = 100.0
   V_e_min: torax_pydantic.MeterPerSecond = -50.0
   V_e_max: torax_pydantic.MeterPerSecond = 50.0
+  smooth_clipping: Annotated[bool, torax_pydantic.JAX_STATIC] = False
 
   @pydantic.model_validator(mode='after')
   def _check_fields(self) -> Self:
@@ -148,6 +139,7 @@ class NeoclassicalTransportModelConfig(torax_pydantic.ConfigBase):
         D_e_max=self.D_e_max,
         V_e_min=self.V_e_min,
         V_e_max=self.V_e_max,
+        smooth_clipping=self.smooth_clipping,
     )
 
   @abc.abstractmethod

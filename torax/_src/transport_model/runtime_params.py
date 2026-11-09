@@ -66,3 +66,4 @@ class RuntimeParams:
   core_transport_model_params: Mapping[str, ComponentRuntimeParams]
   pedestal_transport_model_params: Mapping[str, ComponentRuntimeParams]
   smoothing_zones: tuple[SmoothingZoneParams, ...]
+  smooth_clipping: bool = jax.tree.static()

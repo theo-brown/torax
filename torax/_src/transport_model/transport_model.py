@@ -357,26 +357,12 @@ class TransportModel(static_dataclass.StaticDataclass):
       input_coeffs: transport_coeffs.TransportCoeffs,
   ) -> transport_coeffs.TransportCoeffs:
     """Applies min/max clipping to transport coefficients for PDE stability."""
-    chi_face_ion = jnp.clip(
-        input_coeffs.chi_face_ion,
-        transport_runtime_params.chi_min,
-        transport_runtime_params.chi_max,
-    )
-    chi_face_el = jnp.clip(
-        input_coeffs.chi_face_el,
-        transport_runtime_params.chi_min,
-        transport_runtime_params.chi_max,
-    )
-    d_face_el = jnp.clip(
-        input_coeffs.d_face_el,
-        transport_runtime_params.D_e_min,
-        transport_runtime_params.D_e_max,
-    )
-    v_face_el = jnp.clip(
-        input_coeffs.v_face_el,
-        transport_runtime_params.V_e_min,
-        transport_runtime_params.V_e_max,
-    )
+    p = transport_runtime_params
+    clip = math_utils.smooth_clip if p.smooth_clipping else jnp.clip
+    chi_face_ion = clip(input_coeffs.chi_face_ion, p.chi_min, p.chi_max)
+    chi_face_el = clip(input_coeffs.chi_face_el, p.chi_min, p.chi_max)
+    d_face_el = clip(input_coeffs.d_face_el, p.D_e_min, p.D_e_max)
+    v_face_el = clip(input_coeffs.v_face_el, p.V_e_min, p.V_e_max)
 
     return transport_coeffs.TransportCoeffs(
         chi_face_ion=chi_face_ion,

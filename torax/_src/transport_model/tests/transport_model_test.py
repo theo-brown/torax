@@ -964,6 +964,7 @@ class TransportModelTest(parameterized.TestCase):
     combined_params.smoothing_width = 0.0
     combined_params.pedestal_smoothing_width = 0.0
     combined_params.smoothing_zones = ()
+    combined_params.smooth_clipping = False
 
     pedestal_output = _make_pedestal_output(rho_norm_top=1.0)
 
@@ -1236,6 +1237,7 @@ class TransportModelTest(parameterized.TestCase):
     combined_params.smoothing_width = 0.0
     combined_params.pedestal_smoothing_width = 0.0
     combined_params.smoothing_zones = ()
+    combined_params.smooth_clipping = False
 
     runtime_params = mock.Mock()
     runtime_params.transport = combined_params

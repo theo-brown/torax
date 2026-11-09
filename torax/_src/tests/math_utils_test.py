@@ -484,6 +484,40 @@ class MathUtilsTest(parameterized.TestCase):
     expected = jnp.array([-0.5 / eps, 1.0 / eps, 0.5 / eps])
     np.testing.assert_allclose(got, expected, rtol=1e-12)
 
+  def test_smooth_clip_matches_clip_away_from_bounds(self):
+    # Transition widths are 0.005 at the lower and 0.5 at the upper bound.
+    x = jnp.array([-100.0, 0.2, 1.0, 5.0, 6.0, 100.0])
+    got = math_utils.smooth_clip(x, 0.05, 10.0)
+    np.testing.assert_allclose(got[1:5], x[1:5], atol=2e-4)
+    np.testing.assert_allclose(
+        got[jnp.array([0, -1])], [0.05, 10.0], rtol=1e-12
+    )
+
+  def test_smooth_clip_stays_within_bounds(self):
+    x = jnp.linspace(-20.0, 20.0, 401)
+    got = math_utils.smooth_clip(x, 0.05, 10.0)
+    self.assertTrue(np.all(got >= 0.05))
+    self.assertTrue(np.all(got <= 10.0 + 1e-12))
+    # At a bound the output is offset by width * ln(2).
+    at_bounds = math_utils.smooth_clip(jnp.array([0.05, 10.0]), 0.05, 10.0)
+    np.testing.assert_allclose(
+        at_bounds, [0.05 + 0.005 * np.log(2), 10.0 - 0.5 * np.log(2)],
+        rtol=1e-6,
+    )
+
+  def test_smooth_clip_gradient_is_continuous_at_bounds(self):
+    grad = jax.vmap(jax.grad(lambda x: math_utils.smooth_clip(x, 0.05, 10.0)))
+    # Slope is 1/2 exactly at each bound and changes continuously across it.
+    np.testing.assert_allclose(
+        grad(jnp.array([0.05, 10.0])), [0.5, 0.5], rtol=1e-3
+    )
+    # No jump across a bound: the slope just either side is still ~1/2.
+    near = jnp.array([0.05 - 1e-5, 0.05 + 1e-5, 10.0 - 1e-3, 10.0 + 1e-3])
+    np.testing.assert_allclose(grad(near), 0.5, atol=2e-3)
+    g = grad(jnp.linspace(-1.0, 12.0, 1301))
+    self.assertTrue(np.all(np.isfinite(g)))
+    self.assertTrue(np.all((g >= 0.0) & (g <= 1.0)))
+
   @parameterized.named_parameters(('n_rho_50', 50), ('n_rho_2000', 2000))
   def test_gaussian_smoothing_matrix(self, n_rho):
     rho_face_norm = jnp.linspace(0.0, 1.0, n_rho + 1)

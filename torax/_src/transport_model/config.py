@@ -478,6 +478,10 @@ class TransportConfig(torax_pydantic.ConfigBase):
       that zone's `smoothing_width` is used, while outside all defined zones (or
       in zones with `smoothing_width=0.0`), no smoothing is applied and those
       points do not contribute to smoothing neighboring zones.
+    smooth_clipping: If `True`, replace the hard min/max clipping of the
+      transport coefficients with a smooth (softplus) clip. Hard clips make the
+      Jacobian discontinuous where a coefficient crosses a bound, which can
+      stall the Newton-Raphson solver.
   """
 
   chi_min: torax_pydantic.MeterSquaredPerSecond = 0.05
@@ -497,6 +501,7 @@ class TransportConfig(torax_pydantic.ConfigBase):
   smoothing_zones: Sequence[SmoothingZoneConfig] = pydantic.Field(
       default_factory=list
   )
+  smooth_clipping: Annotated[bool, torax_pydantic.JAX_STATIC] = False
 
   def build_transport_model(self) -> transport_model.TransportModel:
     core_transport_models = {
@@ -546,6 +551,7 @@ class TransportConfig(torax_pydantic.ConfigBase):
         core_transport_model_params=core_transport_model_params,
         pedestal_transport_model_params=pedestal_transport_model_params,
         smoothing_zones=tuple(smoothing_zones),
+        smooth_clipping=self.smooth_clipping,
     )
 
   @pydantic.model_validator(mode='after')

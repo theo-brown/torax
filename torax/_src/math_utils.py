@@ -320,6 +320,43 @@ def safe_divide(
   return num / safe_denom
 
 
+def smooth_clip(
+    x: array_typing.Array,
+    lower: array_typing.FloatScalar,
+    upper: array_typing.FloatScalar,
+    rel_width_lower: float = 0.1,
+    rel_width_upper: float = 0.05,
+) -> array_typing.Array:
+  """C-infinity approximation of `jnp.clip(x, lower, upper)`.
+
+  Uses a softplus pair: a soft minimum with `upper` followed by a soft maximum
+  with `lower`, so the output never falls below `lower` (keeping e.g.
+  diffusivities non-negative). Each transition has width `rel_width *
+  max(|bound|, 1e-3 * (upper - lower))`. Far from the bounds the output equals x
+  up to terms of order exp(-distance / width); exactly at a bound it is offset
+  inwards by width * ln(2). It can exceed `upper` by at most
+  width_lower * exp(-(upper - lower) / width_lower).
+
+  Args:
+    x: Input array.
+    lower: Lower bound.
+    upper: Upper bound, greater than `lower`.
+    rel_width_lower: Transition width at `lower`, relative to its magnitude.
+    rel_width_upper: Transition width at `upper`, relative to its magnitude.
+
+  Returns:
+    The smoothly clipped array.
+  """
+  lower = jnp.asarray(lower, dtype=jnp.result_type(x))
+  upper = jnp.asarray(upper, dtype=jnp.result_type(x))
+  # Fall back to a fraction of the range for bounds at or near zero.
+  scale_floor = 1e-3 * (upper - lower)
+  width_lower = rel_width_lower * jnp.maximum(jnp.abs(lower), scale_floor)
+  width_upper = rel_width_upper * jnp.maximum(jnp.abs(upper), scale_floor)
+  y = upper - width_upper * jax.nn.softplus((upper - x) / width_upper)
+  return lower + width_lower * jax.nn.softplus((y - lower) / width_lower)
+
+
 @jax.jit
 def inverse_softplus(x: jax.Array) -> jax.Array:
   """Inverse of softplus function."""
