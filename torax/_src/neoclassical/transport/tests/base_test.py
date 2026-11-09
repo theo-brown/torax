@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
 from typing import Annotated, Literal
 
 from absl.testing import absltest
+import jax
 import numpy as np
 from torax._src.core_profiles import core_profiles as core_profiles_lib
 from torax._src.geometry import geometry as geometry_lib
@@ -37,6 +39,9 @@ class NeoclassicalTransportTest(absltest.TestCase):
     super().setUp()
     register_model.register_neoclassical_transport_model(
         FakeNeoclassicalTransportModelConfig
+    )
+    register_model.register_neoclassical_transport_model(
+        TeChiNeoclassicalTransportModelConfig
     )
 
   def test_clipping(self):
@@ -165,6 +170,50 @@ class NeoclassicalTransportTest(absltest.TestCase):
       )
 
 
+  def test_smooth_clipping_slope_is_continuous_across_bound(self):
+    # chi_e = T_e on the faces, with chi_min placed exactly at T_e of one face.
+    # Scaling T_e by s moves that face across the bound at s = 1. A hard clip
+    # has zero slope below the bound and slope T_e above it; that jump makes
+    # the Newton Jacobian discontinuous and can stall the solver.
+    face = 2  # Interior face (the default grid has 5 faces).
+    delta = 1e-4
+    config_dict = default_configs.get_default_config_dict()
+    config_dict['neoclassical'] = {
+        'transport': {
+            'model_name': 'fake_te_chi',
+            'chi_max': 1e3,
+            'smooth_clipping': True,
+        }
+    }
+    torax_config = config.ToraxConfig.from_dict(config_dict)
+    core_profiles, _, geo = core_profile_helpers.make_initial_inputs(
+        torax_config
+    )
+    T_e = core_profiles.kinetic.T_e
+    runtime_params = dataclasses.replace(
+        torax_config.neoclassical.transport.build_runtime_params(),
+        chi_min=float(T_e.face_value()[face]),
+    )
+    intermediates = formulas.compute_neoclassical_intermediates(
+        geo, core_profiles, fast_ions=()
+    )
+    model = torax_config.neoclassical.transport.build_model()
+
+    def chi_e(s):
+      kinetic = dataclasses.replace(
+          core_profiles.kinetic,
+          T_e=dataclasses.replace(T_e, value=s * T_e.value),
+      )
+      profiles = dataclasses.replace(core_profiles, kinetic=kinetic)
+      return model(runtime_params, geo, profiles, intermediates).chi_face_el[
+          face
+      ]
+
+    slope_below = jax.grad(chi_e)(1.0 - delta)
+    slope_above = jax.grad(chi_e)(1.0 + delta)
+    self.assertGreater(slope_above, 0.0)
+    np.testing.assert_allclose(slope_below, slope_above, rtol=1e-2)
+
 class FakeNeoclassicalTransportModel(
     neoclassical_transport_base.NeoclassicalTransportModel
 ):
@@ -205,3 +254,43 @@ class FakeNeoclassicalTransportModelConfig(
 
   def build_model(self) -> FakeNeoclassicalTransportModel:
     return FakeNeoclassicalTransportModel()
+
+
+class TeChiNeoclassicalTransportModel(
+    neoclassical_transport_base.NeoclassicalTransportModel
+):
+  """Fake model with chi_e equal to the face T_e, so it varies with T_e."""
+
+  def _call_implementation(
+      self,
+      runtime_params: transport_runtime_params.RuntimeParams,
+      geometry: geometry_lib.Geometry,
+      core_profiles: core_profiles_lib.CoreProfiles,
+      neoclassical_intermediates: formulas.AnalyticalNeoclassicalIntermediates,
+  ) -> transport_coeffs.NeoclassicalTransport:
+    del runtime_params, neoclassical_intermediates
+    zeros = np.zeros(geometry.rho_face_norm.shape[0])
+    return transport_coeffs.NeoclassicalTransport(
+        chi_face_ion=zeros,
+        chi_face_el=core_profiles.kinetic.T_e.face_value(),
+        d_face_el=zeros,
+        v_face_el=zeros,
+        v_face_el_ware=zeros,
+    )
+
+  def __hash__(self) -> int:
+    return hash(self.__class__.__name__)
+
+  def __eq__(self, other) -> bool:
+    return isinstance(other, type(self))
+
+
+class TeChiNeoclassicalTransportModelConfig(
+    neoclassical_transport_base.NeoclassicalTransportModelConfig
+):
+  model_name: Annotated[Literal['fake_te_chi'], torax_pydantic.JAX_STATIC] = (
+      'fake_te_chi'
+  )
+
+  def build_model(self) -> TeChiNeoclassicalTransportModel:
+    return TeChiNeoclassicalTransportModel()
