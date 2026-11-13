@@ -21,6 +21,7 @@ turbulent heat and particle transport coefficients.
 
 import abc
 import dataclasses
+from typing import Any
 
 import jax
 from jax import numpy as jnp
@@ -65,6 +66,35 @@ class ComponentTransportModel(static_dataclass.StaticDataclass, abc.ABC):
     """
     del datatree, runtime_params
     return transport_state_lib.ComponentTransportState()
+
+  def ingest_post_processed_outputs(
+      self,
+      component_state: transport_state_lib.ComponentTransportState,
+      post_processed_outputs: Any,
+      transport_runtime_params: (
+          transport_runtime_params_lib.ComponentRuntimeParams
+      ),
+      runtime_params: runtime_params_lib.RuntimeParams,
+  ) -> transport_state_lib.ComponentTransportState:
+    """Updates the state from the previous step's post-processed outputs.
+
+    Called once per step, before the solve, so models can use lagged global
+    quantities (e.g. H98) that are only available after post-processing. The
+    default passes the state through unchanged.
+
+    Args:
+      component_state: ComponentTransportState for this model.
+      post_processed_outputs: `PostProcessedOutputs` of the previous step
+        (untyped here to avoid an import cycle).
+      transport_runtime_params: Runtime parameters for this transport model at
+        the start of the step.
+      runtime_params: Runtime parameters at the start of the step.
+
+    Returns:
+      The updated ComponentTransportState.
+    """
+    del post_processed_outputs, transport_runtime_params, runtime_params
+    return component_state
 
   def __call__(
       self,

@@ -19,7 +19,7 @@ regions.
 """
 
 import dataclasses
-from typing import Mapping
+from typing import Any, Mapping
 import jax
 import jax.numpy as jnp
 from torax._src import array_typing
@@ -69,6 +69,51 @@ class TransportModel(static_dataclass.StaticDataclass):
             name: model.initial_state(runtime_params)
             for name, model in self.pedestal_transport_models.items()
         },
+    )
+
+  def update_state_from_post_processed_outputs(
+      self,
+      transport_state: transport_state_lib.TransportState,
+      post_processed_outputs: Any,
+      runtime_params: runtime_params_lib.RuntimeParams,
+  ) -> transport_state_lib.TransportState:
+    """Lets each component ingest the previous step's post-processed outputs.
+
+    Called once per step, before the solve, so the result is fixed across
+    solver iterations and dt-backtracking retries of that step.
+
+    Args:
+      transport_state: Transport state at the start of the step.
+      post_processed_outputs: `PostProcessedOutputs` of the previous step.
+      runtime_params: Runtime parameters at the start of the step.
+
+    Returns:
+      The updated TransportState.
+    """
+    transport_params = runtime_params.transport
+
+    def _update(models, states, params_map):
+      return {
+          name: model.ingest_post_processed_outputs(
+              states[name],
+              post_processed_outputs,
+              params_map[name],
+              runtime_params,
+          )
+          for name, model in models.items()
+      }
+
+    return transport_state_lib.TransportState(
+        core_transport_states=_update(
+            self.core_transport_models,
+            transport_state.core_transport_states,
+            transport_params.core_transport_model_params,
+        ),
+        pedestal_transport_states=_update(
+            self.pedestal_transport_models,
+            transport_state.pedestal_transport_states,
+            transport_params.pedestal_transport_model_params,
+        ),
     )
 
   def initial_state_from_datatree(

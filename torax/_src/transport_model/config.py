@@ -24,6 +24,7 @@ import pydantic
 from torax._src.torax_pydantic import interpolated_param_1d
 from torax._src.torax_pydantic import torax_pydantic
 from torax._src.transport_model import bohm_gyrobohm
+from torax._src.transport_model import bohm_gyrobohm_h98_feedback
 from torax._src.transport_model import config_base
 from torax._src.transport_model import critical_gradient
 from torax._src.transport_model import enums
@@ -382,6 +383,101 @@ class BohmGyroBohmTransportModelConfig(
     )
 
 
+
+class BohmGyroBohmH98FeedbackTransportModelConfig(
+    BohmGyroBohmTransportModelConfig
+):
+  """Bohm-GyroBohm transport with a PID multiplier tracking a target H98.
+
+  All BgB coefficients are scaled by a multiplier `m`, updated once per step
+  from the previous step's H98 (one-step lag):
+
+  ```
+  e = H98 - target_H98
+  I = clip(I + integral_gain * e * dt, min_integral, max_integral)
+  m = clip(multiplier_feedforward * exp(proportional_gain * e + I
+           + derivative_gain * (de/dt)_smoothed), multiplier_min,
+           multiplier_max)
+  ```
+
+  H98 above target raises transport. The controller holds until the first
+  finite, positive H98 arrives, using `multiplier_feedforward` until then.
+
+  Attributes:
+    model_name: Always `'bohm_gyrobohm_h98_feedback'`.
+    target_H98: Reference H98 [dimensionless].
+    multiplier_feedforward: Multiplier at zero controller output.
+    proportional_gain: Gain on the H98 error [per unit H98].
+    integral_gain: Gain on the time-integrated H98 error [per unit H98 per s].
+    derivative_gain: Gain on the H98 error rate [s per unit H98].
+    derivative_smoothing_time_scale: Exponential smoothing time [s] of the error
+      rate; `0.0` uses the raw finite difference.
+    min_integral: Lower anti-windup bound on the integral term (log of the
+      multiplier).
+    max_integral: Upper anti-windup bound on the integral term.
+    multiplier_min: Lower bound on the multiplier.
+    multiplier_max: Upper bound on the multiplier.
+  """
+
+  model_name: Annotated[
+      Literal['bohm_gyrobohm_h98_feedback'], torax_pydantic.JAX_STATIC
+  ] = 'bohm_gyrobohm_h98_feedback'
+  target_H98: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0)
+  )
+  multiplier_feedforward: torax_pydantic.PositiveTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0)
+  )
+  proportional_gain: torax_pydantic.NonNegativeTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(1.0)
+  )
+  integral_gain: torax_pydantic.NonNegativeTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
+  derivative_gain: torax_pydantic.NonNegativeTimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
+  derivative_smoothing_time_scale: (
+      torax_pydantic.NonNegativeTimeVaryingScalar
+  ) = torax_pydantic.ValidatedDefault(0.0)
+  min_integral: float = -np.log(10.0)
+  max_integral: float = np.log(10.0)
+  multiplier_min: pydantic.PositiveFloat = 0.1
+  multiplier_max: pydantic.PositiveFloat = 10.0
+
+  @pydantic.model_validator(mode='after')
+  def _validate_bounds(self) -> Self:
+    if self.min_integral > self.max_integral:
+      raise ValueError('min_integral must be <= max_integral.')
+    if self.multiplier_min >= self.multiplier_max:
+      raise ValueError('multiplier_min must be < multiplier_max.')
+    return self
+
+  def build_transport_model(
+      self,
+  ) -> bohm_gyrobohm_h98_feedback.BohmGyroBohmH98FeedbackTransportModel:
+    return bohm_gyrobohm_h98_feedback.BohmGyroBohmH98FeedbackTransportModel()
+
+  def build_runtime_params(
+      self, t: chex.Numeric
+  ) -> bohm_gyrobohm_h98_feedback.RuntimeParams:
+    base_params = super().build_runtime_params(t)
+    return bohm_gyrobohm_h98_feedback.RuntimeParams(
+        **vars(base_params),
+        target_H98=self.target_H98.get_value(t),
+        multiplier_feedforward=self.multiplier_feedforward.get_value(t),
+        proportional_gain=self.proportional_gain.get_value(t),
+        integral_gain=self.integral_gain.get_value(t),
+        derivative_gain=self.derivative_gain.get_value(t),
+        derivative_smoothing_time_scale=(
+            self.derivative_smoothing_time_scale.get_value(t)
+        ),
+        min_integral=self.min_integral,
+        max_integral=self.max_integral,
+        multiplier_min=self.multiplier_min,
+        multiplier_max=self.multiplier_max,
+    )
+
 try:
   from torax._src.transport_model import qualikiz_transport_model  # pylint: disable=g-import-not-at-top
 
@@ -394,6 +490,7 @@ try:
       | PrescribedTransportModelConfig
       | CriticalGradientTransportModelConfig
       | BohmGyroBohmTransportModelConfig
+      | BohmGyroBohmH98FeedbackTransportModelConfig
       | tglf_transport_model.TGLFTransportModelConfig
       | qualikiz_transport_model.QualikizTransportModelConfig,
       pydantic.Discriminator('model_name'),
@@ -406,6 +503,7 @@ except ImportError:
       | PrescribedTransportModelConfig
       | CriticalGradientTransportModelConfig
       | BohmGyroBohmTransportModelConfig
+      | BohmGyroBohmH98FeedbackTransportModelConfig
       | tglf_transport_model.TGLFTransportModelConfig,
       pydantic.Discriminator('model_name'),
   ]

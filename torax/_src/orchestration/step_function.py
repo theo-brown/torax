@@ -263,6 +263,18 @@ class SimulationStepFn:
         runtime_params_provider=runtime_params_provider,
         models=self._solver.models,
     )
+    # Transport models may use lagged post-processed quantities (e.g. H98).
+    # Updating here, once per step, keeps the state fixed across all step paths
+    # (sawtooth, adaptive dt retries, fixed) and solver iterations.
+    transport_model = self._solver.models.transport_model
+    model_state_t = dataclasses.replace(
+        model_state_t,
+        transport=transport_model.update_state_from_post_processed_outputs(
+            model_state_t.transport,
+            previous_post_processed_outputs,
+            runtime_params_t,
+        ),
+    )
 
     def _step():
       """Take either the adaptive or fixed step, depending on the config."""

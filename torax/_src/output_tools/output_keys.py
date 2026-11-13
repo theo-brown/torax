@@ -534,6 +534,37 @@ CHI_GYROBOHM_I: Final[OutputKey] = OutputKey(
     units=Units.SQUARE_METER_PER_SECOND,
     grid_type=GridType.FACE,
 )
+# H98 feedback controller state (bohm_gyrobohm_h98_feedback).
+TRANSPORT_MULTIPLIER: Final[OutputKey] = OutputKey(
+    "transport_multiplier",
+    units=Units.DIMENSIONLESS,
+    grid_type=GridType.SCALAR,
+)
+H98_FEEDBACK_INPUT: Final[OutputKey] = OutputKey(
+    "H98_feedback_input",
+    units=Units.DIMENSIONLESS,
+    grid_type=GridType.SCALAR,
+)
+FEEDBACK_INTEGRAL_TERM: Final[OutputKey] = OutputKey(
+    "feedback_integral_term",
+    units=Units.DIMENSIONLESS,
+    grid_type=GridType.SCALAR,
+)
+FEEDBACK_PREVIOUS_ERROR: Final[OutputKey] = OutputKey(
+    "feedback_previous_error",
+    units=Units.DIMENSIONLESS,
+    grid_type=GridType.SCALAR,
+)
+FEEDBACK_SMOOTHED_ERROR_DERIVATIVE: Final[OutputKey] = OutputKey(
+    "feedback_smoothed_error_derivative",
+    units=Units.INVERSE_SECOND,
+    grid_type=GridType.SCALAR,
+)
+FEEDBACK_TIME: Final[OutputKey] = OutputKey(
+    "feedback_time",
+    units=Units.SECOND,
+    grid_type=GridType.SCALAR,
+)
 
 # ---------------------------------------------------------------------------
 # Coordinates.
