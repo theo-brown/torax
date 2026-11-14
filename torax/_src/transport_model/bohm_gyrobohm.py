@@ -85,6 +85,7 @@ class RuntimeParams(transport_runtime_params_lib.ComponentRuntimeParams):
   D_face_c1: array_typing.FloatScalar
   D_face_c2: array_typing.FloatScalar
   V_face_coeff: array_typing.FloatScalar
+  V_face_geometric_coeff: array_typing.FloatScalar
   chi_e_bohm_multiplier: array_typing.FloatScalar
   chi_e_gyrobohm_multiplier: array_typing.FloatScalar
   chi_i_bohm_multiplier: array_typing.FloatScalar
@@ -233,6 +234,23 @@ class BohmGyroBohmTransportModel(component.ComponentTransportModel):
 
     # Electron convectivity set proportional to the electron diffusivity
     v_face_el = transport_runtime_params.V_face_coeff * d_face_el
+
+    # Additional geometric inward pinch, Tholerus et al., Nucl. Fusion 64 (2024)
+    # 106030, eq. 10: v = -c D S^2 / (V dV/drho_norm) * sqrt(Phi_b / (pi B_0)),
+    # with flux-surface area S = <|grad V|> = g0 and sqrt(Phi_b/(pi B_0)) =
+    # rho_b. In a large-aspect-ratio cylinder this gives v = -2c D / r. The
+    # ratio is singular on axis, where d_face_el is zero, so it is zeroed there.
+    pinch_ratio = jnp.concatenate([
+        jnp.zeros(1),
+        geo.g0_face[1:] ** 2
+        * geo.rho_b
+        / (geo.volume_face[1:] * geo.vpr_face[1:]),
+    ])
+    v_face_el -= (
+        transport_runtime_params.V_face_geometric_coeff
+        * pinch_ratio
+        * d_face_el
+    )
 
     return (
         BohmGyroBohmTransportOutput(

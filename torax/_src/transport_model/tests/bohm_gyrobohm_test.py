@@ -205,6 +205,49 @@ class BohmGyroBohmTest(absltest.TestCase):
         output_B.chi_face_el,
     )
 
+  def test_geometric_pinch(self):
+    """Tests the Tholerus et al. (2024) eq. 10 geometric inward pinch."""
+
+    def outputs(V_face_geometric_coeff):
+      model, bgb_params, runtime_params, geo, core_profiles, mask = (
+          self._build_model_and_params(
+              V_face_geometric_coeff=V_face_geometric_coeff
+          )
+      )
+      output, _ = model(
+          bgb_params,
+          runtime_params,
+          geo,
+          core_profiles,
+          mask,
+          component_state=model.initial_state(runtime_params),
+      )
+      return output, geo
+
+    output_off, geo = outputs(0.0)
+    output_on, _ = outputs(0.5)
+
+    # Off by default: convectivity is the V_face_coeff * D term only.
+    np.testing.assert_allclose(
+        output_off.v_face_el, 0.3 * output_off.d_face_el
+    )
+    # Diffusivity is unchanged; the pinch is zero on axis and inward elsewhere.
+    np.testing.assert_allclose(output_on.d_face_el, output_off.d_face_el)
+    pinch = np.asarray(output_on.v_face_el - output_off.v_face_el)
+    self.assertEqual(pinch[0], 0.0)
+    self.assertTrue(np.all(pinch[1:] < 0.0))
+    # Matches -0.5 * D * S^2 / (V dV/drho_norm) * rho_b with S = g0.
+    d = np.asarray(output_on.d_face_el)[1:]
+    ratio = (
+        np.asarray(geo.g0_face)[1:] ** 2
+        * float(geo.rho_b)
+        / (np.asarray(geo.volume_face)[1:] * np.asarray(geo.vpr_face)[1:])
+    )
+    np.testing.assert_allclose(pinch[1:], -0.5 * ratio * d, rtol=1e-6)
+    # Close to the large-aspect-ratio cylinder limit v / D = -2 * 0.5 / r.
+    r = np.asarray(geo.rho_face_norm)[1:] * float(geo.rho_b)
+    np.testing.assert_allclose(pinch[1:] / d * r, -1.0, rtol=0.25)
+
   def test_to_output_dict(self):
     n_face = 10
     bgb_output = bohm_gyrobohm.BohmGyroBohmTransportOutput(

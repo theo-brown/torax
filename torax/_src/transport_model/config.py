@@ -318,6 +318,11 @@ class BohmGyroBohmTransportModelConfig(
     D_face_c1: Constant for the electron diffusivity weighting factor.
     D_face_c2: Constant for the electron diffusivity weighting factor.
     V_face_coeff: Proportionality factor between convectivity and diffusivity.
+    V_face_geometric_coeff: Prefactor of an additional geometric inward pinch,
+      v = -V_face_geometric_coeff * D * S^2 / (V dV/drho_norm) * rho_b, with S
+      the flux-surface area and V the enclosed volume (Tholerus et al., Nucl.
+      Fusion 64 (2024) 106030, eq. 10, where the prefactor is 0.5). `0.0`
+      (default) disables it.
   """
 
   model_name: Annotated[Literal['bohm_gyrobohm'], torax_pydantic.JAX_STATIC] = (
@@ -356,6 +361,9 @@ class BohmGyroBohmTransportModelConfig(
   V_face_coeff: torax_pydantic.TimeVaryingScalar = (
       torax_pydantic.ValidatedDefault(-0.1)
   )
+  V_face_geometric_coeff: torax_pydantic.TimeVaryingScalar = (
+      torax_pydantic.ValidatedDefault(0.0)
+  )
 
   def build_transport_model(
       self,
@@ -378,6 +386,7 @@ class BohmGyroBohmTransportModelConfig(
         D_face_c1=self.D_face_c1.get_value(t),
         D_face_c2=self.D_face_c2.get_value(t),
         V_face_coeff=self.V_face_coeff.get_value(t),
+        V_face_geometric_coeff=self.V_face_geometric_coeff.get_value(t),
         **vars(base_params),
     )
 
